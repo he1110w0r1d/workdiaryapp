@@ -293,7 +293,7 @@ ${index + 1}. ${diary.content}
         
         // 首先尝试使用外部LLM
         try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'daily');
+          llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
           if (llmSummary) {
             console.log('使用外部LLM生成的总结内容');
             summaryContent = llmSummary;
@@ -305,7 +305,7 @@ ${index + 1}. ${diary.content}
         // 如果外部LLM失败，尝试本地LLM
         if (!llmSummary) {
           try {
-            llmSummary = await localLLM.generateSummary(llmData, 'daily');
+            llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, user._id);
             if (llmSummary) {
               console.log('使用本地LLM生成的总结内容');
               summaryContent = llmSummary;
@@ -318,6 +318,20 @@ ${index + 1}. ${diary.content}
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
           console.log('使用默认模板生成的总结内容');
+        }
+        
+        // 对LLM生成的内容进行占位符替换处理
+        if (llmSummary) {
+          const workDetails = diaries.map(diary => {
+            const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+            return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
+          }).join('\n\n');
+          
+          summaryContent = summaryContent
+            .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
+            .replace(/\{\{totalEntries\}\}/g, diaries.length)
+            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{workDetails\}\}/g, workDetails);
         }
         
         const summary = new Summary({
@@ -413,7 +427,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         
         // 首先尝试使用外部LLM
         try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'monthly');
+          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
           if (llmSummary) {
             console.log('使用外部LLM生成的月度总结内容');
             summaryContent = llmSummary;
@@ -425,7 +439,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         // 如果外部LLM失败，尝试本地LLM
         if (!llmSummary) {
           try {
-            llmSummary = await localLLM.generateSummary(llmData, 'monthly');
+            llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
               console.log('使用本地LLM生成的月度总结内容');
               summaryContent = llmSummary;
@@ -563,7 +577,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         
         // 首先尝试使用外部LLM
         try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'monthly');
+          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
           if (llmSummary) {
             console.log('使用外部LLM生成的当月总结内容');
             summaryContent = llmSummary;
@@ -575,7 +589,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         // 如果外部LLM失败，尝试本地LLM
         if (!llmSummary) {
           try {
-            llmSummary = await localLLM.generateSummary(llmData, 'monthly');
+            llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
               console.log('使用本地LLM生成的当月总结内容');
               summaryContent = llmSummary;
@@ -710,7 +724,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         
         // 首先尝试使用外部LLM
         try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'yearly');
+          llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
           if (llmSummary) {
             console.log('使用外部LLM生成的年度总结内容');
             summaryContent = llmSummary;
@@ -722,7 +736,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         // 如果外部LLM失败，尝试本地LLM
         if (!llmSummary) {
           try {
-            llmSummary = await localLLM.generateSummary(llmData, 'yearly');
+            llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
               console.log('使用本地LLM生成的年度总结内容');
               summaryContent = llmSummary;
@@ -857,7 +871,82 @@ exports.deleteSummary = async (req, res) => {
     console.log('总结删除成功:', req.params.id);
     res.json({ message: '总结删除成功' });
   } catch (error) {
-    console.error('删除总结错误:', error);
+    console.error('生成今日总结失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 获取提示词模板
+exports.getPromptTemplate = async (req, res) => {
+  try {
+    const { type } = req.params; // daily, monthly, yearly, html_generation
+    
+    const validTypes = ['daily', 'monthly', 'yearly', 'html_generation'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ message: '无效的提示词类型' });
+    }
+    
+    // 特殊处理HTML生成提示词
+    if (type === 'html_generation') {
+      const htmlTemplatePath = path.join(__dirname, '../templates', 'html_generation_prompt.txt');
+      if (fs.existsSync(htmlTemplatePath)) {
+        const content = fs.readFileSync(htmlTemplatePath, 'utf8');
+        return res.json({ type, content });
+      }
+    }
+    
+    // 优先返回用户的定制化提示词
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    
+    if (user && user.customPrompts && user.customPrompts[type]) {
+      const content = user.customPrompts[type];
+      return res.json({ type, content });
+    }
+    
+    // 如果没有定制化提示词，返回默认模板
+    const templatePath = path.join(__dirname, '../templates', `${type}_summary_prompt.txt`);
+    
+    if (fs.existsSync(templatePath)) {
+      const content = fs.readFileSync(templatePath, 'utf8');
+      res.json({ type, content });
+    } else {
+      res.status(404).json({ message: '提示词模板不存在' });
+    }
+  } catch (error) {
+    console.error('获取提示词模板失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 更新提示词模板
+exports.updatePromptTemplate = async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { content } = req.body;
+    
+    const validTypes = ['daily', 'monthly', 'yearly', 'html_generation'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ message: '无效的提示词类型' });
+    }
+    
+    if (!content || content.trim() === '') {
+      return res.status(400).json({ message: '提示词内容不能为空' });
+    }
+    
+    const templatePath = path.join(__dirname, '../templates', `${type}_summary_prompt.txt`);
+    
+    // 特殊处理HTML生成提示词
+    if (type === 'html_generation') {
+      const htmlTemplatePath = path.join(__dirname, '../templates', 'html_generation_prompt.txt');
+      fs.writeFileSync(htmlTemplatePath, content, 'utf8');
+      return res.json({ message: 'HTML生成提示词更新成功' });
+    }
+    
+    fs.writeFileSync(templatePath, content, 'utf8');
+    res.json({ message: '提示词模板更新成功' });
+  } catch (error) {
+    console.error('更新提示词模板失败:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -943,7 +1032,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     if (!llmSummary) {
       try {
         console.log('尝试使用本地LLM生成总结...');
-        llmSummary = await localLLM.generateSummary(llmData, 'daily');
+        llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
           console.log('使用本地LLM重新生成的总结内容');
           summaryContent = llmSummary;
@@ -957,6 +1046,20 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 如果所有LLM都失败，使用默认模板
     if (!llmSummary) {
       console.log('使用默认模板重新生成的总结内容');
+    }
+    
+    // 对LLM生成的内容进行占位符替换处理
+    if (llmSummary) {
+      const workDetails = diaries.map(diary => {
+        const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+        return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
+      }).join('\n\n');
+      
+      summaryContent = summaryContent
+        .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
+        .replace(/\{\{totalEntries\}\}/g, diaries.length)
+        .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+        .replace(/\{\{workDetails\}\}/g, workDetails);
     }
     
     // 创建新的总结
@@ -1052,7 +1155,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     if (!llmSummary) {
       try {
         console.log('尝试使用外部LLM生成今日总结...');
-        llmSummary = await externalLLM.generateSummary(llmData, 'daily');
+        llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
           console.log('使用外部LLM生成的今日总结内容');
           summaryContent = llmSummary;
@@ -1067,7 +1170,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     if (!llmSummary) {
       try {
         console.log('尝试使用本地LLM生成今日总结...');
-        llmSummary = await localLLM.generateSummary(llmData, 'daily');
+        llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
           console.log('使用本地LLM生成的今日总结内容');
           summaryContent = llmSummary;
@@ -1081,6 +1184,20 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 如果所有LLM都失败，使用默认模板
     if (!llmSummary) {
       console.log('使用默认模板生成的今日总结内容');
+    }
+    
+    // 对LLM生成的内容进行占位符替换处理
+    if (llmSummary) {
+      const workDetails = diaries.map(diary => {
+        const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+        return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
+      }).join('\n\n');
+      
+      summaryContent = summaryContent
+        .replace(/\{\{date\}\}/g, today.toLocaleDateString('zh-CN'))
+        .replace(/\{\{totalEntries\}\}/g, diaries.length)
+        .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+        .replace(/\{\{workDetails\}\}/g, workDetails);
     }
     
     // 创建新的总结

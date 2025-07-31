@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Avatar, Upload, message, Divider, Typography, Space, Spin } from 'antd';
-import { UserOutlined, SaveOutlined, UploadOutlined, LogoutOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, Avatar, Upload, message, Divider, Typography, Space, Spin, Select, Row, Col } from 'antd';
+import { UserOutlined, SaveOutlined, UploadOutlined, LogoutOutlined, ToolOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 
@@ -8,9 +8,18 @@ const { Title, Text } = Typography;
 
 const UserSettings = () => {
   const [form] = Form.useForm();
+  const [workForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [workLoading, setWorkLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [userInfo, setUserInfo] = useState(null);
+  const [workProfile, setWorkProfile] = useState(null);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressSteps, setProgressSteps] = useState({
+    daily: { status: 'waiting', text: '每日提示词' },
+    monthly: { status: 'waiting', text: '每月提示词' },
+    yearly: { status: 'waiting', text: '年度提示词' }
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,6 +34,23 @@ const UserSettings = () => {
           nickname: userData.nickname || '',
           bio: userData.bio || ''
         });
+        
+        // 设置工作信息配置
+        const workProfileData = userData.workProfile || {};
+        setWorkProfile(workProfileData);
+        workForm.setFieldsValue({
+          industry: workProfileData.industry || '',
+          position: workProfileData.position || '',
+          level: workProfileData.level || '',
+          department: workProfileData.department || '',
+          responsibilities: Array.isArray(workProfileData.responsibilities) 
+            ? workProfileData.responsibilities.join('\n') 
+            : (workProfileData.responsibilities || ''),
+          kpiGoals: workProfileData.kpiGoals || '',
+          writingStyle: workProfileData.writingStyle || '',
+          summaryPurpose: workProfileData.summaryPurpose || '',
+          avoidContent: workProfileData.avoidContent || []
+        });
       } catch (error) {
         console.error('获取用户信息失败:', error);
         message.error('获取用户信息失败: ' + (error.response?.data?.message || error.message));
@@ -37,13 +63,13 @@ const UserSettings = () => {
     };
 
     fetchUserProfile();
-  }, [form, navigate]);
+  }, [form, workForm, navigate]);
 
   const handleSave = async (values) => {
     setLoading(true);
     try {
       const response = await api.put('/users/profile', values);
-      message.success('设置保存成功！');
+      message.success('个人信息保存成功！');
       setUserInfo({ ...userInfo, ...values });
       console.log('用户信息更新成功:', response.data);
     } catch (error) {
@@ -54,6 +80,119 @@ const UserSettings = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 轮询进度状态
+  const pollProgress = async () => {
+    try {
+      const response = await api.get('/users/generate-custom-prompts?progress=true');
+      const progress = response.data.progress;
+      
+      setProgressSteps({
+        daily: { 
+          status: progress.daily.status, 
+          text: progress.daily.message 
+        },
+        monthly: { 
+          status: progress.monthly.status, 
+          text: progress.monthly.message 
+        },
+        yearly: { 
+          status: progress.yearly.status, 
+          text: progress.yearly.message 
+        }
+      });
+      
+      // 检查是否所有步骤都完成或失败
+      const allFinished = Object.values(progress).every(step => 
+        step.status === 'finish' || step.status === 'error'
+      );
+      
+      if (allFinished) {
+        // 3秒后隐藏进度条
+        setTimeout(() => {
+          setShowProgress(false);
+        }, 3000);
+        return false; // 停止轮询
+      }
+      
+      return true; // 继续轮询
+    } catch (error) {
+      console.error('获取进度失败:', error);
+      return false; // 停止轮询
+    }
+  };
+
+  const handleWorkProfileSave = async (values) => {
+    setWorkLoading(true);
+    setShowProgress(true);
+    
+    // 重置进度状态
+    setProgressSteps({
+      daily: { status: 'waiting', text: '等待开始' },
+      monthly: { status: 'waiting', text: '等待开始' },
+      yearly: { status: 'waiting', text: '等待开始' }
+    });
+    
+    try {
+      // 保存工作信息配置
+      const response = await api.put('/users/work-profile', values);
+      console.log('工作信息配置更新成功:', response.data);
+      
+      // 生成新的定制化提示词
+      try {
+        // 启动进度轮询
+        const pollInterval = setInterval(async () => {
+          const shouldContinue = await pollProgress();
+          if (!shouldContinue) {
+            clearInterval(pollInterval);
+          }
+        }, 1000); // 每秒轮询一次
+        
+        // 实际调用API生成提示词
+        const promptResponse = await api.post('/users/generate-custom-prompts');
+        console.log('定制化提示词生成成功:', promptResponse.data);
+        
+        message.success('工作信息配置保存成功，并已生成新的定制化提示词！');
+        
+        // 清除轮询
+        clearInterval(pollInterval);
+        
+        // 最后一次获取进度状态
+        await pollProgress();
+        
+      } catch (promptError) {
+        console.error('生成定制化提示词失败:', promptError);
+        message.warning('工作信息配置保存成功，但生成定制化提示词失败: ' + (promptError.response?.data?.message || promptError.message));
+        
+        // 标记失败状态
+        setProgressSteps(prev => {
+          const newSteps = { ...prev };
+          Object.keys(newSteps).forEach(key => {
+            if (newSteps[key].status === 'active' || newSteps[key].status === 'waiting') {
+              newSteps[key] = { status: 'error', text: '生成失败' };
+            }
+          });
+          return newSteps;
+        });
+        
+        // 3秒后隐藏进度条
+        setTimeout(() => {
+          setShowProgress(false);
+        }, 3000);
+      }
+      
+      setWorkProfile({ ...workProfile, ...values });
+    } catch (error) {
+      console.error('保存工作信息配置失败:', error);
+      message.error('保存工作信息配置失败: ' + (error.response?.data?.message || error.message));
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+      setShowProgress(false);
+    } finally {
+      setWorkLoading(false);
     }
   };
 
@@ -92,15 +231,50 @@ const UserSettings = () => {
     );
   }
 
+  // 职级选项
+  const levels = [
+    { value: 'junior', label: '初级（1-3年）' },
+    { value: 'middle', label: '中级（3-5年）' },
+    { value: 'senior', label: '高级（5-8年）' },
+    { value: 'expert', label: '专家级（8年以上）' },
+    { value: 'manager', label: '管理层' }
+  ];
+
+  // 写作风格选项
+  const writingStyles = [
+    { value: 'concise', label: '简洁明了' },
+    { value: 'reflective', label: '深度反思' },
+    { value: 'data_driven', label: '数据驱动' },
+    { value: 'narrative', label: '叙述性' }
+  ];
+
+  // 总结用途选项
+  const summaryPurposes = [
+    { value: 'report_up', label: '向上汇报' },
+    { value: 'annual_review', label: '年度评估' },
+    { value: 'self_reflection', label: '自我反思' },
+    { value: 'team_sharing', label: '团队分享' },
+    { value: 'promotion', label: '晋升材料' }
+  ];
+
+  // 避免内容选项
+  const avoidContentOptions = [
+    { value: 'empty_words', label: '空洞套话' },
+    { value: 'exaggeration', label: '过度美化/夸大' },
+    { value: 'technical_inaccuracy', label: '与实际不符的技术细节' },
+    { value: 'emotional_expression', label: '泛泛而谈的情绪表达' }
+  ];
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto' }}>
       <Card
         title={
           <Space>
-            <UserOutlined /> 用户设置
+            <UserOutlined /> 个人信息设置
           </Space>
         }
         loading={!userInfo}
+        style={{ marginBottom: 24 }}
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Avatar 
@@ -205,6 +379,264 @@ const UserSettings = () => {
             注册时间: {userInfo?.createdAt ? new Date(userInfo.createdAt).toLocaleDateString() : '未知'}
           </Text>
         </div>
+      </Card>
+
+      {/* 工作信息配置卡片 */}
+      <Card
+        title={
+          <Space>
+            <ToolOutlined /> 工作信息配置
+          </Space>
+        }
+        loading={!workProfile && !userInfo}
+      >
+        <Form
+          form={workForm}
+          layout="vertical"
+          onFinish={handleWorkProfileSave}
+        >
+          <Title level={5}>基本身份信息</Title>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="industry"
+                label="所属行业"
+              >
+                <Input placeholder="如：互联网、金融、制造业" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="position"
+                label="职位名称"
+              >
+                <Input placeholder="如：前端工程师、产品经理" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="level"
+                label="职级水平"
+              >
+                <Select placeholder="请选择您的职级水平">
+                  {levels.map(level => (
+                    <Select.Option key={level.value} value={level.value}>
+                      {level.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="department"
+                label="所在团队/部门"
+              >
+                <Input placeholder="如：技术研发部、市场运营组" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider />
+          <Title level={5}>工作目标导向</Title>
+          <Form.Item
+            name="responsibilities"
+            label="日常主要职责"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="请列出您的主要职责，如：负责需求调研、协调开发排期、产品测试验收等..."
+              maxLength={1000}
+              showCount
+            />
+          </Form.Item>
+          <Form.Item
+            name="kpiGoals"
+            label="关键绩效指标和目标"
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder="描述您的主要工作目标和绩效指标..."
+              maxLength={1000}
+              showCount
+            />
+          </Form.Item>
+
+          <Divider />
+          <Title level={5}>偏好设置</Title>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="writingStyle"
+                label="工作日志的写作风格偏好"
+              >
+                <Select placeholder="请选择您希望的总结风格">
+                  {writingStyles.map(style => (
+                    <Select.Option key={style.value} value={style.value}>
+                      {style.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="summaryPurpose"
+                label="总结主要用途"
+              >
+                <Select placeholder="请选择总结的主要用途">
+                  {summaryPurposes.map(purpose => (
+                    <Select.Option key={purpose.value} value={purpose.value}>
+                      {purpose.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item
+            name="avoidContent"
+            label="希望避免的内容类型"
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择您希望在总结中避免的内容类型"
+              style={{ width: '100%' }}
+            >
+              {avoidContentOptions.map(option => (
+                <Select.Option key={option.value} value={option.value}>
+                  {option.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Divider />
+          <div style={{ textAlign: 'center' }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={workLoading}
+              icon={<SaveOutlined />}
+              size="large"
+            >
+              保存并生成新的提示词
+            </Button>
+            
+            {/* 进度条 */}
+            {showProgress && (
+              <div style={{ marginTop: '24px', padding: '0 20px' }}>
+                <div style={{ marginBottom: '16px', fontSize: '14px', color: '#666' }}>
+                  提示词生成进度
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  {/* 每日提示词进度 */}
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ 
+                      width: '40px', 
+                      height: '40px', 
+                      borderRadius: '50%', 
+                      margin: '0 auto 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      backgroundColor: progressSteps.daily.status === 'finish' ? '#52c41a' : 
+                                     progressSteps.daily.status === 'active' ? '#1890ff' :
+                                     progressSteps.daily.status === 'error' ? '#ff4d4f' : '#d9d9d9',
+                      color: progressSteps.daily.status === 'waiting' ? '#999' : '#fff'
+                    }}>
+                      {progressSteps.daily.status === 'finish' ? '✓' : 
+                       progressSteps.daily.status === 'active' ? <Spin size="small" /> :
+                       progressSteps.daily.status === 'error' ? '✗' : '1'}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: progressSteps.daily.status === 'error' ? '#ff4d4f' : '#666'
+                    }}>
+                      {progressSteps.daily.text}
+                    </div>
+                  </div>
+                  
+                  {/* 连接线 */}
+                  <div style={{ 
+                    width: '40px', 
+                    height: '2px', 
+                    backgroundColor: progressSteps.monthly.status !== 'waiting' ? '#1890ff' : '#d9d9d9'
+                  }} />
+                  
+                  {/* 每月提示词进度 */}
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ 
+                      width: '40px', 
+                      height: '40px', 
+                      borderRadius: '50%', 
+                      margin: '0 auto 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      backgroundColor: progressSteps.monthly.status === 'finish' ? '#52c41a' : 
+                                     progressSteps.monthly.status === 'active' ? '#1890ff' :
+                                     progressSteps.monthly.status === 'error' ? '#ff4d4f' : '#d9d9d9',
+                      color: progressSteps.monthly.status === 'waiting' ? '#999' : '#fff'
+                    }}>
+                      {progressSteps.monthly.status === 'finish' ? '✓' : 
+                       progressSteps.monthly.status === 'active' ? <Spin size="small" /> :
+                       progressSteps.monthly.status === 'error' ? '✗' : '2'}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: progressSteps.monthly.status === 'error' ? '#ff4d4f' : '#666'
+                    }}>
+                      {progressSteps.monthly.text}
+                    </div>
+                  </div>
+                  
+                  {/* 连接线 */}
+                  <div style={{ 
+                    width: '40px', 
+                    height: '2px', 
+                    backgroundColor: progressSteps.yearly.status !== 'waiting' ? '#1890ff' : '#d9d9d9'
+                  }} />
+                  
+                  {/* 年度提示词进度 */}
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ 
+                      width: '40px', 
+                      height: '40px', 
+                      borderRadius: '50%', 
+                      margin: '0 auto 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      backgroundColor: progressSteps.yearly.status === 'finish' ? '#52c41a' : 
+                                     progressSteps.yearly.status === 'active' ? '#1890ff' :
+                                     progressSteps.yearly.status === 'error' ? '#ff4d4f' : '#d9d9d9',
+                      color: progressSteps.yearly.status === 'waiting' ? '#999' : '#fff'
+                    }}>
+                      {progressSteps.yearly.status === 'finish' ? '✓' : 
+                       progressSteps.yearly.status === 'active' ? <Spin size="small" /> :
+                       progressSteps.yearly.status === 'error' ? '✗' : '3'}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: progressSteps.yearly.status === 'error' ? '#ff4d4f' : '#666'
+                    }}>
+                      {progressSteps.yearly.text}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </Form>
       </Card>
     </div>
   );

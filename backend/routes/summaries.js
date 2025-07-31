@@ -9,7 +9,9 @@ const {
   generateTodaySummary,
   generateMonthlySummary,
   generateCurrentMonthlySummary,
-  generateYearlySummary
+  generateYearlySummary,
+  getPromptTemplate,
+  updatePromptTemplate
 } = require('../controllers/summaryController');
 
 router.route('/')
@@ -33,5 +35,9 @@ router.route('/generate/current-monthly')
 
 router.route('/generate/yearly')
   .post(protect, generateYearlySummary);
+
+router.route('/prompt/:type')
+  .get(protect, getPromptTemplate)
+  .put(protect, updatePromptTemplate);
 
 module.exports = router;

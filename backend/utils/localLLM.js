@@ -37,9 +37,10 @@ class LocalLLM {
    * @param {Object} data 工作数据
    * @param {string} type 总结类型 (daily, monthly, yearly)
    * @param {Object} options 额外选项
+   * @param {string} userId 用户ID，用于获取定制化提示词
    * @returns {Promise<string>} 生成的总结内容
    */
-  async generateSummary(data, type, options = {}) {
+  async generateSummary(data, type, options = {}, userId = null) {
     if (!this.config.enabled) {
       console.log('本地LLM未启用，跳过LLM总结生成');
       return null;
@@ -47,7 +48,7 @@ class LocalLLM {
 
     try {
       // 准备提示词模板
-      const promptTemplate = await this._getPromptTemplate(type);
+      const promptTemplate = await this._getPromptTemplate(type, userId);
       
       // 填充提示词模板
       const prompt = this._fillPromptTemplate(promptTemplate, data, type);
@@ -69,12 +70,57 @@ class LocalLLM {
   }
 
   /**
+   * 生成文本内容
+   * @param {string} prompt 提示词
+   * @param {Object} options 额外选项
+   * @returns {Promise<string>} 生成的文本内容
+   */
+  async generateText(prompt, options = {}) {
+    if (!this.config.enabled) {
+      console.log('本地LLM未启用，跳过本地LLM文本生成');
+      return null;
+    }
+
+    try {
+      // 调用本地LLM API
+      const response = await this.client.post(this.config.apiUrl, {
+        model: this.config.model,
+        prompt: prompt,
+        temperature: options.temperature || this.config.temperature,
+        stream: false
+      });
+      
+      // 返回生成的内容
+      return response.data.response;
+    } catch (error) {
+      console.error('本地LLM生成文本失败:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * 获取提示词模板
    * @param {string} type 总结类型
+   * @param {string} userId 用户ID，用于获取定制化提示词
    * @returns {Promise<string>} 提示词模板
    */
-  async _getPromptTemplate(type) {
+  async _getPromptTemplate(type, userId = null) {
     try {
+      // 如果提供了用户ID，优先尝试获取用户的定制化提示词
+      if (userId) {
+        try {
+          const User = require('../models/User');
+          const user = await User.findById(userId);
+          
+          if (user && user.customPrompts && user.customPrompts[type]) {
+            console.log(`使用用户 ${userId} 的定制化${type}提示词`);
+            return user.customPrompts[type];
+          }
+        } catch (error) {
+          console.log('获取用户定制化提示词失败，使用默认模板:', error.message);
+        }
+      }
+      
       // 模板文件路径
       const templatePath = path.join(__dirname, '../templates', `${type}_summary_prompt.txt`);
       

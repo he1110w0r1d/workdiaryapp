@@ -11,11 +11,14 @@ import {
   Empty,
   message,
   Space,
-  Popconfirm
+  Popconfirm,
+  Input
 } from 'antd';
-import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined } from '@ant-design/icons';
+import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import api from '../utils/api';  // 修改这里
 import moment from 'moment';
+
+const { TextArea } = Input;
 
 const { Title } = Typography;
 
@@ -31,6 +34,11 @@ const SummaryList = () => {
   const [generateYearlyLoading, setGenerateYearlyLoading] = useState(false);
   const [selectedSummary, setSelectedSummary] = useState(null);
   const [activeTab, setActiveTab] = useState('daily');
+  const [promptModalVisible, setPromptModalVisible] = useState(false);
+  const [currentPromptType, setCurrentPromptType] = useState('');
+  const [promptContent, setPromptContent] = useState('');
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [pagination, setPagination] = useState({
     daily: { current: 1, pageSize: 10, total: 0 },
     monthly: { current: 1, pageSize: 10, total: 0 },
@@ -201,6 +209,51 @@ const SummaryList = () => {
     }
   };
 
+  // 查看提示词
+  const handleViewPrompt = async (type) => {
+    setCurrentPromptType(type);
+    setPromptModalVisible(true);
+    setPromptLoading(true);
+    setIsEditingPrompt(false);
+    
+    try {
+      const response = await api.get(`/summaries/prompt/${type}`);
+      setPromptContent(response.data.content);
+    } catch (error) {
+      console.error('获取提示词失败:', error);
+      message.error('获取提示词失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setPromptLoading(false);
+    }
+  };
+
+  // 更新提示词
+  const handleUpdatePrompt = async () => {
+    setPromptLoading(true);
+    try {
+      const response = await api.put(`/summaries/prompt/${currentPromptType}`, {
+        content: promptContent
+      });
+      message.success(response.data.message);
+      setIsEditingPrompt(false);
+    } catch (error) {
+      console.error('更新提示词失败:', error);
+      message.error('更新提示词失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setPromptLoading(false);
+    }
+  };
+
+  // 获取提示词类型的中文名称
+  const getPromptTypeText = (type) => {
+    switch (type) {
+      case 'daily': return '每日总结提示词';
+      case 'monthly': return '月度总结提示词';
+      case 'yearly': return '年度总结提示词';
+      default: return '提示词';
+    }
+  };
+
   const getColumns = (type) => [
     {
       title: '类型',
@@ -322,6 +375,15 @@ const SummaryList = () => {
                     <span>每日工作总结</span>
                     <Space>
                       <Button 
+                        type="text" 
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewPrompt('daily')}
+                        size="small"
+                        title="查看提示词"
+                      >
+                        查看提示词
+                      </Button>
+                      <Button 
                         type="default" 
                         icon={<ReloadOutlined />}
                         loading={regenerateLoading}
@@ -364,6 +426,15 @@ const SummaryList = () => {
                     <span>月度工作总结</span>
                     <Space>
                       <Button 
+                        type="text" 
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewPrompt('monthly')}
+                        size="small"
+                        title="查看提示词"
+                      >
+                        查看提示词
+                      </Button>
+                      <Button 
                         type="default" 
                         icon={<PlusOutlined />}
                         loading={generateMonthlyLoading}
@@ -404,16 +475,27 @@ const SummaryList = () => {
                 title={
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>年度工作总结</span>
-                    <Button 
-                      type="primary" 
-                      icon={<PlusOutlined />}
-                      loading={generateYearlyLoading}
-                      onClick={handleGenerateYearlySummary}
-                      size="small"
-                      style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
-                    >
-                      立即生成年度总结
-                    </Button>
+                    <Space>
+                      <Button 
+                        type="text" 
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewPrompt('yearly')}
+                        size="small"
+                        title="查看提示词"
+                      >
+                        查看提示词
+                      </Button>
+                      <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />}
+                        loading={generateYearlyLoading}
+                        onClick={handleGenerateYearlySummary}
+                        size="small"
+                        style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+                      >
+                        立即生成年度总结
+                      </Button>
+                    </Space>
                   </div>
                 }
               >
@@ -447,6 +529,67 @@ const SummaryList = () => {
             }} 
           />
         )}
+      </Modal>
+
+      <Modal
+        title={getPromptTypeText(currentPromptType)}
+        open={promptModalVisible}
+        onCancel={() => {
+          setPromptModalVisible(false);
+          setIsEditingPrompt(false);
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setPromptModalVisible(false);
+            setIsEditingPrompt(false);
+          }}>
+            取消
+          </Button>,
+          !isEditingPrompt ? (
+            <Button 
+              key="edit" 
+              type="primary" 
+              icon={<EditOutlined />}
+              onClick={() => setIsEditingPrompt(true)}
+            >
+              编辑
+            </Button>
+          ) : (
+            <Button 
+              key="save" 
+              type="primary" 
+              loading={promptLoading}
+              onClick={handleUpdatePrompt}
+            >
+              保存
+            </Button>
+          )
+        ]}
+        width={800}
+        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
+      >
+        <Spin spinning={promptLoading}>
+          {isEditingPrompt ? (
+            <TextArea
+              value={promptContent}
+              onChange={(e) => setPromptContent(e.target.value)}
+              rows={20}
+              placeholder="请输入提示词内容..."
+            />
+          ) : (
+            <pre style={{ 
+              whiteSpace: 'pre-wrap', 
+              wordBreak: 'break-word',
+              backgroundColor: '#f5f5f5',
+              padding: '12px',
+              borderRadius: '6px',
+              fontSize: '14px',
+              lineHeight: '1.5'
+            }}>
+              {promptContent}
+            </pre>
+          )}
+        </Spin>
       </Modal>
     </div>
   );

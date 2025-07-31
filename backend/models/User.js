@@ -33,6 +33,79 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // 工作信息配置
+  workProfile: {
+    // 基本身份信息
+    industry: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    position: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    level: {
+      type: String,
+      enum: ['junior', 'middle', 'senior', 'expert', 'manager', ''],
+      default: ''
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    // 工作职责
+    responsibilities: [{
+      type: String,
+      trim: true
+    }],
+    // 关键绩效指标
+    kpiGoals: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 1000
+    },
+    // 写作风格偏好
+    writingStyle: {
+      type: String,
+      enum: ['concise', 'reflective', 'data_driven', 'narrative', ''],
+      default: ''
+    },
+    // 总结用途
+    summaryPurpose: {
+      type: String,
+      enum: ['report_up', 'annual_review', 'self_reflection', 'team_sharing', 'promotion', ''],
+      default: ''
+    },
+    // 希望避免的内容
+    avoidContent: [{
+      type: String,
+      enum: ['empty_words', 'exaggeration', 'technical_inaccuracy', 'emotional_expression']
+    }],
+    // 是否已完成初始配置
+    isProfileCompleted: {
+      type: Boolean,
+      default: false
+    }
+  },
+  // 定制化提示词
+  customPrompts: {
+    daily: {
+      type: String,
+      default: ''
+    },
+    monthly: {
+      type: String,
+      default: ''
+    },
+    yearly: {
+      type: String,
+      default: ''
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now

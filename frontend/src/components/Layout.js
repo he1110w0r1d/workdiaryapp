@@ -15,6 +15,7 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
 import 'moment/locale/zh-cn';
 import api from '../utils/api';
+import WorkProfileSetup from './WorkProfileSetup';
 
 import { getLunarDateString, getFullLunarString } from '../utils/lunar';
 
@@ -90,6 +91,7 @@ const TimeInfo = () => {
 const AppLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [showWorkProfileSetup, setShowWorkProfileSetup] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -98,6 +100,13 @@ const AppLayout = ({ children }) => {
     try {
       const response = await api.get('/users/profile');
       setUserInfo(response.data);
+      
+      // 检查用户是否需要配置工作信息
+      const user = response.data;
+      if (!user.workProfile || !user.workProfile.industry) {
+        // 如果用户没有配置工作信息，显示配置弹窗
+        setShowWorkProfileSetup(true);
+      }
     } catch (error) {
       console.error('获取用户信息失败:', error);
     }
@@ -252,6 +261,16 @@ const AppLayout = ({ children }) => {
           <Outlet />
         </Content>
       </Layout>
+      
+      {/* 工作信息配置弹窗 */}
+      <WorkProfileSetup
+        visible={showWorkProfileSetup}
+        onClose={() => setShowWorkProfileSetup(false)}
+        onComplete={() => {
+          setShowWorkProfileSetup(false);
+          fetchUserInfo(); // 重新获取用户信息
+        }}
+      />
     </Layout>
   );
 };
