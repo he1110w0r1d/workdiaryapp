@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MongoDB 数据库
+  mongodb:
+    image: mongo:6.0
+    container_name: work-diary-mongodb-dev
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: workdiary
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_dev_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - work-diary-dev-network
+
+  # 后端服务 (开发模式)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: work-diary-backend-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/workdiary?authSource=admin
+      - JWT_SECRET=dev-secret-key
+      - USE_LOCAL_LLM=false
+      - LOCAL_LLM_API_URL=http://localhost:11434/api/generate
+      - LOCAL_LLM_MODEL=llama3
+      - LOCAL_LLM_TIMEOUT=60000
+      - LOCAL_LLM_TEMPERATURE=0.7
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    networks:
+      - work-diary-dev-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/uploads:/app/uploads
+    command: npm run dev
+
+  # 前端服务 (开发模式)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: work-diary-frontend-dev
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - work-diary-dev-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongodb_dev_data:
+
+networks:
+  work-diary-dev-network:
+    driver: bridge
