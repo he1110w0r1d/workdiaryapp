@@ -177,7 +177,7 @@ const Dashboard = () => {
           <Badge.Ribbon text="总览" color="blue">
             <Card 
               hoverable
-              onClick={() => navigate('/diaries')}
+              onClick={() => navigate('/app/diaries')}
               style={{ 
                 cursor: 'pointer',
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -202,7 +202,7 @@ const Dashboard = () => {
               hoverable
               onClick={() => {
                 const today = moment().format('YYYY-MM-DD');
-                navigate(`/diaries?date=${today}`);
+                navigate(`/app/diaries?date=${today}`);
               }}
               style={{ 
                 cursor: 'pointer',

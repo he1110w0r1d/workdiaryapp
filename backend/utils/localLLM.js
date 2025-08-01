@@ -222,6 +222,17 @@ class LocalLLM {
   _fillPromptTemplate(template, data, type) {
     let filledTemplate = template;
     
+    // 填充用户基本信息占位符
+    if (data.user) {
+      filledTemplate = filledTemplate
+        .replace('{{userName}}', data.user.nickname || data.user.username || '')
+        .replace('{{userPosition}}', data.user.workProfile?.position || '')
+        .replace('{{userDepartment}}', data.user.workProfile?.department || '')
+        .replace('{{userLevel}}', this._formatUserLevel(data.user.workProfile?.level) || '')
+        .replace('{{userIndustry}}', data.user.workProfile?.industry || '')
+        .replace('{{userResponsibilities}}', this._formatResponsibilities(data.user.workProfile?.responsibilities) || '');
+    }
+    
     // 根据总结类型处理不同的数据
     switch (type) {
       case 'daily':
@@ -306,6 +317,34 @@ class LocalLLM {
         return `- ${month}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`;
       })
       .join('\n');
+  }
+
+  /**
+   * 格式化用户级别
+   * @param {string} level 用户级别
+   * @returns {string} 格式化后的级别
+   */
+  _formatUserLevel(level) {
+    const levelMap = {
+      'junior': '初级',
+      'middle': '中级', 
+      'senior': '高级',
+      'expert': '专家',
+      'manager': '管理层'
+    };
+    return levelMap[level] || level || '';
+  }
+
+  /**
+   * 格式化用户职责
+   * @param {Array} responsibilities 职责数组
+   * @returns {string} 格式化后的职责
+   */
+  _formatResponsibilities(responsibilities) {
+    if (!responsibilities || !Array.isArray(responsibilities) || responsibilities.length === 0) {
+      return '';
+    }
+    return responsibilities.join('、');
   }
 }
 

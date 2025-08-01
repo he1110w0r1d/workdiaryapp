@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, theme, Button, Avatar, Dropdown, Space, Typography, Spin } from 'antd';
+import { Layout, Menu, theme, Button, Avatar, Dropdown, Space, Typography, Spin, Modal } from 'antd';
 import { 
   HomeOutlined, 
   FileTextOutlined, 
   BarChartOutlined, 
   UserOutlined,
-  LogoutOutlined,
   SettingOutlined,
-
+  QuestionCircleOutlined,
   ClockCircleOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  LogoutOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -133,40 +133,39 @@ const AppLayout = ({ children }) => {
 
   const menuItems = [
     {
-      key: '/',
+      key: '/app',
       icon: <HomeOutlined />,
-      label: <Link to="/">仪表板</Link>,
+      label: <Link to="/app">仪表板</Link>,
     },
     {
-      key: '/diaries',
+      key: '/app/diaries',
       icon: <FileTextOutlined />,
-      label: <Link to="/diaries">工作日记</Link>,
+      label: <Link to="/app/diaries">工作日记</Link>,
     },
-
     {
-      key: '/summaries',
+      key: '/app/summaries',
       icon: <BarChartOutlined />,
-      label: <Link to="/summaries">工作总结</Link>,
+      label: <Link to="/app/summaries">工作总结</Link>,
     },
     {
-      key: '/settings',
+      key: '/app/settings',
       icon: <SettingOutlined />,
-      label: <Link to="/settings">系统设置</Link>,
+      label: <Link to="/app/settings">系统设置</Link>,
     },
     {
-      key: '/user-settings',
+      key: '/app/user-settings',
       icon: <UserOutlined />,
-      label: <Link to="/user-settings">用户设置</Link>,
+      label: <Link to="/app/user-settings">用户设置</Link>,
     },
   ];
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate('/welcome');
   };
 
   const handleAvatarClick = () => {
-    navigate('/user-settings');
+    navigate('/app/user-settings');
   };
 
   return (
@@ -241,21 +240,69 @@ const AppLayout = ({ children }) => {
             <TimeInfo />
           </div>
           
-          <Avatar 
-            size="large" 
-            src={userInfo?.avatar ? `http://localhost:5000${userInfo.avatar}` : undefined}
-            icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
-            onClick={handleAvatarClick}
-            title="点击进入用户设置"
-            style={{ 
-              cursor: 'pointer',
-              background: userInfo?.avatar ? 'transparent' : 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-              color: '#333',
-              border: '2px solid white',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-            }} 
-            className="float"
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Button
+              type="text"
+              icon={<QuestionCircleOutlined />}
+              onClick={() => {
+                Modal.info({
+                  title: '使用说明',
+                  width: 600,
+                  content: (
+                    <div>
+                      <h4>📝 工作日记系统使用指南</h4>
+                      <ul style={{ lineHeight: '1.8' }}>
+                        <li><strong>日记管理：</strong>记录每日工作内容，支持富文本编辑</li>
+                        <li><strong>AI总结：</strong>自动生成工作总结，提升效率</li>
+                        <li><strong>数据统计：</strong>查看工作数据分析和趋势</li>
+                        <li><strong>系统设置：</strong>配置AI助手和个人偏好</li>
+                        <li><strong>用户设置：</strong>管理个人信息和头像</li>
+                      </ul>
+                      <p style={{ marginTop: '16px', color: '#666' }}>
+                        💡 提示：点击左侧菜单可快速导航到各个功能模块
+                      </p>
+                    </div>
+                  )
+                });
+              }}
+              style={{ 
+                color: 'white',
+                fontSize: '16px'
+              }}
+              title="使用说明"
+            >
+              使用说明
+            </Button>
+            
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+              style={{ 
+                color: 'white',
+                fontSize: '16px'
+              }}
+              title="退出登录"
+            >
+              退出登录
+            </Button>
+            
+            <Avatar 
+              size="large" 
+              src={userInfo?.avatar ? `http://localhost:5000${userInfo.avatar}` : undefined}
+              icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
+              onClick={handleAvatarClick}
+              title="点击进入用户设置"
+              style={{ 
+                cursor: 'pointer',
+                background: userInfo?.avatar ? 'transparent' : 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+                color: '#333',
+                border: '2px solid white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+              }} 
+              className="float"
+            />
+          </div>
         </Header>
         <Content style={{ margin: '24px 16px', padding: 24, background: colorBgContainer }}>
           <Outlet />

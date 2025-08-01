@@ -60,13 +60,13 @@ const Calendar = () => {
 
   const handleDateClick = (date) => {
     const dateStr = date.format('YYYY-MM-DD');
-    navigate(`/diaries?date=${dateStr}`);
+    navigate(`/app/diaries?date=${dateStr}`);
   };
 
   const handleAddDiary = (date, event) => {
     event.stopPropagation(); // 阻止事件冒泡
     const dateStr = date.format('YYYY-MM-DD');
-    navigate(`/diaries/new?date=${dateStr}`);
+    navigate(`/app/diaries/new?date=${dateStr}`);
   };
 
   const renderCalendarGrid = () => {

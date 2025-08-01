@@ -193,13 +193,11 @@ const Settings = () => {
             if (llmType === 'local') {
               return (
                 <>                  <Form.Item
+                    name="useLocalLLM"
                     label="启用本地LLM"
                     valuePropName="checked"
                   >
-                    <Switch 
-                      checked={form.getFieldValue('useLocalLLM')}
-                      onChange={(checked) => form.setFieldsValue({ useLocalLLM: checked })}
-                    />
+                    <Switch />
                   </Form.Item>
                 </>
               );
@@ -228,24 +226,22 @@ const Settings = () => {
                   <Divider orientation="left">本地LLM配置</Divider>
                   
                   <Form.Item
+                    name="apiUrl"
                     label="API地址"
                     rules={[{ required: true, message: '请输入API地址' }]}
                   >
                     <Input 
                       placeholder="例如: http://localhost:11434/api/generate" 
-                      value={form.getFieldValue('apiUrl')}
-                      onChange={(e) => form.setFieldsValue({ apiUrl: e.target.value })}
                     />
                   </Form.Item>
 
                   <Form.Item
+                    name="model"
                     label="模型名称"
                     rules={[{ required: true, message: '请输入模型名称' }]}
                   >
                     <Select 
                       placeholder="选择模型"
-                      value={form.getFieldValue('model')}
-                      onChange={(value) => form.setFieldsValue({ model: value })}
                     >
                       <Option value="llama3">Llama 3</Option>
                       <Option value="llama2">Llama 2</Option>
@@ -259,32 +255,31 @@ const Settings = () => {
 
                   {model === 'custom' && (
                     <Form.Item
+                      name="customModel"
                       label="自定义模型名称"
                       rules={[{ required: true, message: '请输入自定义模型名称' }]}
                     >
                       <Input 
                           placeholder="输入自定义模型名称" 
-                          value={form.getFieldValue('customModel')}
-                          onChange={(e) => form.setFieldsValue({ customModel: e.target.value })}
                         />
                     </Form.Item>
                   )}
 
                   <Form.Item
+                    name="timeout"
                     label="请求超时时间(毫秒)"
                     rules={[{ required: true, message: '请输入超时时间' }]}
                   >
                     <InputNumber 
                       min={1000} 
-                      max={300000} 
+                      max={600000} 
                       step={1000} 
-                      style={{ width: '100%' }} 
-                      value={form.getFieldValue('timeout')}
-                      onChange={(value) => form.setFieldsValue({ timeout: value })}
+                      style={{ width: '100%' }}
                     />
                   </Form.Item>
 
                   <Form.Item
+                    name="temperature"
                     label="温度参数"
                     tooltip="控制输出的随机性，值越高随机性越大，值越低则更确定性"
                     rules={[{ required: true, message: '请输入温度参数' }]}
@@ -294,8 +289,6 @@ const Settings = () => {
                       max={2} 
                       step={0.1} 
                       style={{ width: '100%' }} 
-                      value={form.getFieldValue('temperature')}
-                      onChange={(value) => form.setFieldsValue({ temperature: value })}
                     />
                   </Form.Item>
                 </>
@@ -306,13 +299,12 @@ const Settings = () => {
                   <Divider orientation="left">外部LLM配置</Divider>
                   
                   <Form.Item
+                    name="externalProvider"
                     label="外部提供商"
                     rules={[{ required: true, message: '请选择外部提供商' }]}
                   >
                     <Select 
                       placeholder="选择外部LLM提供商"
-                      value={form.getFieldValue('externalProvider')}
-                      onChange={(value) => form.setFieldsValue({ externalProvider: value })}
                     >
                       <Option value="openai">OpenAI</Option>
                       <Option value="claude">Claude (Anthropic)</Option>
@@ -322,55 +314,52 @@ const Settings = () => {
                   </Form.Item>
 
                   <Form.Item
+                    name="externalApiKey"
                     label="API密钥"
                     rules={[{ required: true, message: '请输入API密钥' }]}
                   >
                     <Input.Password 
                       placeholder="输入API密钥" 
-                      value={form.getFieldValue('externalApiKey')}
-                      onChange={(e) => form.setFieldsValue({ externalApiKey: e.target.value })}
                     />
                   </Form.Item>
 
                   {externalProvider === 'custom' && (
                     <Form.Item
+                      name="externalApiUrl"
                       label="自定义API地址"
                       rules={[{ required: true, message: '请输入API地址' }]}
                     >
                       <Input 
                           placeholder="例如: https://api.example.com/v1/chat/completions" 
-                          value={form.getFieldValue('externalApiUrl')}
-                          onChange={(e) => form.setFieldsValue({ externalApiUrl: e.target.value })}
                         />
                     </Form.Item>
                   )}
 
                   <Form.Item
+                    name="externalModel"
                     label="模型名称"
                     rules={[{ required: true, message: '请输入模型名称' }]}
                   >
                     <Input 
                       placeholder={getModelPlaceholder(form.getFieldValue('externalProvider'))} 
-                      value={form.getFieldValue('externalModel')}
-                      onChange={(e) => form.setFieldsValue({ externalModel: e.target.value })}
                     />
                   </Form.Item>
 
                   <Form.Item
+                    name="externalTimeout"
                     label="请求超时时间(毫秒)"
                     rules={[{ required: true, message: '请输入超时时间' }]}
                   >
                     <InputNumber 
                       min={1000} 
-                      max={300000} 
+                      max={600000} 
                       step={1000} 
                       style={{ width: '100%' }} 
-                      value={form.getFieldValue('externalTimeout')}
-                      onChange={(value) => form.setFieldsValue({ externalTimeout: value })}
                     />
                   </Form.Item>
 
                   <Form.Item
+                    name="externalTemperature"
                     label="温度参数"
                     tooltip="控制输出的随机性，值越高随机性越大，值越低则更确定性"
                     rules={[{ required: true, message: '请输入温度参数' }]}
@@ -380,12 +369,11 @@ const Settings = () => {
                       max={2} 
                       step={0.1} 
                       style={{ width: '100%' }} 
-                      value={form.getFieldValue('externalTemperature')}
-                      onChange={(value) => form.setFieldsValue({ externalTemperature: value })}
                     />
                   </Form.Item>
 
                   <Form.Item
+                    name="externalMaxTokens"
                     label="最大Token数"
                     tooltip="生成内容的最大长度限制"
                     rules={[{ required: true, message: '请输入最大Token数' }]}
@@ -395,8 +383,6 @@ const Settings = () => {
                       max={8000} 
                       step={100} 
                       style={{ width: '100%' }} 
-                      value={form.getFieldValue('externalMaxTokens')}
-                      onChange={(value) => form.setFieldsValue({ externalMaxTokens: value })}
                     />
                   </Form.Item>
                 </>

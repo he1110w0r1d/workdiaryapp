@@ -324,7 +324,7 @@ ${index + 1}. ${diary.content}
         if (llmSummary) {
           const workDetails = diaries.map(diary => {
             const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-            return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
+            return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
           }).join('\n\n');
           
           summaryContent = summaryContent
@@ -364,12 +364,15 @@ exports.generateMonthlySummary = async (req, res) => {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
-    const users = await User.find();
-    console.log(`找到 ${users.length} 个用户`);
+    // 只为当前登录用户生成总结
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+    
+    console.log(`为用户 ${user.username} 生成月度总结`);
     
     let totalSummariesGenerated = 0;
-    
-    for (const user of users) {
       const diaries = await Diary.find({
         user: user._id,
         startTime: {
@@ -408,14 +411,23 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
 ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocaleDateString('zh-CN')}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`).join('\n')}
         `.trim();
         
+        // 构建工作详情
+        const workDetails = diaries.map(diary => {
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+        }).join('\n\n');
+
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
         const llmData = {
           date: lastMonth,
           diaries: diaries,
           totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: workDetails,
           dailyWork: dailyWork,
-          tagDistribution: tagDistribution
+          tagDistribution: tagDistribution,
+          user: user
         };
         
         // 尝试使用LLM生成总结
@@ -454,6 +466,21 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           console.log('使用默认模板生成的月度总结内容');
         }
         
+        // 对LLM生成的内容进行占位符替换处理
+        if (llmSummary) {
+          summaryContent = summaryContent
+            .replace(/\{\{date\}\}/g, `${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月`)
+            .replace(/\{\{totalEntries\}\}/g, diaries.length)
+            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{workDetails\}\}/g, workDetails)
+            .replace(/\{\{userName\}\}/g, user.profile?.name || user.username)
+            .replace(/\{\{userPosition\}\}/g, user.workProfile?.position || '未设置')
+            .replace(/\{\{userDepartment\}\}/g, user.workProfile?.department || '未设置')
+            .replace(/\{\{userLevel\}\}/g, user.workProfile?.level || '未设置')
+            .replace(/\{\{userIndustry\}\}/g, user.workProfile?.industry || '未设置')
+            .replace(/\{\{userResponsibilities\}\}/g, user.workProfile?.responsibilities || '未设置');
+        }
+        
         // 生成HTML网页
         let htmlFilePath = null;
         try {
@@ -489,17 +516,15 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         await summary.save();
         totalSummariesGenerated++;
         console.log(`为用户 ${user.username} 生成月度总结完成`);
+        
+        res.json({ 
+          success: true, 
+          message: `月度总结生成成功`,
+          summary: summary
+        });
       } else {
-        console.log(`用户 ${user.username} 在指定月份没有日记数据，跳过生成`);
+        res.status(404).json({ success: false, message: '指定月份没有日记数据' });
       }
-    }
-    
-    console.log(`月度总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
-    res.json({ 
-      success: true, 
-      message: `月度总结生成完成，共生成 ${totalSummariesGenerated} 个总结`,
-      summariesGenerated: totalSummariesGenerated
-    });
   } catch (error) {
     console.error('生成月度总结失败:', error);
     res.status(500).json({ success: false, message: '生成月度总结失败', error: error.message });
@@ -514,12 +539,15 @@ exports.generateCurrentMonthlySummary = async (req, res) => {
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     
-    const users = await User.find();
-    console.log(`找到 ${users.length} 个用户`);
+    // 只为当前登录用户生成总结
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+    
+    console.log(`为用户 ${user.username} 生成当月总结`);
     
     let totalSummariesGenerated = 0;
-    
-    for (const user of users) {
       const diaries = await Diary.find({
         user: user._id,
         startTime: {
@@ -558,14 +586,23 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
 ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocaleDateString('zh-CN')}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`).join('\n')}
         `.trim();
         
+        // 构建工作详情
+        const workDetails = diaries.map(diary => {
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+        }).join('\n\n');
+
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
         const llmData = {
           date: currentMonth,
           diaries: diaries,
           totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: workDetails,
           dailyWork: dailyWork,
-          tagDistribution: tagDistribution
+          tagDistribution: tagDistribution,
+          user: user
         };
         
         // 尝试使用LLM生成总结
@@ -639,17 +676,15 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         await summary.save();
         totalSummariesGenerated++;
         console.log(`为用户 ${user.username} 生成当月总结完成`);
+        
+        res.json({ 
+          success: true, 
+          message: `当月总结生成成功`,
+          summary: summary
+        });
       } else {
-        console.log(`用户 ${user.username} 在当月没有日记数据，跳过生成`);
+        res.status(404).json({ success: false, message: '当月没有日记数据' });
       }
-    }
-    
-    console.log(`当月总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
-    res.json({ 
-      success: true, 
-      message: `当月总结生成完成，共生成 ${totalSummariesGenerated} 个总结`,
-      summariesGenerated: totalSummariesGenerated
-    });
   } catch (error) {
     console.error('生成当月总结失败:', error);
     res.status(500).json({ success: false, message: '生成当月总结失败', error: error.message });
@@ -661,17 +696,23 @@ exports.generateYearlySummary = async (req, res) => {
     console.log('开始生成年度总结...');
     
     const now = new Date();
-    const lastYear = new Date(now.getFullYear() - 1, 0, 1);
-    const currentYear = new Date(now.getFullYear(), 0, 1);
+    // 获取请求参数中的年份，如果没有则默认为当前年份
+    const targetYear = req.query.year ? parseInt(req.query.year) : now.getFullYear();
+    const yearStart = new Date(targetYear, 0, 1);
+    const yearEnd = new Date(targetYear + 1, 0, 1);
     
-    const users = await User.find();
+    // 只为当前登录用户生成总结
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
     
-    for (const user of users) {
+    console.log(`为用户 ${user.username} 生成${targetYear}年度总结`);
       const diaries = await Diary.find({
         user: user._id,
         startTime: {
-          $gte: lastYear,
-          $lt: currentYear
+          $gte: yearStart,
+          $lt: yearEnd
         }
       });
       
@@ -689,7 +730,7 @@ exports.generateYearlySummary = async (req, res) => {
         
         // 准备基础总结内容
         const baseContent = `
-# ${lastYear.getFullYear()}年 工作总结
+# ${targetYear}年 工作总结
 
 ## 年度概览
 - 工作条目数量: ${diaries.length}
@@ -706,13 +747,22 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
 (此处可添加年度工作总结和个人反思)
         `.trim();
         
+        // 构建工作详情
+        const workDetails = diaries.map(diary => {
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+        }).join('\n\n');
+
         // 准备LLM所需数据
         const llmData = {
-          date: lastYear,
+          date: new Date(targetYear, 0, 1),
           diaries: diaries,
           totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: workDetails,
           monthlyWork: monthlyWork,
-          tagDistribution: tagStats
+          tagDistribution: tagStats,
+          user: user
         };
         
         // 尝试使用LLM生成总结
@@ -751,12 +801,27 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           console.log('使用默认模板生成的年度总结内容');
         }
         
+        // 对LLM生成的内容进行占位符替换处理
+        if (llmSummary) {
+          summaryContent = summaryContent
+            .replace(/\{\{date\}\}/g, `${targetYear}年`)
+            .replace(/\{\{totalEntries\}\}/g, diaries.length)
+            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{workDetails\}\}/g, workDetails)
+            .replace(/\{\{userName\}\}/g, user.profile?.name || user.username)
+            .replace(/\{\{userPosition\}\}/g, user.workProfile?.position || '未设置')
+            .replace(/\{\{userDepartment\}\}/g, user.workProfile?.department || '未设置')
+            .replace(/\{\{userLevel\}\}/g, user.workProfile?.level || '未设置')
+            .replace(/\{\{userIndustry\}\}/g, user.workProfile?.industry || '未设置')
+            .replace(/\{\{userResponsibilities\}\}/g, user.workProfile?.responsibilities || '未设置');
+        }
+        
         // 生成HTML网页
         let htmlFilePath = null;
         try {
           console.log('开始生成年度总结HTML网页...');
           const htmlData = {
-            date: lastYear,
+            date: new Date(targetYear, 0, 1),
             diaries: diaries,
             totalWorkTime: totalWorkTime,
             monthlyWork: monthlyWork,
@@ -764,7 +829,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           };
           
           const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent);
-          htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', lastYear);
+          htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', new Date(targetYear, 0, 1));
           console.log('年度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
           console.error('生成年度总结HTML网页失败:', error);
@@ -773,7 +838,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         const summary = new Summary({
           user: user._id,
           type: 'yearly',
-          date: lastYear,
+          date: new Date(targetYear, 0, 1),
           content: summaryContent,
           htmlFilePath: htmlFilePath,
           statistics: {
@@ -784,11 +849,16 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         });
         
         await summary.save();
+        console.log(`为用户 ${user.username} 生成年度总结完成`);
+        
+        res.json({ 
+          success: true, 
+          message: `年度总结生成成功`,
+          summary: summary
+        });
+      } else {
+        res.status(404).json({ success: false, message: '指定年份没有日记数据' });
       }
-    }
-    
-    console.log('年度总结生成完成');
-    res.json({ success: true, message: '年度总结生成完成' });
   } catch (error) {
     console.error('生成年度总结失败:', error);
     res.status(500).json({ success: false, message: '生成年度总结失败', error: error.message });
@@ -934,16 +1004,30 @@ exports.updatePromptTemplate = async (req, res) => {
       return res.status(400).json({ message: '提示词内容不能为空' });
     }
     
-    const templatePath = path.join(__dirname, '../templates', `${type}_summary_prompt.txt`);
-    
-    // 特殊处理HTML生成提示词
+    // 特殊处理HTML生成提示词 - 保存到文件系统
     if (type === 'html_generation') {
       const htmlTemplatePath = path.join(__dirname, '../templates', 'html_generation_prompt.txt');
       fs.writeFileSync(htmlTemplatePath, content, 'utf8');
       return res.json({ message: 'HTML生成提示词更新成功' });
     }
     
-    fs.writeFileSync(templatePath, content, 'utf8');
+    // 对于其他类型的提示词，保存到用户的数据库记录中
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: '用户不存在' });
+    }
+    
+    // 初始化customPrompts对象（如果不存在）
+    if (!user.customPrompts) {
+      user.customPrompts = {};
+    }
+    
+    // 保存用户的自定义提示词
+    user.customPrompts[type] = content;
+    await user.save();
+    
     res.json({ message: '提示词模板更新成功' });
   } catch (error) {
     console.error('更新提示词模板失败:', error);
@@ -995,7 +1079,7 @@ exports.regenerateDailySummary = async (req, res) => {
 - 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
 
 ## 工作详情
-${diaries.map(diary => `### ${diary.title}\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
+${diaries.map(diary => `### 工作内容\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
 
 ## 工作分布
 ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
@@ -1051,9 +1135,9 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 对LLM生成的内容进行占位符替换处理
     if (llmSummary) {
       const workDetails = diaries.map(diary => {
-        const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-        return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
-      }).join('\n\n');
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+        }).join('\n\n');
       
       summaryContent = summaryContent
         .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
@@ -1132,17 +1216,29 @@ exports.generateTodaySummary = async (req, res) => {
 - 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
 
 ## 工作详情
-${diaries.map(diary => `### ${diary.title}\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
+${diaries.map(diary => `### 工作内容\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
 
 ## 工作分布
 ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
     `.trim();
     
+    // 获取用户信息
+    const user = await User.findById(req.user.id);
+    
+    // 构建工作详情
+    const workDetails = diaries.map(diary => {
+      const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+      return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+    }).join('\n\n');
+
     // 准备LLM所需数据
     const llmData = {
       date: today,
       diaries: diaries,
-      totalWorkTime: totalWorkTime
+      totalWorkTime: totalWorkTime,
+      totalEntries: diaries.length,
+      workDetails: workDetails,
+      user: user
     };
     
     // 尝试使用LLM生成总结
@@ -1189,9 +1285,9 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 对LLM生成的内容进行占位符替换处理
     if (llmSummary) {
       const workDetails = diaries.map(diary => {
-        const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-        return `**${diary.title}**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.description}\n- 标签: ${diary.tags.join(', ')}`;
-      }).join('\n\n');
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+        }).join('\n\n');
       
       summaryContent = summaryContent
         .replace(/\{\{date\}\}/g, today.toLocaleDateString('zh-CN'))
@@ -1219,5 +1315,286 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
   } catch (error) {
     console.error('生成今日总结失败:', error);
     res.status(500).json({ message: '生成失败: ' + error.message });
+  }
+};
+
+// ==================== 定时任务专用批量处理函数 ====================
+
+// 批量生成所有用户的月度总结（定时任务专用）
+exports.batchGenerateMonthlySummary = async () => {
+  try {
+    console.log('开始批量生成月度总结...');
+    
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const users = await User.find();
+    console.log(`找到 ${users.length} 个用户`);
+    
+    let totalSummariesGenerated = 0;
+    
+    for (const user of users) {
+      const diaries = await Diary.find({
+        user: user._id,
+        startTime: {
+          $gte: lastMonth,
+          $lt: currentMonth
+        }
+      });
+      
+      console.log(`用户 ${user.username} 在 ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
+      
+      if (diaries.length > 0) {
+        let totalWorkTime = 0;
+        const dailyWork = {};
+        
+        diaries.forEach(diary => {
+          totalWorkTime += calculateWorkTime(diary.startTime, diary.endTime);
+          
+          const dateKey = new Date(diary.startTime).toDateString();
+          dailyWork[dateKey] = (dailyWork[dateKey] || 0) + calculateWorkTime(diary.startTime, diary.endTime);
+        });
+        
+        // 准备基础总结内容
+        const baseContent = `
+# ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 工作总结
+
+## 月度概览
+- 工作天数: ${Object.keys(dailyWork).length}
+- 工作条目数量: ${diaries.length}
+- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 平均每日工作时长: ${Math.floor(totalWorkTime / Object.keys(dailyWork).length / 60)}小时${Math.floor((totalWorkTime / Object.keys(dailyWork).length) % 60)}分钟
+
+## 工作内容分析
+${diaries.map(diary => {
+  const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+  return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleDateString('zh-CN')} ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+}).join('\n\n')}
+        `.trim();
+        
+        let summaryContent = baseContent;
+        
+        // 准备LLM所需数据
+        const llmData = {
+          date: lastMonth,
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          dailyWork: dailyWork
+        };
+        
+        let llmSummary = null;
+        
+        // 首先尝试使用外部LLM
+        try {
+          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
+          if (llmSummary) {
+            console.log('使用外部LLM生成的月度总结内容');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
+        }
+        
+        // 如果外部LLM失败，尝试本地LLM
+        if (!llmSummary) {
+          try {
+            llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用本地LLM生成的月度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('本地LLM生成月度总结失败:', error.message);
+          }
+        }
+        
+        // 如果所有LLM都失败，使用默认模板
+        if (!llmSummary) {
+          console.log('使用默认模板生成的月度总结内容');
+        }
+        
+        // 生成HTML网页
+        let htmlFilePath = null;
+        try {
+          console.log('开始生成月度总结HTML网页...');
+          const tagDistribution = generateTagDistribution(diaries);
+          const htmlData = {
+            date: lastMonth,
+            diaries: diaries,
+            totalWorkTime: totalWorkTime,
+            dailyWork: dailyWork,
+            tagDistribution: tagDistribution
+          };
+          
+          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent);
+          htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'monthly', lastMonth);
+          console.log('月度总结HTML网页生成成功:', htmlFilePath);
+        } catch (error) {
+          console.error('生成月度总结HTML网页失败:', error);
+        }
+        
+        const summary = new Summary({
+          user: user._id,
+          type: 'monthly',
+          date: lastMonth,
+          content: summaryContent,
+          htmlFilePath: htmlFilePath,
+          statistics: {
+            totalEntries: diaries.length,
+            totalTime: totalWorkTime,
+            tagDistribution: generateTagDistribution(diaries)
+          }
+        });
+        
+        await summary.save();
+        totalSummariesGenerated++;
+        console.log(`为用户 ${user.username} 生成月度总结完成`);
+      } else {
+        console.log(`用户 ${user.username} 在指定月份没有日记数据，跳过生成`);
+      }
+    }
+    
+    console.log(`月度总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
+  } catch (error) {
+    console.error('批量生成月度总结失败:', error);
+  }
+};
+
+// 批量生成所有用户的年度总结（定时任务专用）
+exports.batchGenerateYearlySummary = async () => {
+  try {
+    console.log('开始批量生成年度总结...');
+    
+    const now = new Date();
+    const lastYear = new Date(now.getFullYear() - 1, 0, 1);
+    const currentYear = new Date(now.getFullYear(), 0, 1);
+    
+    const users = await User.find();
+    
+    for (const user of users) {
+      const diaries = await Diary.find({
+        user: user._id,
+        startTime: {
+          $gte: lastYear,
+          $lt: currentYear
+        }
+      });
+      
+      if (diaries.length > 0) {
+        let totalWorkTime = 0;
+        const monthlyWork = {};
+        const tagStats = {};
+        
+        diaries.forEach(diary => {
+          totalWorkTime += calculateWorkTime(diary.startTime, diary.endTime);
+          
+          const monthKey = `${new Date(diary.startTime).getFullYear()}年${new Date(diary.startTime).getMonth() + 1}月`;
+          monthlyWork[monthKey] = (monthlyWork[monthKey] || 0) + calculateWorkTime(diary.startTime, diary.endTime);
+          
+          diary.tags.forEach(tag => {
+            tagStats[tag] = (tagStats[tag] || 0) + 1;
+          });
+        });
+        
+        // 准备基础总结内容
+        const baseContent = `
+# ${lastYear.getFullYear()}年 工作总结
+
+## 年度概览
+- 工作条目数量: ${diaries.length}
+- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 月均工作时长: ${Math.floor(totalWorkTime / 12 / 60)}小时${Math.floor((totalWorkTime / 12) % 60)}分钟
+
+## 月度工作趋势
+${Object.entries(monthlyWork).map(([month, minutes]) => `- ${month}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`).join('\n')}
+
+## 工作类型分布
+${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
+
+## 总结与反思
+(此处可添加年度工作总结和个人反思)
+        `.trim();
+        
+        // 准备LLM所需数据
+        const llmData = {
+          date: lastYear,
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          monthlyWork: monthlyWork,
+          tagStats: tagStats
+        };
+        
+        let summaryContent = baseContent;
+        let llmSummary = null;
+        
+        // 首先尝试使用外部LLM
+        try {
+          llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
+          if (llmSummary) {
+            console.log('使用外部LLM生成的年度总结内容');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
+        }
+        
+        // 如果外部LLM失败，尝试本地LLM
+        if (!llmSummary) {
+          try {
+            llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用本地LLM生成的年度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('本地LLM生成年度总结失败:', error.message);
+          }
+        }
+        
+        // 如果所有LLM都失败，使用默认模板
+        if (!llmSummary) {
+          console.log('使用默认模板生成的年度总结内容');
+        }
+        
+        // 生成HTML网页
+        let htmlFilePath = null;
+        try {
+          console.log('开始生成年度总结HTML网页...');
+          const htmlData = {
+            date: lastYear,
+            diaries: diaries,
+            totalWorkTime: totalWorkTime,
+            monthlyWork: monthlyWork,
+            tagStats: tagStats
+          };
+          
+          const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent);
+          htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', lastYear);
+          console.log('年度总结HTML网页生成成功:', htmlFilePath);
+        } catch (error) {
+          console.error('生成年度总结HTML网页失败:', error);
+        }
+        
+        const summary = new Summary({
+          user: user._id,
+          type: 'yearly',
+          date: lastYear,
+          content: summaryContent,
+          htmlFilePath: htmlFilePath,
+          statistics: {
+            totalEntries: diaries.length,
+            totalTime: totalWorkTime,
+            tagDistribution: tagStats
+          }
+        });
+        
+        await summary.save();
+      }
+    }
+    
+    console.log('年度总结生成完成');
+  } catch (error) {
+    console.error('批量生成年度总结失败:', error);
   }
 };

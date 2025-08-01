@@ -182,6 +182,29 @@ const updateWorkProfile = async (req, res) => {
       ...workProfileData,
       isProfileCompleted: true
     };
+
+    // 直接读取默认模板并保存到用户数据库中
+    try {
+      const templatesPath = path.join(__dirname, '../templates');
+      
+      // 读取默认模板文件
+      const dailyTemplate = fs.readFileSync(path.join(templatesPath, 'daily_summary_prompt.txt'), 'utf8');
+      const monthlyTemplate = fs.readFileSync(path.join(templatesPath, 'monthly_summary_prompt.txt'), 'utf8');
+      const yearlyTemplate = fs.readFileSync(path.join(templatesPath, 'yearly_summary_prompt.txt'), 'utf8');
+      
+      // 保存默认模板到用户的customPrompts字段
+      user.customPrompts = {
+        daily: dailyTemplate,
+        monthly: monthlyTemplate,
+        yearly: yearlyTemplate
+      };
+      
+      console.log('默认提示词模板已关联到用户');
+    } catch (templateError) {
+      console.error('读取默认模板失败:', templateError);
+      // 即使模板读取失败，也不影响工作信息的保存
+    }
+
     user.updatedAt = new Date();
 
     console.log('准备保存用户工作信息:', user.workProfile);

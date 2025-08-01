@@ -98,9 +98,9 @@ app.use('/api/settings', settingsRoutes);
 // 每天凌晨1点生成昨日总结
 cron.schedule('0 1 * * *', generateDailySummary);
 // 每月1日凌晨2点生成上月总结
-cron.schedule('0 2 1 * *', generateMonthlySummary);
+cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary);
 // 每年1月1日凌晨3点生成上年总结
-cron.schedule('0 3 1 1 *', generateYearlySummary);
+cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary);
 
 // 根路径
 app.get('/', (req, res) => {

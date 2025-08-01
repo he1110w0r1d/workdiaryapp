@@ -22,8 +22,13 @@ import {
   PlusOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import api from '../utils/api';  // 修改这里
-import moment from 'moment';
+import api from '../utils/api';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+import locale from 'antd/es/date-picker/locale/zh_CN';
+
+// 设置dayjs全局locale
+dayjs.locale('zh-cn');
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -37,55 +42,57 @@ const DiaryForm = () => {
   const [loading, setLoading] = useState(false);
   const [initialValues, setInitialValues] = useState({});
   
-  // 获取URL参数中的日期
-  const dateParam = searchParams.get('date');
+  // 移除受控状态，使用Form管理
+
+  const isEdit = !!id;
 
   useEffect(() => {
-    if (id) {
+    if (isEdit) {
       fetchDiary();
     } else {
-      // 如果有URL参数中的日期则使用，否则使用当前日期
-      const defaultDate = dateParam ? moment(dateParam) : moment();
-      const now = moment();
+      const today = dayjs();
+      const now = dayjs();
       
       const defaultValues = {
-        startDate: defaultDate,
+        content: '',
+        location: '',
+        tags: [],
+        startDate: today,
+        endDate: today,
         startTime: now,
-        endDate: defaultDate,
-        endTime: now.clone().add(1, 'hour'),
+        endTime: now.add(1, 'hour'),
         workPriority: '中'
       };
-       
-       setInitialValues(defaultValues);
+      
+      setInitialValues(defaultValues);
       form.setFieldsValue(defaultValues);
     }
-  }, [id]); // 移除searchParams依赖，避免重复设置
+  }, [id, isEdit, form]);
 
   const fetchDiary = async () => {
     try {
       const response = await api.get(`/diaries/${id}`);  // 修改这里
       const diary = response.data;
       
+      const startMoment = dayjs(diary.startTime).isValid() ? dayjs(diary.startTime) : dayjs();
+      const endMoment = dayjs(diary.endTime).isValid() ? dayjs(diary.endTime) : dayjs();
+      
       const initialValues = {
         content: diary.content,
         location: diary.location,
         tags: diary.tags,
         workPriority: diary.workPriority || '中',
-        startDate: moment(diary.startTime),
-        startTime: moment(diary.startTime),
-        endDate: moment(diary.endTime),
-        endTime: moment(diary.endTime)
+        startDate: startMoment,
+        endDate: endMoment,
+        startTime: startMoment,
+        endTime: endMoment
       };
-      
-      // 设置状态
-      setSelectedTags(diary.tags || []);
-      setWorkPriority(diary.workPriority || '中');
       
       setInitialValues(initialValues);
       form.setFieldsValue(initialValues);
     } catch (error) {
       message.error('获取日记失败');
-      navigate('/diaries');
+      navigate('/app/diaries');
     }
   };
 
@@ -96,14 +103,14 @@ const DiaryForm = () => {
         content: values.content,
         location: values.location || '',
         tags: values.tags || [],
-        workPriority: values.workPriority || workPriority || '中',
-        startTime: moment(values.startDate)
+        workPriority: values.workPriority || '中',
+        startTime: dayjs(values.startDate)
           .hour(values.startTime.hour())
           .minute(values.startTime.minute())
           .second(0)
           .millisecond(0)
           .toISOString(),
-        endTime: moment(values.endDate)
+        endTime: dayjs(values.endDate)
           .hour(values.endTime.hour())
           .minute(values.endTime.minute())
           .second(0)
@@ -111,15 +118,15 @@ const DiaryForm = () => {
           .toISOString()
         };
 
-      if (id) {
-        await api.put(`/diaries/${id}`, diaryData);  // 修改这里
-        message.success('更新成功');
+      if (isEdit) {
+        await api.put(`/diaries/${id}`, diaryData);
+        message.success('日记更新成功');
       } else {
-        await api.post('/diaries', diaryData);  // 修改这里
-        message.success('创建成功');
+        await api.post('/diaries', diaryData);
+        message.success('日记创建成功');
       }
       
-      navigate('/diaries');
+      navigate('/app/diaries');
     } catch (error) {
       message.error(error.response?.data?.message || '操作失败');
     } finally {
@@ -184,7 +191,13 @@ const DiaryForm = () => {
               label="开始日期"
               rules={[{ required: true, message: '请选择开始日期' }]}
             >
-              <DatePicker style={{ width: '100%' }} />
+              <DatePicker 
+                format="YYYY-MM-DD" 
+                style={{ width: '100%' }} 
+                placeholder="请选择开始日期"
+                allowClear={false}
+                locale={locale}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -205,7 +218,13 @@ const DiaryForm = () => {
               label="结束日期"
               rules={[{ required: true, message: '请选择结束日期' }]}
             >
-              <DatePicker style={{ width: '100%' }} />
+              <DatePicker 
+                format="YYYY-MM-DD" 
+                style={{ width: '100%' }} 
+                placeholder="请选择结束日期"
+                allowClear={false}
+                locale={locale}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -422,7 +441,7 @@ const DiaryForm = () => {
               {id ? '💾 更新日记' : '✨ 创建日记'}
             </Button>
             <Button 
-              onClick={() => navigate('/diaries')}
+              onClick={() => navigate('/app/diaries')}
               size="large"
               icon={<RollbackOutlined />}
               style={{

@@ -14,12 +14,6 @@ const UserSettings = () => {
   const [pageLoading, setPageLoading] = useState(true);
   const [userInfo, setUserInfo] = useState(null);
   const [workProfile, setWorkProfile] = useState(null);
-  const [showProgress, setShowProgress] = useState(false);
-  const [progressSteps, setProgressSteps] = useState({
-    daily: { status: 'waiting', text: '每日提示词' },
-    monthly: { status: 'waiting', text: '每月提示词' },
-    yearly: { status: 'waiting', text: '年度提示词' }
-  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -83,106 +77,17 @@ const UserSettings = () => {
     }
   };
 
-  // 轮询进度状态
-  const pollProgress = async () => {
-    try {
-      const response = await api.get('/users/generate-custom-prompts?progress=true');
-      const progress = response.data.progress;
-      
-      setProgressSteps({
-        daily: { 
-          status: progress.daily.status, 
-          text: progress.daily.message 
-        },
-        monthly: { 
-          status: progress.monthly.status, 
-          text: progress.monthly.message 
-        },
-        yearly: { 
-          status: progress.yearly.status, 
-          text: progress.yearly.message 
-        }
-      });
-      
-      // 检查是否所有步骤都完成或失败
-      const allFinished = Object.values(progress).every(step => 
-        step.status === 'finish' || step.status === 'error'
-      );
-      
-      if (allFinished) {
-        // 3秒后隐藏进度条
-        setTimeout(() => {
-          setShowProgress(false);
-        }, 3000);
-        return false; // 停止轮询
-      }
-      
-      return true; // 继续轮询
-    } catch (error) {
-      console.error('获取进度失败:', error);
-      return false; // 停止轮询
-    }
-  };
+
 
   const handleWorkProfileSave = async (values) => {
     setWorkLoading(true);
-    setShowProgress(true);
-    
-    // 重置进度状态
-    setProgressSteps({
-      daily: { status: 'waiting', text: '等待开始' },
-      monthly: { status: 'waiting', text: '等待开始' },
-      yearly: { status: 'waiting', text: '等待开始' }
-    });
     
     try {
       // 保存工作信息配置
       const response = await api.put('/users/work-profile', values);
       console.log('工作信息配置更新成功:', response.data);
       
-      // 生成新的定制化提示词
-      try {
-        // 启动进度轮询
-        const pollInterval = setInterval(async () => {
-          const shouldContinue = await pollProgress();
-          if (!shouldContinue) {
-            clearInterval(pollInterval);
-          }
-        }, 1000); // 每秒轮询一次
-        
-        // 实际调用API生成提示词
-        const promptResponse = await api.post('/users/generate-custom-prompts');
-        console.log('定制化提示词生成成功:', promptResponse.data);
-        
-        message.success('工作信息配置保存成功，并已生成新的定制化提示词！');
-        
-        // 清除轮询
-        clearInterval(pollInterval);
-        
-        // 最后一次获取进度状态
-        await pollProgress();
-        
-      } catch (promptError) {
-        console.error('生成定制化提示词失败:', promptError);
-        message.warning('工作信息配置保存成功，但生成定制化提示词失败: ' + (promptError.response?.data?.message || promptError.message));
-        
-        // 标记失败状态
-        setProgressSteps(prev => {
-          const newSteps = { ...prev };
-          Object.keys(newSteps).forEach(key => {
-            if (newSteps[key].status === 'active' || newSteps[key].status === 'waiting') {
-              newSteps[key] = { status: 'error', text: '生成失败' };
-            }
-          });
-          return newSteps;
-        });
-        
-        // 3秒后隐藏进度条
-        setTimeout(() => {
-          setShowProgress(false);
-        }, 3000);
-      }
-      
+      message.success('工作信息配置保存成功！');
       setWorkProfile({ ...workProfile, ...values });
     } catch (error) {
       console.error('保存工作信息配置失败:', error);
@@ -190,7 +95,6 @@ const UserSettings = () => {
       if (error.response?.status === 401) {
         navigate('/login');
       }
-      setShowProgress(false);
     } finally {
       setWorkLoading(false);
     }
@@ -522,119 +426,9 @@ const UserSettings = () => {
               icon={<SaveOutlined />}
               size="large"
             >
-              保存并生成新的提示词
+              保存工作信息配置
             </Button>
-            
-            {/* 进度条 */}
-            {showProgress && (
-              <div style={{ marginTop: '24px', padding: '0 20px' }}>
-                <div style={{ marginBottom: '16px', fontSize: '14px', color: '#666' }}>
-                  提示词生成进度
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  {/* 每日提示词进度 */}
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '50%', 
-                      margin: '0 auto 8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      backgroundColor: progressSteps.daily.status === 'finish' ? '#52c41a' : 
-                                     progressSteps.daily.status === 'active' ? '#1890ff' :
-                                     progressSteps.daily.status === 'error' ? '#ff4d4f' : '#d9d9d9',
-                      color: progressSteps.daily.status === 'waiting' ? '#999' : '#fff'
-                    }}>
-                      {progressSteps.daily.status === 'finish' ? '✓' : 
-                       progressSteps.daily.status === 'active' ? <Spin size="small" /> :
-                       progressSteps.daily.status === 'error' ? '✗' : '1'}
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: progressSteps.daily.status === 'error' ? '#ff4d4f' : '#666'
-                    }}>
-                      {progressSteps.daily.text}
-                    </div>
-                  </div>
-                  
-                  {/* 连接线 */}
-                  <div style={{ 
-                    width: '40px', 
-                    height: '2px', 
-                    backgroundColor: progressSteps.monthly.status !== 'waiting' ? '#1890ff' : '#d9d9d9'
-                  }} />
-                  
-                  {/* 每月提示词进度 */}
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '50%', 
-                      margin: '0 auto 8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      backgroundColor: progressSteps.monthly.status === 'finish' ? '#52c41a' : 
-                                     progressSteps.monthly.status === 'active' ? '#1890ff' :
-                                     progressSteps.monthly.status === 'error' ? '#ff4d4f' : '#d9d9d9',
-                      color: progressSteps.monthly.status === 'waiting' ? '#999' : '#fff'
-                    }}>
-                      {progressSteps.monthly.status === 'finish' ? '✓' : 
-                       progressSteps.monthly.status === 'active' ? <Spin size="small" /> :
-                       progressSteps.monthly.status === 'error' ? '✗' : '2'}
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: progressSteps.monthly.status === 'error' ? '#ff4d4f' : '#666'
-                    }}>
-                      {progressSteps.monthly.text}
-                    </div>
-                  </div>
-                  
-                  {/* 连接线 */}
-                  <div style={{ 
-                    width: '40px', 
-                    height: '2px', 
-                    backgroundColor: progressSteps.yearly.status !== 'waiting' ? '#1890ff' : '#d9d9d9'
-                  }} />
-                  
-                  {/* 年度提示词进度 */}
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '50%', 
-                      margin: '0 auto 8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      backgroundColor: progressSteps.yearly.status === 'finish' ? '#52c41a' : 
-                                     progressSteps.yearly.status === 'active' ? '#1890ff' :
-                                     progressSteps.yearly.status === 'error' ? '#ff4d4f' : '#d9d9d9',
-                      color: progressSteps.yearly.status === 'waiting' ? '#999' : '#fff'
-                    }}>
-                      {progressSteps.yearly.status === 'finish' ? '✓' : 
-                       progressSteps.yearly.status === 'active' ? <Spin size="small" /> :
-                       progressSteps.yearly.status === 'error' ? '✗' : '3'}
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: progressSteps.yearly.status === 'error' ? '#ff4d4f' : '#666'
-                    }}>
-                      {progressSteps.yearly.text}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
         </Form>
       </Card>

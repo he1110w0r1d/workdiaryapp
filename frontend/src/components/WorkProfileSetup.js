@@ -11,10 +11,10 @@ import {
   Col,
   Checkbox,
   message,
-  Spin,
-  Typography
+  Typography,
+  Alert
 } from 'antd';
-import { UserOutlined, BulbOutlined, FileTextOutlined, CheckOutlined } from '@ant-design/icons';
+import { UserOutlined, BulbOutlined, FileTextOutlined, CheckOutlined, LinkOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 
 const { Option } = Select;
@@ -25,8 +25,9 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
   const [current, setCurrent] = useState(0);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [workProfile, setWorkProfile] = useState({});
+
+
 
 
 
@@ -83,7 +84,7 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
     {
       title: '完成设置',
       icon: <CheckOutlined />,
-      description: '生成定制化提示词'
+      description: '保存工作信息配置'
     }
   ];
 
@@ -100,6 +101,8 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
     setCurrent(current - 1);
   };
 
+
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -112,17 +115,15 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       
       // 保存工作信息配置
       const response = await api.put('/users/work-profile', finalProfile);
-      
       console.log('工作信息保存成功:', response.data);
-      setGenerating(true);
       
-      // 生成定制化提示词
-      const promptResponse = await api.post('/users/generate-prompts', {});
+      message.success('工作信息配置保存成功！');
       
-      console.log('提示词生成成功:', promptResponse.data);
-      message.success('工作信息配置完成，定制化提示词已生成！');
-      onComplete && onComplete();
-      onClose();
+      // 关闭模态框
+      setTimeout(() => {
+        onComplete && onComplete();
+        onClose();
+      }, 1000);
       
     } catch (error) {
       console.error('保存工作信息失败:', error);
@@ -131,7 +132,6 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       message.error(`保存失败：${error.response?.data?.message || error.message}`);
     } finally {
       setLoading(false);
-      setGenerating(false);
     }
   };
 
@@ -140,6 +140,25 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       case 0:
         return (
           <Card title="基本身份信息" className="step-card">
+            <Alert
+              message="💡 提示：如需使用AI功能，请先获取SiliconFlow API密钥"
+              description={
+                <div>
+                  <span>本应用支持AI智能总结功能，需要配置SiliconFlow API密钥。</span>
+                  <Button 
+                    type="link" 
+                    icon={<LinkOutlined />}
+                    onClick={() => window.open('/siliconflowregiest/index.html', '_blank')}
+                    style={{ padding: 0, marginLeft: 8 }}
+                  >
+                    查看API注册教程
+                  </Button>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -264,24 +283,14 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
         return (
           <Card title="设置完成" className="step-card">
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              {generating ? (
-                <div>
-                  <Spin size="large" />
-                  <div style={{ marginTop: 16 }}>
-                    <Title level={4}>正在生成您的专属提示词...</Title>
-                    <Text type="secondary">这可能需要几分钟时间，请耐心等待</Text>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <CheckOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
-                  <Title level={3}>配置即将完成！</Title>
-                  <Text type="secondary">
-                    点击完成按钮，系统将根据您的信息生成定制化的提示词模板，
-                    让AI更好地理解您的工作内容和需求。
-                  </Text>
-                </div>
-              )}
+              <div>
+                <CheckOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
+                <Title level={3}>配置即将完成！</Title>
+                <Text type="secondary">
+                  点击完成按钮，系统将保存您的工作信息配置，
+                  并自动关联默认的工作总结提示词模板。
+                </Text>
+              </div>
             </div>
           </Card>
         );
@@ -311,6 +320,8 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
           {renderStepContent()}
         </Form>
         
+
+        
         <div style={{ marginTop: 24, textAlign: 'right' }}>
           {current > 0 && (
             <Button style={{ marginRight: 8 }} onClick={prev}>
@@ -326,10 +337,9 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
             <Button 
               type="primary" 
               onClick={handleSubmit} 
-              loading={loading || generating}
-              disabled={generating}
+              loading={loading}
             >
-              {generating ? '生成中...' : '完成设置'}
+              完成设置
             </Button>
           )}
         </div>

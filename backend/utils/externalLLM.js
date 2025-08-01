@@ -17,9 +17,9 @@ class ExternalLLM {
       // API地址
       apiUrl: process.env.EXTERNAL_LLM_API_URL || '',
       // 模型名称
-      model: process.env.EXTERNAL_LLM_MODEL || 'gpt-3.5-turbo',
+      model: process.env.EXTERNAL_LLM_MODEL || 'deepseek-ai/DeepSeek-V3',
       // 请求超时时间（毫秒）
-      timeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '300000'),
+      timeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '600000'),
       // 温度参数，控制输出的随机性
       temperature: parseFloat(process.env.EXTERNAL_LLM_TEMPERATURE || '0.7'),
       // 最大token数
@@ -348,6 +348,17 @@ class ExternalLLM {
   _fillPromptTemplate(template, data, type) {
     let filledTemplate = template;
     
+    // 填充用户基本信息占位符
+    if (data.user) {
+      filledTemplate = filledTemplate
+        .replace('{{userName}}', data.user.nickname || data.user.username || '')
+        .replace('{{userPosition}}', data.user.workProfile?.position || '')
+        .replace('{{userDepartment}}', data.user.workProfile?.department || '')
+        .replace('{{userLevel}}', this._formatUserLevel(data.user.workProfile?.level) || '')
+        .replace('{{userIndustry}}', data.user.workProfile?.industry || '')
+        .replace('{{userResponsibilities}}', this._formatResponsibilities(data.user.workProfile?.responsibilities) || '');
+    }
+    
     // 根据总结类型处理不同的数据
     switch (type) {
       case 'daily':
@@ -366,7 +377,8 @@ class ExternalLLM {
           .replace('{{totalTime}}', data.totalWorkTime)
           .replace('{{averageTime}}', Math.floor(data.totalWorkTime / Object.keys(data.dailyWork).length))
           .replace('{{tagDistribution}}', this._formatTagDistribution(data.tagDistribution))
-          .replace('{{dailyWorkStats}}', this._formatDailyWorkStats(data.dailyWork));
+          .replace('{{dailyWorkStats}}', this._formatDailyWorkStats(data.dailyWork))
+          .replace('{{workDetails}}', data.workDetails || '');
         break;
         
       case 'yearly':
@@ -376,7 +388,8 @@ class ExternalLLM {
           .replace('{{totalTime}}', data.totalWorkTime)
           .replace('{{averageTime}}', Math.floor(data.totalWorkTime / 12))
           .replace('{{monthlyWorkTrend}}', this._formatMonthlyWorkTrend(data.monthlyWork))
-          .replace('{{tagDistribution}}', this._formatTagDistribution(data.tagDistribution));
+          .replace('{{tagDistribution}}', this._formatTagDistribution(data.tagDistribution))
+          .replace('{{workDetails}}', data.workDetails || '');
         break;
     }
     
@@ -432,6 +445,34 @@ class ExternalLLM {
         return `- ${month}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`;
       })
       .join('\n');
+  }
+
+  /**
+   * 格式化用户级别
+   * @param {string} level 用户级别
+   * @returns {string} 格式化后的级别
+   */
+  _formatUserLevel(level) {
+    const levelMap = {
+      'junior': '初级',
+      'middle': '中级', 
+      'senior': '高级',
+      'expert': '专家',
+      'manager': '管理层'
+    };
+    return levelMap[level] || level || '';
+  }
+
+  /**
+   * 格式化用户职责
+   * @param {Array} responsibilities 职责数组
+   * @returns {string} 格式化后的职责
+   */
+  _formatResponsibilities(responsibilities) {
+    if (!responsibilities || !Array.isArray(responsibilities) || responsibilities.length === 0) {
+      return '';
+    }
+    return responsibilities.join('、');
   }
 }
 

@@ -22,16 +22,16 @@ const getDefaultSettings = () => {
     // 本地LLM设置
     useLocalLLM: process.env.USE_LOCAL_LLM === 'true',
     apiUrl: process.env.LOCAL_LLM_API_URL || 'http://localhost:11434/api/generate',
-    model: process.env.LOCAL_LLM_MODEL || 'llama3',
-    timeout: parseInt(process.env.LOCAL_LLM_TIMEOUT || '60000'),
+    model: process.env.LOCAL_LLM_MODEL || 'qwen3:4b',
+    timeout: parseInt(process.env.LOCAL_LLM_TIMEOUT || '600000'),
     temperature: parseFloat(process.env.LOCAL_LLM_TEMPERATURE || '0.7'),
     
     // 外部LLM设置
-    externalProvider: process.env.EXTERNAL_LLM_PROVIDER || 'openai',
+    externalProvider: process.env.EXTERNAL_LLM_PROVIDER || '自定义',
     externalApiKey: process.env.EXTERNAL_LLM_API_KEY || '',
-    externalApiUrl: process.env.EXTERNAL_LLM_API_URL || '',
-    externalModel: process.env.EXTERNAL_LLM_MODEL || 'gpt-3.5-turbo',
-    externalTimeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '30000'),
+    externalApiUrl: process.env.EXTERNAL_LLM_API_URL || 'https://api.siliconflow.cn/v1/chat/completions',
+    externalModel: process.env.EXTERNAL_LLM_MODEL || 'deepseek-ai/DeepSeek-V3',
+    externalTimeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '600000'),
     externalTemperature: parseFloat(process.env.EXTERNAL_LLM_TEMPERATURE || '0.7'),
     externalMaxTokens: parseInt(process.env.EXTERNAL_LLM_MAX_TOKENS || '2000')
   };

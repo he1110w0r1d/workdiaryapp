@@ -216,7 +216,7 @@ const DiaryList = () => {
       key: 'action',
       render: (_, record) => (
         <Space size="middle">
-          <Link to={`/diaries/${record._id}/edit`}>
+          <Link to={`/app/diaries/${record._id}/edit`}>
             <Button icon={<EditOutlined />} size="small">
               编辑
             </Button>
@@ -246,7 +246,7 @@ const DiaryList = () => {
         marginBottom: 16 
       }}>
         <Title level={2}>工作日记</Title>
-        <Link to="/diaries/new">
+        <Link to="/app/diaries/new">
           <Button type="primary" icon={<PlusOutlined />}>
             新增日记
           </Button>

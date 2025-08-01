@@ -13,10 +13,10 @@ const Login = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      const response = await api.post('/users/login', values);  // 修改这里
+      const response = await api.post('/users/login', values);
       localStorage.setItem('token', response.data.token);
       message.success('登录成功');
-      navigate('/');
+      navigate('/app');
     } catch (error) {
       message.error(error.response?.data?.message || '登录失败');
     } finally {

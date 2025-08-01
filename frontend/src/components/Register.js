@@ -13,9 +13,17 @@ const Register = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      await api.post('/users/register', values);  // 修改这里
-      message.success('注册成功，请登录');
-      navigate('/login');
+      const response = await api.post('/users/register', values);
+      message.success('注册成功！');
+      
+      // 如果注册返回了token，直接登录
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        navigate('/llm-setup');
+      } else {
+        // 否则跳转到登录页
+        navigate('/login');
+      }
     } catch (error) {
       message.error(error.response?.data?.message || '注册失败');
     } finally {
