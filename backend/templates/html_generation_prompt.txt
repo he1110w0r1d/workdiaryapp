@@ -16,6 +16,12 @@
 - 详细内容区域：工作总结的详细文本内容
 - 底部：页脚信息
 
+### 重要：日期显示规范
+- 对于月度总结，请根据数据中的date字段正确显示月份
+- 如果date是某月的第一天（如2025-07-01），应显示为"2025年7月"而不是"2025年6月"
+- 请使用JavaScript的getFullYear()和getMonth()+1来正确获取年份和月份
+- 避免时区转换导致的日期显示错误
+
 ### 3. 数据可视化（可以用svg来展示）
 - 工作标签分布：饼图或环形图
 - 工作时长趋势：折线图或柱状图
@@ -40,6 +46,15 @@
 
 ## 总结内容：
 {{summaryContent}}
+
+## 日期处理示例：
+对于月度总结，请使用以下JavaScript代码正确显示日期：
+```javascript
+const summaryDate = new Date(summaryData.date);
+const year = summaryDate.getFullYear();
+const month = summaryDate.getMonth() + 1; // getMonth()返回0-11，需要+1
+const displayTitle = `${year}年${month}月工作总结`;
+```
 
 ## 重要说明：
 请直接返回完整的HTML代码，不要包含任何markdown格式、代码块标记（```）或说明文字。

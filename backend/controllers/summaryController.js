@@ -281,7 +281,8 @@ ${index + 1}. ${diary.content}
         const llmData = {
           date: yesterday,
           diaries: diaries,
-          totalWorkTime: totalWorkTime
+          totalWorkTime: totalWorkTime,
+          user: user
         };
         
         // 尝试使用LLM生成总结
@@ -1085,11 +1086,18 @@ ${diaries.map(diary => `### 工作内容\n- 开始时间: ${new Date(diary.start
 ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
     `.trim();
     
+    // 获取用户信息
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: '用户不存在' });
+    }
+    
     // 准备LLM所需数据
     const llmData = {
       date: yesterday,
       diaries: diaries,
-      totalWorkTime: totalWorkTime
+      totalWorkTime: totalWorkTime,
+      user: user
     };
     
     // 尝试使用LLM生成总结
@@ -1380,7 +1388,8 @@ ${diaries.map(diary => {
           date: lastMonth,
           diaries: diaries,
           totalWorkTime: totalWorkTime,
-          dailyWork: dailyWork
+          dailyWork: dailyWork,
+          user: user
         };
         
         let llmSummary = null;
@@ -1522,7 +1531,8 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           diaries: diaries,
           totalWorkTime: totalWorkTime,
           monthlyWork: monthlyWork,
-          tagStats: tagStats
+          tagStats: tagStats,
+          user: user
         };
         
         let summaryContent = baseContent;
