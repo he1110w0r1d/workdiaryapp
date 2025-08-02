@@ -108,26 +108,63 @@ docker-compose --version
 
 ### 2. 项目配置
 
-#### 修改环境变量
+#### 环境变量配置
 
-**后端配置 (.env.production):**
+**重要**: 项目使用 `.env.example` 文件作为配置模板，部署前需要创建实际的 `.env` 文件。
+
+**步骤 1: 创建环境变量文件**
+```bash
+# 后端环境变量
+cp backend/.env.example backend/.env
+
+# 前端环境变量
+cp frontend/.env.example frontend/.env
+```
+
+**步骤 2: 修改后端配置 (backend/.env)**
 ```env
+# 服务器端口
+PORT=5000
+
+# 数据库连接 - 根据部署环境选择
+# 开发环境使用本地MongoDB
+MONGODB_URI=mongodb://localhost:27017/workdiary
+# 生产环境使用Docker容器中的MongoDB
+# MONGODB_URI=mongodb://admin:your-secure-password@mongodb:27017/workdiary?authSource=admin
+
 # 重要：修改以下密钥为安全的随机字符串
 JWT_SECRET=your-super-secure-jwt-secret-key-here
 SESSION_SECRET=your-super-secure-session-secret-key-here
-MONGODB_URI=mongodb://admin:your-secure-password@mongodb:27017/workdiary?authSource=admin
 
-# 生产环境设置
+# 运行环境
 NODE_ENV=production
+
+# CORS允许的源地址
 CORS_ORIGIN=http://your-domain.com
+
+# 本地LLM配置（可选）
+USE_LOCAL_LLM=false
+LOCAL_LLM_API_URL=http://localhost:11434/api/generate
+LOCAL_LLM_MODEL=llama3
+LOCAL_LLM_TIMEOUT=60000
+LOCAL_LLM_TEMPERATURE=0.7
 ```
 
-**前端配置 (.env.production):**
+**步骤 3: 修改前端配置 (frontend/.env)**
 ```env
-# 修改为实际的 API 地址
+# 后端API地址 - 修改为实际的服务器地址
 REACT_APP_API_URL=http://your-domain.com/api
 # 或者使用 IP 地址
-# REACT_APP_API_URL=http://192.168.1.100:5000
+# REACT_APP_API_URL=http://192.168.1.100:5000/api
+
+# 网络配置
+HOST=0.0.0.0  # 生产环境建议使用0.0.0.0
+PORT=3000
+
+# 天气API配置 - 请注册并替换为您自己的API密钥
+REACT_APP_QWEATHER_KEY=your-qweather-api-key-here
+REACT_APP_OPENWEATHER_KEY=your-openweather-api-key-here
+REACT_APP_USE_MOCK_WEATHER=false
 ```
 
 #### 修改数据库密码
