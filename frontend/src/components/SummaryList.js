@@ -294,7 +294,7 @@ const SummaryList = () => {
               icon={<LinkOutlined />} 
               size="small"
               type="primary"
-              onClick={() => window.open(`http://localhost:5000${record.htmlFilePath}`, '_blank')}
+              onClick={() => window.open(`${process.env.REACT_APP_API_URL.replace('/api', '')}${record.htmlFilePath}`, '_blank')}
             >
               查看网页
             </Button>

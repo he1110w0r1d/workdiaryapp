@@ -64,11 +64,46 @@ const { generateDailySummary, generateMonthlySummary, generateYearlySummary } = 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// 启用trust proxy以正确获取客户端IP
+app.set('trust proxy', true);
+
 // 设置请求超时时间为10分钟，适应LLM生成时间
 app.use((req, res, next) => {
   req.setTimeout(600000); // 10分钟
   res.setTimeout(600000); // 10分钟
   next();
+});
+
+// IP访问限制中间件 - 只允许局域网192.168.1.x访问
+app.use((req, res, next) => {
+  const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 
+    (req.connection.socket ? req.connection.socket.remoteAddress : null);
+  
+  // 获取真实IP（处理代理情况）
+  const realIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || clientIP;
+  const ip = realIP ? realIP.split(',')[0].trim() : clientIP;
+  
+  console.log(`访问请求来自IP: ${ip}`);
+  
+  // 允许本地访问
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+    return next();
+  }
+  
+  // 检查是否为192.168.1.x网段
+  const ipv4Regex = /^192\.168\.1\.(\d{1,3})$/;
+  const ipv6MappedRegex = /^::ffff:192\.168\.1\.(\d{1,3})$/;
+  
+  if (ipv4Regex.test(ip) || ipv6MappedRegex.test(ip)) {
+    return next();
+  }
+  
+  // 拒绝访问
+  console.log(`拒绝来自IP ${ip} 的访问请求`);
+  return res.status(403).json({ 
+    error: '访问被拒绝', 
+    message: '此服务仅限局域网192.168.1.x网段访问' 
+  });
 });
 
 // 中间件
@@ -107,6 +142,8 @@ app.get('/', (req, res) => {
   res.json({ message: 'Work Diary API Server' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '192.168.1.84', () => {
+  console.log(`服务器运行在端口 ${PORT}`);
+  console.log(`局域网访问地址: http://192.168.1.84:${PORT}`);
+  console.log('注意: 此服务仅限192.168.1.x网段访问');
 });

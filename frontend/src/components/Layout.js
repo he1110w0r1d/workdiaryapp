@@ -289,7 +289,7 @@ const AppLayout = ({ children }) => {
             
             <Avatar 
               size="large" 
-              src={userInfo?.avatar ? `http://localhost:5000${userInfo.avatar}` : undefined}
+              src={userInfo?.avatar ? `${process.env.REACT_APP_API_URL.replace('/api', '')}${userInfo.avatar}` : undefined}
               icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
               onClick={handleAvatarClick}
               title="点击进入用户设置"
