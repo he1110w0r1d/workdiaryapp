@@ -5,7 +5,6 @@ import {
   FileTextOutlined, 
   BarChartOutlined, 
   UserOutlined,
-  SettingOutlined,
   QuestionCircleOutlined,
   ClockCircleOutlined,
   CalendarOutlined,
@@ -152,11 +151,6 @@ const AppLayout = ({ children }) => {
       key: '/app/model-settings',
       icon: <RobotOutlined />,
       label: <Link to="/app/model-settings">模型设置</Link>,
-    },
-    {
-      key: '/app/settings',
-      icon: <SettingOutlined />,
-      label: <Link to="/app/settings">系统设置</Link>,
     },
     {
       key: '/app/user-settings',

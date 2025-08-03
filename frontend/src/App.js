@@ -13,7 +13,6 @@ import Dashboard from './components/Dashboard';
 import DiaryList from './components/DiaryList';
 import DiaryForm from './components/DiaryForm';
 import SummaryList from './components/SummaryList';
-import Settings from './components/Settings';
 import UserSettings from './components/UserSettings';
 import UserSettingsPage from './components/UserSettingsPage';
 import ModelSettings from './components/ModelSettings';
@@ -43,7 +42,6 @@ function App() {
               <Route path="diaries/:id/edit" element={<DiaryForm />} />
               <Route path="summaries" element={<SummaryList />} />
               <Route path="model-settings" element={<ModelSettings />} />
-              <Route path="settings" element={<Settings />} />
               <Route path="user-settings" element={<UserSettingsPage />} />
             </Route>
             <Route path="/" element={<RootRedirect />} />

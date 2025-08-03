@@ -20,7 +20,7 @@ const LLMSetupGuide = () => {
     externalApiKey: '',
     externalApiUrl: 'https://api.siliconflow.cn/v1/chat/completions',
     externalModel: 'deepseek-ai/DeepSeek-V3',
-    externalTimeout: 120000,
+    externalTimeout: 600000,
     externalTemperature: 0.7,
     externalMaxTokens: 8000
   };
@@ -120,7 +120,7 @@ const LLMSetupGuide = () => {
                 <div style={{ marginTop: '8px' }}>
                   <Text type="secondary">还没有API密钥？</Text>
                   <Link 
-                    href="https://cloud.siliconflow.cn/i/TTiemPwh" 
+                    href="/siliconflowregiest/" 
                     target="_blank"
                     style={{ marginLeft: '8px' }}
                   >

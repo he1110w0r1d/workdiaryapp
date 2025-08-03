@@ -45,6 +45,10 @@ exports.saveUserLLMConfig = async (req, res) => {
     const userId = req.user.id;
     const { name, provider, apiKey, apiUrl, model, timeout, temperature, maxTokens, isDefault } = req.body;
 
+    console.log('=== 添加新LLM配置 ===');
+    console.log('用户ID:', userId);
+    console.log('请求数据:', { name, provider, model, isDefault });
+
     // 验证必填字段
     if (!name || !provider || !model) {
       return res.status(400).json({ message: '配置名称、提供商和模型不能为空' });
@@ -55,12 +59,12 @@ exports.saveUserLLMConfig = async (req, res) => {
       return res.status(404).json({ message: '用户不存在' });
     }
 
-    // 如果设置为默认配置，先取消其他配置的默认状态
-    if (isDefault) {
-      user.llmConfigs.forEach(config => {
-        config.isDefault = false;
-      });
-    }
+    console.log('添加前现有配置数量:', user.llmConfigs.length);
+
+    // 新添加的配置自动设置为默认配置，取消其他配置的默认状态
+    user.llmConfigs.forEach(config => {
+      config.isDefault = false;
+    });
 
     // 添加新配置
     const newConfig = {
@@ -72,12 +76,23 @@ exports.saveUserLLMConfig = async (req, res) => {
       timeout: timeout || 600000,
       temperature: temperature || 0.7,
       maxTokens: maxTokens || 8000,
-      isDefault: isDefault || false,
+      isDefault: true, // 新添加的配置自动设置为默认
       isActive: true
     };
 
+    console.log('新配置:', newConfig);
+
     user.llmConfigs.push(newConfig);
+    
+    console.log('=== 保存到数据库前的数据跟踪 ===');
+    console.log('用户ID:', user._id);
+    console.log('即将保存的完整llmConfigs数组:', JSON.stringify(user.llmConfigs, null, 2));
+    console.log('llmConfigs数组长度:', user.llmConfigs.length);
+    
     await user.save();
+
+    console.log('保存成功，新配置ID:', newConfig._id);
+    console.log('添加后配置数量:', user.llmConfigs.length);
 
     return res.json({ message: 'LLM配置保存成功', configId: newConfig._id });
   } catch (error) {

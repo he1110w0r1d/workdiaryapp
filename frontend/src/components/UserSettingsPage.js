@@ -41,7 +41,7 @@ const UserSettingsPage = () => {
             用户设置
           </Space>
         }
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <Tabs
           activeKey={activeTab}
