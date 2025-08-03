@@ -4,7 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
 
-const logger = require('../utils/logger');
+const logger = require('./utils/logger');
 // 加载环境变量
 dotenv.config();
 
