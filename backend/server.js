@@ -63,7 +63,7 @@ const { generateDailySummary, generateMonthlySummary, generateYearlySummary } = 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+const HOST = process.env.HOST 
 // 启用trust proxy以正确获取客户端IP
 app.set('trust proxy', true);
 
@@ -142,8 +142,8 @@ app.get('/', (req, res) => {
   res.json({ message: 'Work Diary API Server' });
 });
 
-app.listen(PORT, '192.168.1.84', () => {
+app.listen(PORT, HOST, () => {
   console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`局域网访问地址: http://192.168.1.84:${PORT}`);
+  console.log(`局域网访问地址: http://${HOST}:${PORT}`);
   console.log('注意: 此服务仅限192.168.1.x网段访问');
 });
