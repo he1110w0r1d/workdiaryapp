@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
+const logger = require('../utils/logger');
 /**
  * 外部LLM工具类
  * 用于与外部LLM API进行通信
@@ -48,12 +49,12 @@ class ExternalLLM {
    */
   async generateSummary(data, type, options = {}, userId = null) {
     if (!this.config.enabled) {
-      console.log('外部LLM未启用，跳过外部LLM总结生成');
+      logger.llm('外部LLM未启用，跳过外部LLM总结生成');
       return null;
     }
 
     if (!this.config.apiKey) {
-      console.log('外部LLM API密钥未配置，跳过外部LLM总结生成');
+      logger.llm('外部LLM API密钥未配置，跳过外部LLM总结生成');
       return null;
     }
 
@@ -64,21 +65,14 @@ class ExternalLLM {
       // 填充提示词模板
       const prompt = this._fillPromptTemplate(promptTemplate, data, type);
       
-      console.log('=== 发送给外部LLM的提示词 ===');
-      console.log(prompt);
-      console.log('=== 提示词结束 ===');
-      
-      // 调用外部LLM
-      const response = await this._callExternalLLM(prompt, options);
-      
-      console.log('=== 外部LLM返回的内容 ===');
-      console.log(response);
-      console.log('=== 返回内容结束 ===');
+      logger.llm('=== 发送给外部LLM的提示词 ===');
+      logger.info(prompt);
+      // 调试代码已清理
       
       // 返回生成的内容
       return response;
     } catch (error) {
-      console.error('外部LLM生成总结失败:', error.message);
+      logger.error('外部LLM生成总结失败:', error.message);
       return null;
     }
   }
@@ -91,19 +85,19 @@ class ExternalLLM {
    */
   async generateText(prompt, options = {}) {
     if (!this.config.enabled) {
-      console.log('外部LLM未启用，跳过外部LLM文本生成');
+      logger.llm('外部LLM未启用，跳过外部LLM文本生成');
       return null;
     }
 
     if (!this.config.apiKey) {
-      console.log('外部LLM API密钥未配置，跳过外部LLM文本生成');
+      logger.llm('外部LLM API密钥未配置，跳过外部LLM文本生成');
       return null;
     }
 
     try {
       return await this._callExternalLLM(prompt, options);
     } catch (error) {
-      console.error('外部LLM生成文本失败:', error);
+      logger.error('外部LLM生成文本失败:', error);
       throw error;
     }
   }
@@ -239,11 +233,11 @@ class ExternalLLM {
           const user = await User.findById(userId);
           
           if (user && user.customPrompts && user.customPrompts[type]) {
-            console.log(`使用用户 ${userId} 的定制化${type}提示词`);
+            logger.info(`使用用户 ${userId} 的定制化${type}提示词`);
             return user.customPrompts[type];
           }
         } catch (error) {
-          console.log('获取用户定制化提示词失败，使用默认模板:', error.message);
+          logger.info('获取用户定制化提示词失败，使用默认模板:', error.message);
         }
       }
       
@@ -259,7 +253,7 @@ class ExternalLLM {
         return this._getDefaultPromptTemplate(type);
       }
     } catch (error) {
-      console.error('获取提示词模板失败:', error.message);
+      logger.error('获取提示词模板失败:', error.message);
       return this._getDefaultPromptTemplate(type);
     }
   }

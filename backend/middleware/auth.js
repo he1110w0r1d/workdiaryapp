@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const logger = require('../utils/logger');
 exports.protect = async (req, res, next) => {
   try {
     let token;

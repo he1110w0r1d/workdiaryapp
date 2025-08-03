@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { register, login } = require('../controllers/authController');
 const { getUserProfile, updateUserProfile, uploadAvatar, upload, updateWorkProfile, generateCustomPrompts } = require('../controllers/userController');

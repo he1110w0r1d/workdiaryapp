@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
+const logger = require('../utils/logger');
 /**
  * 本地LLM工具类
  * 用于与本地部署的大语言模型进行通信
@@ -42,7 +43,7 @@ class LocalLLM {
    */
   async generateSummary(data, type, options = {}, userId = null) {
     if (!this.config.enabled) {
-      console.log('本地LLM未启用，跳过LLM总结生成');
+      logger.llm('本地LLM未启用，跳过LLM总结生成');
       return null;
     }
 
@@ -64,7 +65,7 @@ class LocalLLM {
       // 返回生成的内容
       return response.data.response;
     } catch (error) {
-      console.error('本地LLM生成总结失败:', error.message);
+      logger.error('本地LLM生成总结失败:', error.message);
       return null;
     }
   }
@@ -77,7 +78,7 @@ class LocalLLM {
    */
   async generateText(prompt, options = {}) {
     if (!this.config.enabled) {
-      console.log('本地LLM未启用，跳过本地LLM文本生成');
+      logger.llm('本地LLM未启用，跳过本地LLM文本生成');
       return null;
     }
 
@@ -93,7 +94,7 @@ class LocalLLM {
       // 返回生成的内容
       return response.data.response;
     } catch (error) {
-      console.error('本地LLM生成文本失败:', error.message);
+      logger.error('本地LLM生成文本失败:', error.message);
       throw error;
     }
   }
@@ -113,11 +114,11 @@ class LocalLLM {
           const user = await User.findById(userId);
           
           if (user && user.customPrompts && user.customPrompts[type]) {
-            console.log(`使用用户 ${userId} 的定制化${type}提示词`);
+            logger.info(`使用用户 ${userId} 的定制化${type}提示词`);
             return user.customPrompts[type];
           }
         } catch (error) {
-          console.log('获取用户定制化提示词失败，使用默认模板:', error.message);
+          logger.info('获取用户定制化提示词失败，使用默认模板:', error.message);
         }
       }
       
@@ -133,7 +134,7 @@ class LocalLLM {
         return this._getDefaultPromptTemplate(type);
       }
     } catch (error) {
-      console.error('获取提示词模板失败:', error.message);
+      logger.error('获取提示词模板失败:', error.message);
       return this._getDefaultPromptTemplate(type);
     }
   }

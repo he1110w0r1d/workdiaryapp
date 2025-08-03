@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const fs = require('fs');
 const path = require('path');
+const logger = require('../utils/logger');
 require('dotenv').config();
 
 // 读取当前全局LLM配置
@@ -13,7 +14,7 @@ const getGlobalLLMConfig = () => {
       return JSON.parse(settingsData);
     }
   } catch (error) {
-    console.error('读取全局LLM配置失败:', error);
+    logger.error('读取全局LLM配置失败:', error);
   }
   return null;
 };
@@ -41,11 +42,11 @@ const migrateUserLLMConfigs = async () => {
   try {
     // 连接数据库
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/workdiary');
-    console.log('数据库连接成功');
+    logger.info('数据库连接成功');
 
     // 读取全局配置
     const globalConfig = getGlobalLLMConfig();
-    console.log('全局LLM配置:', globalConfig);
+    logger.info('全局LLM配置:', globalConfig);
 
     // 查找所有没有LLM配置的用户
     const users = await User.find({
@@ -55,7 +56,7 @@ const migrateUserLLMConfigs = async () => {
       ]
     });
 
-    console.log(`找到 ${users.length} 个需要迁移的用户`);
+    logger.info(`找到 ${users.length} 个需要迁移的用户`);
 
     let migratedCount = 0;
     for (const user of users) {
@@ -75,27 +76,27 @@ const migrateUserLLMConfigs = async () => {
         await user.save();
         migratedCount++;
         
-        console.log(`✓ 用户 ${user.username} 迁移成功`);
+        logger.info(`✓ 用户 ${user.username} 迁移成功`);
       } catch (error) {
-        console.error(`✗ 用户 ${user.username} 迁移失败:`, error.message);
+        logger.error(`✗ 用户 ${user.username} 迁移失败:`, error.message);
       }
     }
 
-    console.log(`\n迁移完成！成功迁移 ${migratedCount} 个用户`);
+    logger.info(`\n迁移完成！成功迁移 ${migratedCount} 个用户`);
     
     // 关闭数据库连接
     await mongoose.connection.close();
-    console.log('数据库连接已关闭');
+    logger.info('数据库连接已关闭');
     
   } catch (error) {
-    console.error('迁移过程中发生错误:', error);
+    logger.error('迁移过程中发生错误:', error);
     process.exit(1);
   }
 };
 
 // 如果直接运行此脚本
 if (require.main === module) {
-  console.log('开始迁移用户LLM配置...');
+  logger.system('开始迁移用户LLM配置...');
   migrateUserLLMConfigs();
 }
 

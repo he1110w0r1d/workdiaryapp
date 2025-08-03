@@ -4,6 +4,7 @@ const User = require('../models/User');
 const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
 const { getUserDefaultLLMConfig } = require('./settingsController');
+const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 
@@ -124,26 +125,18 @@ ${JSON.stringify(summaryData, null, 2)}
 请生成完整的HTML代码：`;
     }
 
-    console.log('=== 发送给外部LLM的HTML生成提示词 ===');
-    console.log(htmlPrompt);
-    console.log('=== HTML生成提示词结束 ===');
+    logger.llm('开始使用外部LLM生成HTML内容');
 
     const rawHtmlContent = await externalLLM._callExternalLLM(htmlPrompt);
     
-    console.log('=== 外部LLM返回的原始内容 ===');
-    console.log(rawHtmlContent);
-    console.log('=== 原始内容结束 ===');
+    logger.llm('外部LLM HTML生成完成');
     
     // 清理HTML内容，去除markdown格式和说明文字
     const cleanedHtmlContent = cleanHTMLContent(rawHtmlContent);
     
-    console.log('=== 清理后的HTML内容 ===');
-    console.log(cleanedHtmlContent);
-    console.log('=== 清理后内容结束 ===');
-    
     return cleanedHtmlContent;
   } catch (error) {
-    console.log('生成HTML失败，使用默认模板:', error.message);
+    logger.warn('生成HTML失败，使用默认模板', { error: error.message });
     return generateDefaultHTML(summaryData, type);
   }
 };
@@ -267,7 +260,7 @@ const saveHTMLFile = async (htmlContent, userId, type, date) => {
 
 exports.generateDailySummary = async () => {
   try {
-    console.log('开始生成每日总结...');
+    logger.system('开始生成每日总结');
     
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -330,11 +323,11 @@ ${index + 1}. ${diary.content}
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的总结内容');
-              summaryContent = llmSummary;
-            }
-          } catch (error) {
-            console.log('外部LLM生成失败，尝试本地LLM:', error.message);
+              logger.llm('使用外部LLM生成总结成功');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          logger.warn('外部LLM生成失败，尝试本地LLM', { error: error.message });
           }
         }
         
@@ -343,17 +336,17 @@ ${index + 1}. ${diary.content}
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的总结内容');
+              logger.llm('使用本地LLM生成总结成功');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成失败:', error.message);
+            logger.warn('本地LLM生成失败', { error: error.message });
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的总结内容');
+          logger.info('使用默认模板生成总结内容');
         }
         
         // 对LLM生成的内容进行占位符替换处理
@@ -386,15 +379,15 @@ ${index + 1}. ${diary.content}
       }
     }
     
-    console.log('每日总结生成完成');
+    logger.system('每日总结生成完成');
   } catch (error) {
-    console.error('生成每日总结失败:', error);
-  }
+      logger.error('生成每日总结失败', { error: error.message, stack: error.stack });
+    }
 };
 
 exports.generateMonthlySummary = async (req, res) => {
   try {
-    console.log('开始生成月度总结...');
+    logger.system('开始生成月度总结...');
     
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -406,7 +399,7 @@ exports.generateMonthlySummary = async (req, res) => {
       return res.status(404).json({ success: false, message: '用户不存在' });
     }
     
-    console.log(`为用户 ${user.username} 生成月度总结`);
+    logger.info(`为用户 ${user.username} 生成月度总结`);
     
     let totalSummariesGenerated = 0;
       const diaries = await Diary.find({
@@ -417,7 +410,7 @@ exports.generateMonthlySummary = async (req, res) => {
         }
       });
       
-      console.log(`用户 ${user.username} 在 ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
+      logger.info(`用户 ${user.username} 在 ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
       
       if (diaries.length > 0) {
         let totalWorkTime = 0;
@@ -478,11 +471,11 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的月度总结内容');
+              logger.llm('使用外部LLM生成的月度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
+            logger.info('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
           }
         }
         
@@ -491,17 +484,17 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的月度总结内容');
+              logger.llm('使用本地LLM生成的月度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成月度总结失败:', error.message);
+            logger.info('本地LLM生成月度总结失败:', error.message);
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的月度总结内容');
+          logger.info('使用默认模板生成的月度总结内容');
         }
         
         // 对LLM生成的内容进行占位符替换处理
@@ -522,7 +515,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         // 生成HTML网页
         let htmlFilePath = null;
         try {
-          console.log('开始生成月度总结HTML网页...');
+          logger.system('开始生成月度总结HTML网页...');
           const htmlData = {
             date: lastMonth,
             diaries: diaries,
@@ -533,9 +526,9 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           
           const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'monthly', lastMonth);
-          console.log('月度总结HTML网页生成成功:', htmlFilePath);
+          logger.info('月度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
-          console.error('生成月度总结HTML网页失败:', error);
+          logger.error('生成月度总结HTML网页失败:', error);
         }
         
         const summary = new Summary({
@@ -553,7 +546,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         
         await summary.save();
         totalSummariesGenerated++;
-        console.log(`为用户 ${user.username} 生成月度总结完成`);
+        logger.info(`为用户 ${user.username} 生成月度总结完成`);
         
         res.json({ 
           success: true, 
@@ -564,14 +557,14 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         res.status(404).json({ success: false, message: '指定月份没有日记数据' });
       }
   } catch (error) {
-    console.error('生成月度总结失败:', error);
+    logger.error('生成月度总结失败:', error);
     res.status(500).json({ success: false, message: '生成月度总结失败', error: error.message });
   }
 };
 
 exports.generateCurrentMonthlySummary = async (req, res) => {
   try {
-    console.log('开始生成当月总结...');
+    logger.system('开始生成当月总结...');
     
     const now = new Date();
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -583,7 +576,7 @@ exports.generateCurrentMonthlySummary = async (req, res) => {
       return res.status(404).json({ success: false, message: '用户不存在' });
     }
     
-    console.log(`为用户 ${user.username} 生成当月总结`);
+    logger.info(`为用户 ${user.username} 生成当月总结`);
     
     let totalSummariesGenerated = 0;
       const diaries = await Diary.find({
@@ -594,7 +587,7 @@ exports.generateCurrentMonthlySummary = async (req, res) => {
         }
       });
       
-      console.log(`用户 ${user.username} 在 ${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
+      logger.info(`用户 ${user.username} 在 ${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
       
       if (diaries.length > 0) {
         let totalWorkTime = 0;
@@ -655,11 +648,11 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的当月总结内容');
+              logger.llm('使用外部LLM生成的当月总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('外部LLM生成当月总结失败，尝试本地LLM:', error.message);
+            logger.info('外部LLM生成当月总结失败，尝试本地LLM:', error.message);
           }
         }
         
@@ -668,23 +661,23 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的当月总结内容');
+              logger.llm('使用本地LLM生成的当月总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成当月总结失败:', error.message);
+            logger.info('本地LLM生成当月总结失败:', error.message);
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的当月总结内容');
+          logger.info('使用默认模板生成的当月总结内容');
         }
         
         // 生成HTML网页
         let htmlFilePath = null;
         try {
-          console.log('开始生成当月总结HTML网页...');
+          logger.system('开始生成当月总结HTML网页...');
           const htmlData = {
             date: currentMonth,
             diaries: diaries,
@@ -695,9 +688,9 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           
           const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'current_monthly', currentMonth);
-          console.log('当月总结HTML网页生成成功:', htmlFilePath);
+          logger.info('当月总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
-          console.error('生成当月总结HTML网页失败:', error);
+          logger.error('生成当月总结HTML网页失败:', error);
         }
         
         const summary = new Summary({
@@ -715,7 +708,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         
         await summary.save();
         totalSummariesGenerated++;
-        console.log(`为用户 ${user.username} 生成当月总结完成`);
+        logger.info(`为用户 ${user.username} 生成当月总结完成`);
         
         res.json({ 
           success: true, 
@@ -726,14 +719,14 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         res.status(404).json({ success: false, message: '当月没有日记数据' });
       }
   } catch (error) {
-    console.error('生成当月总结失败:', error);
+    logger.error('生成当月总结失败:', error);
     res.status(500).json({ success: false, message: '生成当月总结失败', error: error.message });
   }
 };
 
 exports.generateYearlySummary = async (req, res) => {
   try {
-    console.log('开始生成年度总结...');
+    logger.system('开始生成年度总结...');
     
     const now = new Date();
     // 获取请求参数中的年份，如果没有则默认为当前年份
@@ -747,7 +740,7 @@ exports.generateYearlySummary = async (req, res) => {
       return res.status(404).json({ success: false, message: '用户不存在' });
     }
     
-    console.log(`为用户 ${user.username} 生成${targetYear}年度总结`);
+    logger.info(`为用户 ${user.username} 生成${targetYear}年度总结`);
       const diaries = await Diary.find({
         user: user._id,
         startTime: {
@@ -817,11 +810,11 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的年度总结内容');
+              logger.llm('使用外部LLM生成的年度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
+            logger.info('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
           }
         }
         
@@ -830,17 +823,17 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的年度总结内容');
+              logger.llm('使用本地LLM生成的年度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成年度总结失败:', error.message);
+            logger.info('本地LLM生成年度总结失败:', error.message);
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的年度总结内容');
+          logger.info('使用默认模板生成的年度总结内容');
         }
         
         // 对LLM生成的内容进行占位符替换处理
@@ -861,7 +854,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         // 生成HTML网页
         let htmlFilePath = null;
         try {
-          console.log('开始生成年度总结HTML网页...');
+          logger.system('开始生成年度总结HTML网页...');
           const htmlData = {
             date: new Date(targetYear, 0, 1),
             diaries: diaries,
@@ -872,9 +865,9 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           
           const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', new Date(targetYear, 0, 1));
-          console.log('年度总结HTML网页生成成功:', htmlFilePath);
+          logger.info('年度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
-          console.error('生成年度总结HTML网页失败:', error);
+          logger.error('生成年度总结HTML网页失败:', error);
         }
         
         const summary = new Summary({
@@ -891,7 +884,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         });
         
         await summary.save();
-        console.log(`为用户 ${user.username} 生成年度总结完成`);
+        logger.info(`为用户 ${user.username} 生成年度总结完成`);
         
         res.json({ 
           success: true, 
@@ -902,7 +895,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         res.status(404).json({ success: false, message: '指定年份没有日记数据' });
       }
   } catch (error) {
-    console.error('生成年度总结失败:', error);
+    logger.error('生成年度总结失败:', error);
     res.status(500).json({ success: false, message: '生成年度总结失败', error: error.message });
   }
 };
@@ -964,7 +957,7 @@ exports.getSummaryById = async (req, res) => {
 // 删除总结
 exports.deleteSummary = async (req, res) => {
   try {
-    console.log('删除总结请求:', {
+    logger.info('删除总结请求:', {
       summaryId: req.params.id,
       userId: req.user.id
     });
@@ -975,15 +968,15 @@ exports.deleteSummary = async (req, res) => {
     });
 
     if (!summary) {
-      console.log('总结未找到:', req.params.id);
+      logger.info('总结未找到:', req.params.id);
       return res.status(404).json({ message: '总结未找到' });
     }
 
     await Summary.deleteOne({ _id: req.params.id });
-    console.log('总结删除成功:', req.params.id);
+    logger.info('总结删除成功:', req.params.id);
     res.json({ message: '总结删除成功' });
   } catch (error) {
-    console.error('生成今日总结失败:', error);
+    logger.error('生成今日总结失败:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -1026,7 +1019,7 @@ exports.getPromptTemplate = async (req, res) => {
       res.status(404).json({ message: '提示词模板不存在' });
     }
   } catch (error) {
-    console.error('获取提示词模板失败:', error);
+    logger.error('获取提示词模板失败:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -1072,7 +1065,7 @@ exports.updatePromptTemplate = async (req, res) => {
     
     res.json({ message: '提示词模板更新成功' });
   } catch (error) {
-    console.error('更新提示词模板失败:', error);
+    logger.error('更新提示词模板失败:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -1151,36 +1144,36 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 首先尝试使用外部LLM（如果可用）
     if (externalLLM) {
       try {
-        console.log('尝试使用外部LLM生成总结...');
+        logger.llm('尝试使用外部LLM生成总结...');
         llmSummary = await externalLLM.generateSummary(llmData, 'daily');
         if (llmSummary) {
-          console.log('使用外部LLM重新生成的总结内容');
+          logger.llm('使用外部LLM重新生成的总结内容');
           summaryContent = llmSummary;
         }
       } catch (error) {
-        console.log('外部LLM生成失败，尝试本地LLM:', error.message);
-        console.error('外部LLM错误详情:', error);
+        logger.info('外部LLM生成失败，尝试本地LLM:', error.message);
+        logger.error('外部LLM错误详情:', error);
       }
     }
     
     // 如果外部LLM失败或不可用，尝试本地LLM
     if (!llmSummary && localLLM) {
       try {
-        console.log('尝试使用本地LLM生成总结...');
+        logger.llm('尝试使用本地LLM生成总结...');
         llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
-          console.log('使用本地LLM重新生成的总结内容');
+          logger.llm('使用本地LLM重新生成的总结内容');
           summaryContent = llmSummary;
         }
       } catch (error) {
-        console.log('本地LLM生成失败:', error.message);
-        console.error('本地LLM错误详情:', error);
+        logger.info('本地LLM生成失败:', error.message);
+        logger.error('本地LLM错误详情:', error);
       }
     }
     
     // 如果所有LLM都失败，使用默认模板
     if (!llmSummary) {
-      console.log('使用默认模板重新生成的总结内容');
+      logger.info('使用默认模板重新生成的总结内容');
     }
     
     // 对LLM生成的内容进行占位符替换处理
@@ -1218,8 +1211,8 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     });
     
   } catch (error) {
-    console.error('重新生成昨日总结失败:', error);
-    console.error('错误堆栈:', error.stack);
+    logger.error('重新生成昨日总结失败:', error);
+    logger.error('错误堆栈:', error.stack);
     res.status(500).json({ message: '重新生成总结失败: ' + error.message });
   }
 };
@@ -1301,36 +1294,36 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 首先尝试外部LLM（如果可用）
     if (!llmSummary && externalLLM) {
       try {
-        console.log('尝试使用外部LLM生成今日总结...');
+        logger.llm('尝试使用外部LLM生成今日总结...');
         llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
-          console.log('使用外部LLM生成的今日总结内容');
+          logger.llm('使用外部LLM生成的今日总结内容');
           summaryContent = llmSummary;
         }
       } catch (error) {
-        console.log('外部LLM生成今日总结失败，尝试本地LLM:', error.message);
-        console.error('外部LLM错误详情:', error);
+        logger.info('外部LLM生成今日总结失败，尝试本地LLM:', error.message);
+        logger.error('外部LLM错误详情:', error);
       }
     }
 
     // 如果外部LLM失败或不可用，尝试本地LLM
     if (!llmSummary && localLLM) {
       try {
-        console.log('尝试使用本地LLM生成今日总结...');
+        logger.llm('尝试使用本地LLM生成今日总结...');
         llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
         if (llmSummary) {
-          console.log('使用本地LLM生成的今日总结内容');
+          logger.llm('使用本地LLM生成的今日总结内容');
           summaryContent = llmSummary;
         }
       } catch (error) {
-        console.log('本地LLM生成失败:', error.message);
-        console.error('本地LLM错误详情:', error);
+        logger.info('本地LLM生成失败:', error.message);
+        logger.error('本地LLM错误详情:', error);
       }
     }
     
     // 如果所有LLM都失败，使用默认模板
     if (!llmSummary) {
-      console.log('使用默认模板生成的今日总结内容');
+      logger.info('使用默认模板生成的今日总结内容');
     }
     
     // 对LLM生成的内容进行占位符替换处理
@@ -1364,7 +1357,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     
     res.json({ message: '今日总结生成成功', summary });
   } catch (error) {
-    console.error('生成今日总结失败:', error);
+    logger.error('生成今日总结失败:', error);
     res.status(500).json({ message: '生成失败: ' + error.message });
   }
 };
@@ -1374,14 +1367,14 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
 // 批量生成所有用户的月度总结（定时任务专用）
 exports.batchGenerateMonthlySummary = async () => {
   try {
-    console.log('开始批量生成月度总结...');
+    logger.system('开始批量生成月度总结...');
     
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
     const users = await User.find();
-    console.log(`找到 ${users.length} 个用户`);
+    logger.info(`找到 ${users.length} 个用户`);
     
     let totalSummariesGenerated = 0;
     
@@ -1394,7 +1387,7 @@ exports.batchGenerateMonthlySummary = async () => {
         }
       });
       
-      console.log(`用户 ${user.username} 在 ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
+      logger.info(`用户 ${user.username} 在 ${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月 有 ${diaries.length} 条日记`);
       
       if (diaries.length > 0) {
         let totalWorkTime = 0;
@@ -1445,11 +1438,11 @@ ${diaries.map(diary => {
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的月度总结内容');
+              logger.llm('使用外部LLM生成的月度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
+            logger.info('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
           }
         }
         
@@ -1458,23 +1451,23 @@ ${diaries.map(diary => {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的月度总结内容');
+              logger.llm('使用本地LLM生成的月度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成月度总结失败:', error.message);
+            logger.info('本地LLM生成月度总结失败:', error.message);
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的月度总结内容');
+          logger.info('使用默认模板生成的月度总结内容');
         }
         
         // 生成HTML网页
         let htmlFilePath = null;
         try {
-          console.log('开始生成月度总结HTML网页...');
+          logger.system('开始生成月度总结HTML网页...');
           const tagDistribution = generateTagDistribution(diaries);
           const htmlData = {
             date: lastMonth,
@@ -1486,9 +1479,9 @@ ${diaries.map(diary => {
           
           const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'monthly', lastMonth);
-          console.log('月度总结HTML网页生成成功:', htmlFilePath);
+          logger.info('月度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
-          console.error('生成月度总结HTML网页失败:', error);
+          logger.error('生成月度总结HTML网页失败:', error);
         }
         
         const summary = new Summary({
@@ -1506,22 +1499,22 @@ ${diaries.map(diary => {
         
         await summary.save();
         totalSummariesGenerated++;
-        console.log(`为用户 ${user.username} 生成月度总结完成`);
+        logger.info(`为用户 ${user.username} 生成月度总结完成`);
       } else {
-        console.log(`用户 ${user.username} 在指定月份没有日记数据，跳过生成`);
+        logger.info(`用户 ${user.username} 在指定月份没有日记数据，跳过生成`);
       }
     }
     
-    console.log(`月度总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
+    logger.info(`月度总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
   } catch (error) {
-    console.error('批量生成月度总结失败:', error);
+    logger.error('批量生成月度总结失败:', error);
   }
 };
 
 // 批量生成所有用户的年度总结（定时任务专用）
 exports.batchGenerateYearlySummary = async () => {
   try {
-    console.log('开始批量生成年度总结...');
+    logger.system('开始批量生成年度总结...');
     
     const now = new Date();
     const lastYear = new Date(now.getFullYear() - 1, 0, 1);
@@ -1594,11 +1587,11 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           try {
             llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
-              console.log('使用外部LLM生成的年度总结内容');
+              logger.llm('使用外部LLM生成的年度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
+            logger.info('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
           }
         }
         
@@ -1607,23 +1600,23 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
-              console.log('使用本地LLM生成的年度总结内容');
+              logger.llm('使用本地LLM生成的年度总结内容');
               summaryContent = llmSummary;
             }
           } catch (error) {
-            console.log('本地LLM生成年度总结失败:', error.message);
+            logger.info('本地LLM生成年度总结失败:', error.message);
           }
         }
         
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
-          console.log('使用默认模板生成的年度总结内容');
+          logger.info('使用默认模板生成的年度总结内容');
         }
         
         // 生成HTML网页
         let htmlFilePath = null;
         try {
-          console.log('开始生成年度总结HTML网页...');
+          logger.system('开始生成年度总结HTML网页...');
           const htmlData = {
             date: lastYear,
             diaries: diaries,
@@ -1634,9 +1627,9 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           
           const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', lastYear);
-          console.log('年度总结HTML网页生成成功:', htmlFilePath);
+          logger.info('年度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
-          console.error('生成年度总结HTML网页失败:', error);
+          logger.error('生成年度总结HTML网页失败:', error);
         }
         
         const summary = new Summary({
@@ -1656,8 +1649,8 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
       }
     }
     
-    console.log('年度总结生成完成');
+    logger.system('年度总结生成完成');
   } catch (error) {
-    console.error('批量生成年度总结失败:', error);
+    logger.error('批量生成年度总结失败:', error);
   }
 };

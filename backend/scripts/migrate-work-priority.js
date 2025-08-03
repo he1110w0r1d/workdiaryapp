@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const Diary = require('../models/Diary');
 
+const logger = require('../utils/logger');
 // 加载环境变量
 dotenv.config({ path: '../.env' });
 
@@ -14,17 +15,17 @@ async function migrateWorkPriority() {
       useUnifiedTopology: true,
     });
     
-    console.log('已连接到MongoDB数据库');
+    logger.info('已连接到MongoDB数据库');
     
     // 查找所有缺少workPriority字段的日记条目
     const diariesWithoutPriority = await Diary.find({
       workPriority: { $exists: false }
     });
     
-    console.log(`找到 ${diariesWithoutPriority.length} 个缺少workPriority字段的日记条目`);
+    logger.info(`找到 ${diariesWithoutPriority.length} 个缺少workPriority字段的日记条目`);
     
     if (diariesWithoutPriority.length === 0) {
-      console.log('所有日记条目都已包含workPriority字段，无需迁移');
+      logger.info('所有日记条目都已包含workPriority字段，无需迁移');
       return;
     }
     
@@ -34,7 +35,7 @@ async function migrateWorkPriority() {
       { $set: { workPriority: '中' } }
     );
     
-    console.log(`成功更新了 ${result.modifiedCount} 个日记条目，添加了默认优先级'中'`);
+    logger.info(`成功更新了 ${result.modifiedCount} 个日记条目，添加了默认优先级'中'`);
     
     // 验证更新结果
     const remainingWithoutPriority = await Diary.countDocuments({
@@ -42,17 +43,17 @@ async function migrateWorkPriority() {
     });
     
     if (remainingWithoutPriority === 0) {
-      console.log('✅ 数据迁移完成！所有日记条目现在都包含workPriority字段');
+      logger.system('✅ 数据迁移完成！所有日记条目现在都包含workPriority字段');
     } else {
-      console.log(`⚠️  仍有 ${remainingWithoutPriority} 个条目缺少workPriority字段`);
+      logger.info(`⚠️  仍有 ${remainingWithoutPriority} 个条目缺少workPriority字段`);
     }
     
   } catch (error) {
-    console.error('数据迁移失败:', error);
+    logger.error('数据迁移失败:', error);
   } finally {
     // 关闭数据库连接
     await mongoose.connection.close();
-    console.log('数据库连接已关闭');
+    logger.info('数据库连接已关闭');
   }
 }
 

@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
 
+const logger = require('../utils/logger');
 // 加载环境变量
 dotenv.config();
 
@@ -37,7 +38,7 @@ if (fs.existsSync(settingsFilePath)) {
     if (settings.externalTemperature) process.env.EXTERNAL_LLM_TEMPERATURE = String(settings.externalTemperature);
     if (settings.externalMaxTokens) process.env.EXTERNAL_LLM_MAX_TOKENS = String(settings.externalMaxTokens);
     
-    console.log('LLM配置已加载:', {
+    logger.info('LLM配置已加载:', {
       type: settings.llmType,
       useLocalLLM: settings.useLocalLLM,
       localModel: settings.model,
@@ -46,10 +47,10 @@ if (fs.existsSync(settingsFilePath)) {
       externalModel: settings.externalModel
     });
   } catch (error) {
-    console.error('加载LLM配置失败:', error.message);
+    logger.error('加载LLM配置失败:', error.message);
   }
 } else {
-  console.log('LLM配置文件不存在，使用默认配置');
+  logger.llm('LLM配置文件不存在，使用默认配置');
 }
 
 // 导入路由
@@ -83,7 +84,7 @@ app.use((req, res, next) => {
   const realIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || clientIP;
   const ip = realIP ? realIP.split(',')[0].trim() : clientIP;
   
-  console.log(`访问请求来自IP: ${ip}`);
+  logger.info(`访问请求来自IP: ${ip}`);
   
   // 允许本地访问
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
@@ -99,7 +100,7 @@ app.use((req, res, next) => {
   }
   
   // 拒绝访问
-  console.log(`拒绝来自IP ${ip} 的访问请求`);
+  logger.info(`拒绝来自IP ${ip} 的访问请求`);
   return res.status(403).json({ 
     error: '访问被拒绝', 
     message: '此服务仅限局域网192.168.1.x网段访问' 
@@ -120,8 +121,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/workdiary
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('MongoDB connected'))
-.catch(err => console.log(err));
+.then(() => logger.info('MongoDB connected'))
+.catch(err => logger.info(err));
 
 // 路由
 app.use('/api/users', userRoutes);
@@ -143,7 +144,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`局域网访问地址: http://${HOST}:${PORT}`);
-  console.log('注意: 此服务仅限192.168.1.x网段访问');
+  logger.info(`服务器运行在端口 ${PORT}`);
+  logger.info(`局域网访问地址: http://${HOST}:${PORT}`);
+  logger.info('注意: 此服务仅限192.168.1.x网段访问');
 });

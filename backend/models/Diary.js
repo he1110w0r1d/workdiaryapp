@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+const logger = require('../utils/logger');
 const diarySchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,

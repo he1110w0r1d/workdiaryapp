@@ -6,6 +6,7 @@ const fs = require('fs');
 const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
 
+const logger = require('../utils/logger');
 // 动态创建LLM实例以获取最新配置
 const createLLMInstances = async (userId = null) => {
   if (userId) {
@@ -77,7 +78,7 @@ const getUserProfile = async (req, res) => {
     }
     res.json(user);
   } catch (error) {
-    console.error('获取用户信息失败:', error);
+    logger.error('获取用户信息失败:', error);
     res.status(500).json({ message: '服务器错误' });
   }
 };
@@ -109,7 +110,7 @@ const uploadAvatar = async (req, res) => {
       user: user
     });
   } catch (error) {
-    console.error('头像上传失败:', error);
+    logger.error('头像上传失败:', error);
     res.status(500).json({ message: '头像上传失败' });
   }
 };
@@ -166,7 +167,7 @@ const updateUserProfile = async (req, res) => {
       user: updatedUser
     });
   } catch (error) {
-    console.error('更新用户信息失败:', error);
+    logger.error('更新用户信息失败:', error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: '数据验证失败', errors: error.errors });
     }
@@ -180,14 +181,14 @@ const updateWorkProfile = async (req, res) => {
     const userId = req.user.id;
     const workProfileData = req.body;
 
-    console.log('收到工作信息更新请求:', {
+    logger.info('收到工作信息更新请求:', {
       userId,
       workProfileData
     });
 
     const user = await User.findById(userId);
     if (!user) {
-      console.error('用户不存在:', userId);
+      logger.error('用户不存在:', userId);
       return res.status(404).json({ message: '用户不存在' });
     }
 
@@ -222,26 +223,26 @@ const updateWorkProfile = async (req, res) => {
         yearly: yearlyTemplate
       };
       
-      console.log('默认提示词模板已关联到用户');
+      logger.user('默认提示词模板已关联到用户');
     } catch (templateError) {
-      console.error('读取默认模板失败:', templateError);
+      logger.error('读取默认模板失败:', templateError);
       // 即使模板读取失败，也不影响工作信息的保存
     }
 
     user.updatedAt = new Date();
 
-    console.log('准备保存用户工作信息:', user.workProfile);
+    logger.info('准备保存用户工作信息:', user.workProfile);
     await user.save();
-    console.log('工作信息保存成功');
+    logger.info('工作信息保存成功');
 
     res.json({
       message: '工作信息配置更新成功',
       workProfile: user.workProfile
     });
   } catch (error) {
-    console.error('更新工作信息配置失败:', error);
-    console.error('错误详情:', error.message);
-    console.error('错误堆栈:', error.stack);
+    logger.error('更新工作信息配置失败:', error);
+    logger.error('错误详情:', error.message);
+    logger.error('错误堆栈:', error.stack);
     res.status(500).json({ 
       message: '服务器错误',
       error: error.message 
@@ -393,14 +394,14 @@ ${userContext}
       try {
         prompts.daily = await externalLLM.generateText(dailyPromptTemplate);
         if (prompts.daily) {
-          console.log('使用外部LLM生成每日提示词成功');
+          logger.llm('使用外部LLM生成每日提示词成功');
           global.promptGenerationProgress[userId].daily = { status: 'finish', message: '每日提示词生成完成' };
         }
       } catch (error) {
-        console.log('外部LLM生成每日提示词失败，尝试本地LLM:', error.message);
+        logger.info('外部LLM生成每日提示词失败，尝试本地LLM:', error.message);
         prompts.daily = await localLLM.generateText(dailyPromptTemplate);
         if (prompts.daily) {
-          console.log('使用本地LLM生成每日提示词成功');
+          logger.llm('使用本地LLM生成每日提示词成功');
           global.promptGenerationProgress[userId].daily = { status: 'finish', message: '每日提示词生成完成' };
         } else {
           global.promptGenerationProgress[userId].daily = { status: 'error', message: '每日提示词生成失败' };
@@ -412,14 +413,14 @@ ${userContext}
       try {
         prompts.monthly = await externalLLM.generateText(monthlyPromptTemplate);
         if (prompts.monthly) {
-          console.log('使用外部LLM生成月度提示词成功');
+          logger.llm('使用外部LLM生成月度提示词成功');
           global.promptGenerationProgress[userId].monthly = { status: 'finish', message: '月度提示词生成完成' };
         }
       } catch (error) {
-        console.log('外部LLM生成月度提示词失败，尝试本地LLM:', error.message);
+        logger.info('外部LLM生成月度提示词失败，尝试本地LLM:', error.message);
         prompts.monthly = await localLLM.generateText(monthlyPromptTemplate);
         if (prompts.monthly) {
-          console.log('使用本地LLM生成月度提示词成功');
+          logger.llm('使用本地LLM生成月度提示词成功');
           global.promptGenerationProgress[userId].monthly = { status: 'finish', message: '月度提示词生成完成' };
         } else {
           global.promptGenerationProgress[userId].monthly = { status: 'error', message: '月度提示词生成失败' };
@@ -431,21 +432,21 @@ ${userContext}
       try {
         prompts.yearly = await externalLLM.generateText(yearlyPromptTemplate);
         if (prompts.yearly) {
-          console.log('使用外部LLM生成年度提示词成功');
+          logger.llm('使用外部LLM生成年度提示词成功');
           global.promptGenerationProgress[userId].yearly = { status: 'finish', message: '年度提示词生成完成' };
         }
       } catch (error) {
-        console.log('外部LLM生成年度提示词失败，尝试本地LLM:', error.message);
+        logger.info('外部LLM生成年度提示词失败，尝试本地LLM:', error.message);
         prompts.yearly = await localLLM.generateText(yearlyPromptTemplate);
         if (prompts.yearly) {
-          console.log('使用本地LLM生成年度提示词成功');
+          logger.llm('使用本地LLM生成年度提示词成功');
           global.promptGenerationProgress[userId].yearly = { status: 'finish', message: '年度提示词生成完成' };
         } else {
           global.promptGenerationProgress[userId].yearly = { status: 'error', message: '年度提示词生成失败' };
         }
       }
     } catch (error) {
-      console.error('LLM生成提示词失败:', error);
+      logger.error('LLM生成提示词失败:', error);
       // 标记所有未完成的步骤为错误
       Object.keys(global.promptGenerationProgress[userId]).forEach(key => {
         if (global.promptGenerationProgress[userId][key].status === 'active' || global.promptGenerationProgress[userId][key].status === 'waiting') {
@@ -468,7 +469,7 @@ ${userContext}
       prompts: finalPrompts
     });
   } catch (error) {
-    console.error('生成定制化提示词失败:', error);
+    logger.error('生成定制化提示词失败:', error);
     res.status(500).json({ message: '服务器错误' });
   }
 };

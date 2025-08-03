@@ -1,5 +1,6 @@
 const Diary = require('../models/Diary');
 
+const logger = require('../utils/logger');
 exports.createDiary = async (req, res) => {
   try {
     const { content, location, startTime, endTime, tags, workPriority } = req.body;

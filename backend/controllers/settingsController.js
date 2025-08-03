@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const User = require('../models/User');
 
+const logger = require('../utils/logger');
 // 设置文件路径
 const settingsFilePath = path.join(__dirname, '../config/llm-settings.json');
 
@@ -34,7 +35,7 @@ exports.getUserLLMConfigs = async (req, res) => {
 
     return res.json({ configs });
   } catch (error) {
-    console.error('获取用户LLM配置失败:', error);
+    logger.error('获取用户LLM配置失败:', error);
     return res.status(500).json({ message: '获取LLM配置失败' });
   }
 };
@@ -45,9 +46,9 @@ exports.saveUserLLMConfig = async (req, res) => {
     const userId = req.user.id;
     const { name, provider, apiKey, apiUrl, model, timeout, temperature, maxTokens, isDefault } = req.body;
 
-    console.log('=== 添加新LLM配置 ===');
-    console.log('用户ID:', userId);
-    console.log('请求数据:', { name, provider, model, isDefault });
+    logger.llm('=== 添加新LLM配置 ===');
+    logger.info('用户ID:', userId);
+    logger.info('请求数据:', { name, provider, model, isDefault });
 
     // 验证必填字段
     if (!name || !provider || !model) {
@@ -59,7 +60,7 @@ exports.saveUserLLMConfig = async (req, res) => {
       return res.status(404).json({ message: '用户不存在' });
     }
 
-    console.log('添加前现有配置数量:', user.llmConfigs.length);
+    logger.info('添加前现有配置数量:', user.llmConfigs.length);
 
     // 新添加的配置自动设置为默认配置，取消其他配置的默认状态
     user.llmConfigs.forEach(config => {
@@ -80,23 +81,23 @@ exports.saveUserLLMConfig = async (req, res) => {
       isActive: true
     };
 
-    console.log('新配置:', newConfig);
+    logger.info('新配置:', newConfig);
 
     user.llmConfigs.push(newConfig);
     
-    console.log('=== 保存到数据库前的数据跟踪 ===');
-    console.log('用户ID:', user._id);
-    console.log('即将保存的完整llmConfigs数组:', JSON.stringify(user.llmConfigs, null, 2));
-    console.log('llmConfigs数组长度:', user.llmConfigs.length);
+    logger.info('=== 保存到数据库前的数据跟踪 ===');
+    logger.info('用户ID:', user._id);
+    logger.info('即将保存的完整llmConfigs数组:', JSON.stringify(user.llmConfigs, null, 2));
+    logger.info('llmConfigs数组长度:', user.llmConfigs.length);
     
     await user.save();
 
-    console.log('保存成功，新配置ID:', newConfig._id);
-    console.log('添加后配置数量:', user.llmConfigs.length);
+    logger.info('保存成功，新配置ID:', newConfig._id);
+    logger.info('添加后配置数量:', user.llmConfigs.length);
 
     return res.json({ message: 'LLM配置保存成功', configId: newConfig._id });
   } catch (error) {
-    console.error('保存用户LLM配置失败:', error);
+    logger.error('保存用户LLM配置失败:', error);
     return res.status(500).json({ message: '保存LLM配置失败' });
   }
 };
@@ -143,7 +144,7 @@ exports.updateUserLLMConfig = async (req, res) => {
 
     return res.json({ message: 'LLM配置更新成功' });
   } catch (error) {
-    console.error('更新用户LLM配置失败:', error);
+    logger.error('更新用户LLM配置失败:', error);
     return res.status(500).json({ message: '更新LLM配置失败' });
   }
 };
@@ -178,7 +179,7 @@ exports.deleteUserLLMConfig = async (req, res) => {
 
     return res.json({ message: 'LLM配置删除成功' });
   } catch (error) {
-    console.error('删除用户LLM配置失败:', error);
+    logger.error('删除用户LLM配置失败:', error);
     return res.status(500).json({ message: '删除LLM配置失败' });
   }
 };
@@ -206,7 +207,7 @@ exports.getUserDefaultLLMConfig = async (userId) => {
     // 直接返回配置（API密钥已为明文）
     return defaultConfig.toObject();
   } catch (error) {
-    console.error('获取用户默认LLM配置失败:', error);
+    logger.error('获取用户默认LLM配置失败:', error);
     return null;
   }
 };
@@ -250,7 +251,7 @@ exports.testUserLLMConfig = async (req, res) => {
       }, res);
     }
   } catch (error) {
-    console.error('测试用户LLM配置失败:', error);
+    logger.error('测试用户LLM配置失败:', error);
     return res.status(500).json({ message: '测试LLM配置失败' });
   }
 };
@@ -295,7 +296,7 @@ exports.getLLMSettings = async (req, res) => {
       return res.json(defaultSettings);
     }
   } catch (error) {
-    console.error('获取LLM设置失败:', error);
+    logger.error('获取LLM设置失败:', error);
     return res.status(500).json({ message: '获取LLM设置失败' });
   }
 };
@@ -340,7 +341,7 @@ exports.saveLLMSettings = async (req, res) => {
     
     return res.json({ message: '设置保存成功' });
   } catch (error) {
-    console.error('保存LLM设置失败:', error);
+    logger.error('保存LLM设置失败:', error);
     return res.status(500).json({ message: '保存LLM设置失败' });
   }
 };
@@ -359,7 +360,7 @@ exports.testLLMConnection = async (req, res) => {
       return res.status(400).json({ success: false, message: '不支持的LLM类型' });
     }
   } catch (error) {
-    console.error('测试LLM连接失败:', error);
+    logger.error('测试LLM连接失败:', error);
     
     // 构建错误消息
     let errorMessage = '连接失败';
@@ -588,7 +589,7 @@ exports.setDefaultUserLLMConfig = async (req, res) => {
 
     return res.json({ message: '默认配置设置成功' });
   } catch (error) {
-    console.error('设置默认配置失败:', error);
+    logger.error('设置默认配置失败:', error);
     return res.status(500).json({ message: '设置默认配置失败' });
   }
 };
