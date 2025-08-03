@@ -47,9 +47,9 @@ const Settings = () => {
           externalApiKey: '',
           externalApiUrl: '',
           externalModel: 'gpt-3.5-turbo',
-          externalTimeout: 30000,
+          externalTimeout: 600000,
           externalTemperature: 0.7,
-          externalMaxTokens: 2000
+          externalMaxTokens: 8000
         };
         setSettings(defaultSettings);
         form.setFieldsValue(defaultSettings);

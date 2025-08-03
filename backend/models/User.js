@@ -91,6 +91,60 @@ const userSchema = new mongoose.Schema({
       default: false
     }
   },
+  // LLM配置（用户级别）
+  llmConfigs: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      default: '默认配置'
+    },
+    provider: {
+      type: String,
+      enum: ['local', 'openai', 'anthropic', 'custom'],
+      required: true,
+      default: 'custom'
+    },
+    apiKey: {
+      type: String,
+      default: ''
+    },
+    apiUrl: {
+      type: String,
+      default: ''
+    },
+    model: {
+      type: String,
+      required: true,
+      default: 'deepseek-ai/DeepSeek-V3'
+    },
+    timeout: {
+      type: Number,
+      default: 600000
+    },
+    temperature: {
+      type: Number,
+      min: 0,
+      max: 2,
+      default: 0.7
+    },
+    maxTokens: {
+      type: Number,
+      default: 8000
+    },
+    isDefault: {
+      type: Boolean,
+      default: false
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   // 定制化提示词
   customPrompts: {
     daily: {

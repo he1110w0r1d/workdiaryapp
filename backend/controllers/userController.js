@@ -7,7 +7,30 @@ const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
 
 // 动态创建LLM实例以获取最新配置
-const createLLMInstances = () => {
+const createLLMInstances = async (userId = null) => {
+  if (userId) {
+    // 获取用户的LLM配置
+    const user = await User.findById(userId);
+    if (user && user.llmConfigs && user.llmConfigs.length > 0) {
+      // 查找默认配置
+      const defaultConfig = user.llmConfigs.find(config => config.isDefault);
+      if (defaultConfig) {
+        if (defaultConfig.provider === 'local') {
+          return {
+            localLLM: new LocalLLM(defaultConfig),
+            externalLLM: new ExternalLLM()
+          };
+        } else {
+          return {
+            localLLM: new LocalLLM(),
+            externalLLM: new ExternalLLM(defaultConfig)
+          };
+        }
+      }
+    }
+  }
+  
+  // 回退到全局配置
   return {
     localLLM: new LocalLLM(),
     externalLLM: new ExternalLLM()
@@ -343,7 +366,7 @@ ${userContext}
 `;
 
     // 创建LLM实例
-    const { localLLM, externalLLM } = createLLMInstances();
+    const { localLLM, externalLLM } = await createLLMInstances(userId);
     
     // 初始化全局进度状态
     if (!global.promptGenerationProgress) {

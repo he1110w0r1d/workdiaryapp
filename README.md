@@ -108,6 +108,7 @@ MONGODB_URI=mongodb://admin:password@mongodb:27017/workdiary?authSource=admin
 # 安全配置
 JWT_SECRET=your-super-secure-jwt-secret
 SESSION_SECRET=your-super-secure-session-secret
+ENCRYPTION_KEY=your-encryption-key-32-chars!!
 
 # LLM配置（可选）
 USE_LOCAL_LLM=false

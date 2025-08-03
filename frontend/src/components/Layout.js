@@ -9,7 +9,8 @@ import {
   QuestionCircleOutlined,
   ClockCircleOutlined,
   CalendarOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  RobotOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -146,6 +147,11 @@ const AppLayout = ({ children }) => {
       key: '/app/summaries',
       icon: <BarChartOutlined />,
       label: <Link to="/app/summaries">工作总结</Link>,
+    },
+    {
+      key: '/app/model-settings',
+      icon: <RobotOutlined />,
+      label: <Link to="/app/model-settings">模型设置</Link>,
     },
     {
       key: '/app/settings',

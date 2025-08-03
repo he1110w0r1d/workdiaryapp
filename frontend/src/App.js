@@ -15,6 +15,8 @@ import DiaryForm from './components/DiaryForm';
 import SummaryList from './components/SummaryList';
 import Settings from './components/Settings';
 import UserSettings from './components/UserSettings';
+import UserSettingsPage from './components/UserSettingsPage';
+import ModelSettings from './components/ModelSettings';
 import Layout from './components/Layout';
 import RootRedirect from './components/RootRedirect';
 
@@ -40,8 +42,9 @@ function App() {
               <Route path="diaries/new" element={<DiaryForm />} />
               <Route path="diaries/:id/edit" element={<DiaryForm />} />
               <Route path="summaries" element={<SummaryList />} />
+              <Route path="model-settings" element={<ModelSettings />} />
               <Route path="settings" element={<Settings />} />
-              <Route path="user-settings" element={<UserSettings />} />
+              <Route path="user-settings" element={<UserSettingsPage />} />
             </Route>
             <Route path="/" element={<RootRedirect />} />
           </Routes>

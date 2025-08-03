@@ -19,7 +19,7 @@ const LLMSetupGuide = () => {
     externalProvider: 'custom', // 硅基流动作为自定义API
     externalApiKey: '',
     externalApiUrl: 'https://api.siliconflow.cn/v1/chat/completions',
-    externalModel: 'deepseek-ai/DeepSeek-R1',
+    externalModel: 'deepseek-ai/DeepSeek-V3',
     externalTimeout: 120000,
     externalTemperature: 0.7,
     externalMaxTokens: 8000
@@ -28,20 +28,28 @@ const LLMSetupGuide = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      // 合并默认配置和用户输入
-      const llmConfig = {
-        ...defaultConfig,
-        externalApiKey: values.externalApiKey
+      // 构建用户个人LLM配置
+      const userLLMConfig = {
+        name: '硅基流动 (默认)',
+        provider: 'custom',
+        apiKey: values.externalApiKey,
+        apiUrl: defaultConfig.externalApiUrl,
+        model: defaultConfig.externalModel,
+        timeout: defaultConfig.externalTimeout,
+        temperature: defaultConfig.externalTemperature,
+        maxTokens: defaultConfig.externalMaxTokens,
+        isDefault: true,
+        isActive: true
       };
 
-      // 保存LLM配置
-      await api.post('/settings/llm', llmConfig);
-      message.success('LLM配置保存成功！');
+      // 保存到用户个人LLM配置
+      await api.post('/settings/user-llm', userLLMConfig);
+      message.success('AI助手配置保存成功！');
       
       // 跳转到主页面
       navigate('/app');
     } catch (error) {
-      message.error(error.response?.data?.message || 'LLM配置保存失败');
+      message.error(error.response?.data?.message || 'AI助手配置保存失败');
     } finally {
       setLoading(false);
     }

@@ -3,11 +3,44 @@ const Summary = require('../models/Summary');
 const User = require('../models/User');
 const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
+const { getUserDefaultLLMConfig } = require('./settingsController');
 const fs = require('fs');
 const path = require('path');
 
 // 动态创建LLM实例以获取最新配置
-const createLLMInstances = () => {
+const createLLMInstances = async (userId = null) => {
+  // 如果提供了用户ID，尝试获取用户的LLM配置
+  if (userId) {
+    const userConfig = await getUserDefaultLLMConfig(userId);
+    if (userConfig) {
+      // 根据用户配置创建LLM实例
+      if (userConfig.provider === 'local') {
+        return {
+          localLLM: new LocalLLM({
+            apiUrl: userConfig.apiUrl,
+            model: userConfig.model,
+            timeout: userConfig.timeout,
+            temperature: userConfig.temperature
+          }),
+          externalLLM: null
+        };
+      } else {
+        return {
+          localLLM: null,
+          externalLLM: new ExternalLLM({
+            apiKey: userConfig.apiKey,
+            apiUrl: userConfig.apiUrl,
+            model: userConfig.model,
+            timeout: userConfig.timeout,
+            temperature: userConfig.temperature,
+            maxTokens: userConfig.maxTokens
+          })
+        };
+      }
+    }
+  }
+  
+  // 回退到全局配置
   return {
     localLLM: new LocalLLM(),
     externalLLM: new ExternalLLM()
@@ -64,8 +97,8 @@ const cleanHTMLContent = (rawContent) => {
 };
 
 // 生成HTML网页代码
-const generateHTMLPage = async (summaryData, type, summaryContent = '') => {
-  const { externalLLM } = createLLMInstances();
+const generateHTMLPage = async (summaryData, type, summaryContent = '', userId = null) => {
+  const { externalLLM } = await createLLMInstances(userId);
   
   try {
     // 读取HTML生成提示词模板
@@ -290,7 +323,7 @@ ${index + 1}. ${diary.content}
         let llmSummary = null;
         
         // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = createLLMInstances();
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
         // 首先尝试使用外部LLM
         try {
@@ -436,7 +469,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         let llmSummary = null;
         
         // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = createLLMInstances();
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
         // 首先尝试使用外部LLM
         try {
@@ -494,7 +527,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
             tagDistribution: tagDistribution
           };
           
-          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent);
+          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'monthly', lastMonth);
           console.log('月度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
@@ -611,7 +644,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         let llmSummary = null;
         
         // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = createLLMInstances();
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
         // 首先尝试使用外部LLM
         try {
@@ -654,7 +687,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
             tagDistribution: tagDistribution
           };
           
-          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent);
+          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'current_monthly', currentMonth);
           console.log('当月总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
@@ -771,7 +804,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         let llmSummary = null;
         
         // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = createLLMInstances();
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
         // 首先尝试使用外部LLM
         try {
@@ -829,7 +862,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
             tagDistribution: tagStats
           };
           
-          const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent);
+          const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', new Date(targetYear, 0, 1));
           console.log('年度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
@@ -1105,7 +1138,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     let llmSummary = null;
     
     // 动态创建LLM实例以获取最新配置
-    const { localLLM, externalLLM } = createLLMInstances();
+    const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
     
     // 首先尝试使用外部LLM
     try {
@@ -1253,7 +1286,7 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     let summaryContent = baseContent;
     let llmSummary = null;
     
-    const { externalLLM, localLLM } = createLLMInstances();
+    const { externalLLM, localLLM } = await createLLMInstances(req.user.id);
     
     // 首先尝试外部LLM
     if (!llmSummary) {
