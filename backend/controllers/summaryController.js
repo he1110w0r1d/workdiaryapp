@@ -325,19 +325,21 @@ ${index + 1}. ${diary.content}
         // 动态创建LLM实例以获取最新配置
         const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的总结内容');
-            summaryContent = llmSummary;
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, user._id);
             if (llmSummary) {
@@ -471,19 +473,21 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         // 动态创建LLM实例以获取最新配置
         const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的月度总结内容');
-            summaryContent = llmSummary;
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的月度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
@@ -646,19 +650,21 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         // 动态创建LLM实例以获取最新配置
         const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的当月总结内容');
-            summaryContent = llmSummary;
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的当月总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成当月总结失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成当月总结失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
@@ -806,19 +812,21 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         // 动态创建LLM实例以获取最新配置
         const { localLLM, externalLLM } = await createLLMInstances(user._id);
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的年度总结内容');
-            summaryContent = llmSummary;
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的年度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
@@ -1140,21 +1148,23 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     // 动态创建LLM实例以获取最新配置
     const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
     
-    // 首先尝试使用外部LLM
-    try {
-      console.log('尝试使用外部LLM生成总结...');
-      llmSummary = await externalLLM.generateSummary(llmData, 'daily');
-      if (llmSummary) {
-        console.log('使用外部LLM重新生成的总结内容');
-        summaryContent = llmSummary;
+    // 首先尝试使用外部LLM（如果可用）
+    if (externalLLM) {
+      try {
+        console.log('尝试使用外部LLM生成总结...');
+        llmSummary = await externalLLM.generateSummary(llmData, 'daily');
+        if (llmSummary) {
+          console.log('使用外部LLM重新生成的总结内容');
+          summaryContent = llmSummary;
+        }
+      } catch (error) {
+        console.log('外部LLM生成失败，尝试本地LLM:', error.message);
+        console.error('外部LLM错误详情:', error);
       }
-    } catch (error) {
-      console.log('外部LLM生成失败，尝试本地LLM:', error.message);
-      console.error('外部LLM错误详情:', error);
     }
     
-    // 如果外部LLM失败，尝试本地LLM
-    if (!llmSummary) {
+    // 如果外部LLM失败或不可用，尝试本地LLM
+    if (!llmSummary && localLLM) {
       try {
         console.log('尝试使用本地LLM生成总结...');
         llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
@@ -1288,8 +1298,8 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     
     const { externalLLM, localLLM } = await createLLMInstances(req.user.id);
     
-    // 首先尝试外部LLM
-    if (!llmSummary) {
+    // 首先尝试外部LLM（如果可用）
+    if (!llmSummary && externalLLM) {
       try {
         console.log('尝试使用外部LLM生成今日总结...');
         llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, req.user.id);
@@ -1302,9 +1312,9 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
         console.error('外部LLM错误详情:', error);
       }
     }
-    
-    // 如果外部LLM失败，尝试本地LLM
-    if (!llmSummary) {
+
+    // 如果外部LLM失败或不可用，尝试本地LLM
+    if (!llmSummary && localLLM) {
       try {
         console.log('尝试使用本地LLM生成今日总结...');
         llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, req.user.id);
@@ -1427,19 +1437,24 @@ ${diaries.map(diary => {
         
         let llmSummary = null;
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的月度总结内容');
-            summaryContent = llmSummary;
+        // 动态创建LLM实例以获取最新配置
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
+        
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'monthly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的月度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成月度总结失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'monthly', {}, user._id);
             if (llmSummary) {
@@ -1571,19 +1586,24 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
         let summaryContent = baseContent;
         let llmSummary = null;
         
-        // 首先尝试使用外部LLM
-        try {
-          llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
-          if (llmSummary) {
-            console.log('使用外部LLM生成的年度总结内容');
-            summaryContent = llmSummary;
+        // 动态创建LLM实例以获取最新配置
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
+        
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
+            if (llmSummary) {
+              console.log('使用外部LLM生成的年度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
           }
-        } catch (error) {
-          console.log('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
         }
         
-        // 如果外部LLM失败，尝试本地LLM
-        if (!llmSummary) {
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
           try {
             llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
             if (llmSummary) {
