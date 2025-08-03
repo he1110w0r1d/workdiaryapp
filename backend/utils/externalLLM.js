@@ -67,7 +67,9 @@ class ExternalLLM {
       
       logger.llm('=== 发送给外部LLM的提示词 ===');
       logger.info(prompt);
-      // 调试代码已清理
+      
+      // 调用外部LLM生成内容
+      const response = await this._callExternalLLM(prompt, options);
       
       // 返回生成的内容
       return response;
