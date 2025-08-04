@@ -10,7 +10,8 @@ import {
   CalendarOutlined,
   LogoutOutlined,
   RobotOutlined,
-  CheckSquareOutlined
+  CheckSquareOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -147,6 +148,11 @@ const AppLayout = ({ children }) => {
       key: '/app/todos',
       icon: <CheckSquareOutlined />,
       label: <Link to="/app/todos">待办管理</Link>,
+    },
+    {
+      key: '/app/recycle',
+      icon: <DeleteOutlined />,
+      label: <Link to="/app/recycle">日记回收站</Link>,
     },
     {
       key: '/app/summaries',

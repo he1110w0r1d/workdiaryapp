@@ -17,6 +17,7 @@ import SummaryList from './components/SummaryList';
 import UserSettings from './components/UserSettings';
 import UserSettingsPage from './components/UserSettingsPage';
 import ModelSettings from './components/ModelSettings';
+import RecycleBin from './components/RecycleBin';
 import Layout from './components/Layout';
 import RootRedirect from './components/RootRedirect';
 
@@ -41,6 +42,7 @@ function App() {
               <Route path="diaries" element={<DiaryList />} />
               <Route path="diaries/new" element={<DiaryForm />} />
               <Route path="diaries/:id/edit" element={<DiaryForm />} />
+              <Route path="recycle" element={<RecycleBin />} />
               <Route path="todos" element={<TodoList />} />
               <Route path="summaries" element={<SummaryList />} />
               <Route path="model-settings" element={<ModelSettings />} />

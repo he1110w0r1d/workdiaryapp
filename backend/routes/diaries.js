@@ -8,7 +8,10 @@ const {
   getDiaryById,
   updateDiary,
   deleteDiary,
-  updateTodoStatus
+  updateTodoStatus,
+  getDeletedDiaries,
+  restoreDiary,
+  permanentDeleteDiary
 } = require('../controllers/diaryController');
 
 router.route('/')
@@ -22,5 +25,10 @@ router.route('/:id')
 
 // 更新日记待办状态
 router.put('/:id/todo-status', protect, updateTodoStatus);
+
+// 回收站相关路由
+router.get('/recycle/list', protect, getDeletedDiaries);
+router.put('/:id/restore', protect, restoreDiary);
+router.delete('/:id/permanent', protect, permanentDeleteDiary);
 
 module.exports = router;

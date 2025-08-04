@@ -49,7 +49,7 @@ exports.getDiaries = async (req, res) => {
   try {
     const { startDate, endDate, search, page = 1, limit = 10 } = req.query;
     
-    let query = { user: req.user.id };
+    let query = { user: req.user.id, isDeleted: false };
     
     if (startDate && endDate) {
       const start = new Date(startDate);
@@ -94,7 +94,8 @@ exports.getDiaryById = async (req, res) => {
   try {
     const diary = await Diary.findOne({
       _id: req.params.id,
-      user: req.user.id
+      user: req.user.id,
+      isDeleted: false
     });
 
     if (!diary) {
@@ -133,7 +134,7 @@ exports.updateDiary = async (req, res) => {
     }
     
     const diary = await Diary.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
+      { _id: req.params.id, user: req.user.id, isDeleted: false },
       updateData,
       { new: true }
     );
@@ -184,30 +185,138 @@ exports.updateDiary = async (req, res) => {
   }
 };
 
+// 软删除日记
 exports.deleteDiary = async (req, res) => {
   try {
     const diary = await Diary.findOne({
       _id: req.params.id,
-      user: req.user.id
+      user: req.user.id,
+      isDeleted: false
     });
 
     if (!diary) {
       return res.status(404).json({ message: '日记未找到' });
     }
 
-    // 如果日记有关联的待办项，先删除待办项
+    // 软删除日记
+    diary.isDeleted = true;
+    diary.deletedAt = new Date();
+    diary.deletedBy = req.user.id;
+    await diary.save();
+
+    // 如果日记有关联的待办项，也软删除待办项
     if (diary.relatedTodo) {
-      await Todo.findByIdAndDelete(diary.relatedTodo);
-      logger.info(`删除日记时同时删除了关联的待办项: ${diary.relatedTodo}`);
+      await Todo.findByIdAndUpdate(diary.relatedTodo, {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id
+      });
+      logger.info(`软删除日记时同时软删除了关联的待办项: ${diary.relatedTodo}`);
     }
 
-    // 删除日记
-    await Diary.findByIdAndDelete(diary._id);
-
-    logger.info(`用户 ${req.user.id} 删除了日记: ${diary._id}`);
-    res.json({ message: '日记删除成功' });
+    logger.info(`用户 ${req.user.id} 软删除了日记: ${diary._id}`);
+    res.json({ message: '日记已移至回收站' });
   } catch (error) {
     logger.error('删除日记失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 获取回收站中的日记
+exports.getDeletedDiaries = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const deletedDiaries = await Diary.find({
+      user: req.user.id,
+      isDeleted: true
+    })
+    .sort({ deletedAt: -1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .populate('relatedTodo');
+
+    const total = await Diary.countDocuments({
+      user: req.user.id,
+      isDeleted: true
+    });
+
+    res.json({
+      diaries: deletedDiaries,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    logger.error('获取回收站日记失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 恢复日记
+exports.restoreDiary = async (req, res) => {
+  try {
+    const diary = await Diary.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+      isDeleted: true
+    });
+
+    if (!diary) {
+      return res.status(404).json({ message: '已删除的日记未找到' });
+    }
+
+    // 恢复日记
+    diary.isDeleted = false;
+    diary.deletedAt = null;
+    diary.deletedBy = null;
+    await diary.save();
+
+    // 如果日记有关联的待办项，也恢复待办项
+    if (diary.relatedTodo) {
+      await Todo.findByIdAndUpdate(diary.relatedTodo, {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null
+      });
+      logger.info(`恢复日记时同时恢复了关联的待办项: ${diary.relatedTodo}`);
+    }
+
+    logger.info(`用户 ${req.user.id} 恢复了日记: ${diary._id}`);
+    res.json({ message: '日记恢复成功', diary });
+  } catch (error) {
+    logger.error('恢复日记失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 永久删除日记
+exports.permanentDeleteDiary = async (req, res) => {
+  try {
+    const diary = await Diary.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+      isDeleted: true
+    });
+
+    if (!diary) {
+      return res.status(404).json({ message: '已删除的日记未找到' });
+    }
+
+    // 如果日记有关联的待办项，永久删除待办项
+    if (diary.relatedTodo) {
+      await Todo.findByIdAndDelete(diary.relatedTodo);
+      logger.info(`永久删除日记时同时永久删除了关联的待办项: ${diary.relatedTodo}`);
+    }
+
+    // 永久删除日记
+    await Diary.findByIdAndDelete(diary._id);
+
+    logger.info(`用户 ${req.user.id} 永久删除了日记: ${diary._id}`);
+    res.json({ message: '日记已永久删除' });
+  } catch (error) {
+    logger.error('永久删除日记失败:', error);
     res.status(500).json({ message: error.message });
   }
 };

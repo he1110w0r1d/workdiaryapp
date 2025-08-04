@@ -393,11 +393,12 @@ const DiaryList = () => {
         open={deleteModalVisible}
         onOk={handleDelete}
         onCancel={() => setDeleteModalVisible(false)}
-        okText="确认"
+        okText="移至回收站"
         cancelText="取消"
         okButtonProps={{ danger: true }}
       >
         <p>确定要删除这条工作日记吗？</p>
+        <p style={{ color: '#666', fontSize: '12px' }}>删除后的日记将移至回收站，可在30天内恢复。</p>
       </Modal>
 
       <Modal
@@ -405,11 +406,12 @@ const DiaryList = () => {
         open={batchDeleteModalVisible}
         onOk={handleBatchDelete}
         onCancel={() => setBatchDeleteModalVisible(false)}
-        okText="确认删除"
+        okText="移至回收站"
         cancelText="取消"
         okButtonProps={{ danger: true }}
       >
-        <p>确定要删除选中的 {selectedRowKeys.length} 条工作日记吗？此操作不可撤销。</p>
+        <p>确定要删除选中的 {selectedRowKeys.length} 条工作日记吗？</p>
+        <p style={{ color: '#666', fontSize: '12px' }}>删除后的日记将移至回收站，可在30天内恢复。</p>
       </Modal>
 
       <Modal

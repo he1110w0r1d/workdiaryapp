@@ -59,13 +59,23 @@
   }
   
   /* 全局动画效果 - 排除弹出层组件 */
-  *:not(.ant-picker-dropdown):not(.ant-picker-panel):not(.ant-picker-panel *):not(.ant-select-dropdown):not(.ant-select-dropdown *) {
+  *:not(.ant-picker-dropdown):not(.ant-picker-panel):not(.ant-picker-panel *):not(.ant-select-dropdown):not(.ant-select-dropdown *):not(.ant-popover):not(.ant-popover *):not(.ant-popconfirm):not(.ant-popconfirm *):not(.ant-modal):not(.ant-modal *) {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* 确保DatePicker弹出层正常显示 */
+  /* 确保弹出层组件正常显示 */
   .ant-picker-dropdown {
     z-index: 1050 !important;
+    transition: none !important;
+  }
+
+  .ant-popover, .ant-popconfirm {
+    z-index: 1060 !important;
+    transition: none !important;
+  }
+
+  .ant-modal {
+    z-index: 1070 !important;
     transition: none !important;
   }
 

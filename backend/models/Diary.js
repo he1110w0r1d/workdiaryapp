@@ -52,6 +52,20 @@ const diarySchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // 软删除相关字段
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -65,5 +79,7 @@ const diarySchema = new mongoose.Schema({
 // 索引优化
 diarySchema.index({ user: 1, createdAt: -1 });
 diarySchema.index({ user: 1, startTime: 1 });
+diarySchema.index({ user: 1, isDeleted: 1 });
+diarySchema.index({ isDeleted: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('Diary', diarySchema);

@@ -140,6 +140,10 @@ cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGener
 // 每年1月1日凌晨3点生成上年总结
 cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary);
 
+// 启动定时清理任务
+const { scheduleCleanup } = require('./utils/cleanup');
+scheduleCleanup();
+
 // 根路径
 app.get('/', (req, res) => {
   res.json({ message: 'Work Diary API Server' });

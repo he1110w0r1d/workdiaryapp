@@ -54,6 +54,20 @@ const todoSchema = new mongoose.Schema({
       default: ''
     }
   }],
+  // 软删除相关字段
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -68,6 +82,8 @@ const todoSchema = new mongoose.Schema({
 todoSchema.index({ user: 1, status: 1, createdAt: -1 });
 todoSchema.index({ user: 1, dueDate: 1 });
 todoSchema.index({ user: 1, priority: 1 });
+todoSchema.index({ user: 1, isDeleted: 1 });
+todoSchema.index({ isDeleted: 1, deletedAt: 1 });
 
 // 更新时间中间件
 todoSchema.pre('save', function(next) {
