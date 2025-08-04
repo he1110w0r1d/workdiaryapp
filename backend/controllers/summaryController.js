@@ -1,6 +1,7 @@
 const Diary = require('../models/Diary');
 const Summary = require('../models/Summary');
 const User = require('../models/User');
+const Todo = require('../models/Todo');
 const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
 const { getUserDefaultLLMConfig } = require('./settingsController');
@@ -349,6 +350,52 @@ ${index + 1}. ${diary.content}
           logger.info('使用默认模板生成总结内容');
         }
         
+        // 统计待办事项数据
+        const yesterdayStart = new Date(yesterday);
+        yesterdayStart.setHours(0, 0, 0, 0);
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        
+        // 昨日新增的待办事项
+        const todayTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: yesterdayStart,
+            $lt: yesterdayEnd
+          }
+        });
+        
+        // 昨日完成的待办事项
+        const todayTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: {
+                $gte: yesterdayStart,
+                $lt: yesterdayEnd
+              }
+            }
+          }
+        });
+        
+        // 昨日待完成的待办事项（昨日新增但未完成的）
+        const todayTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: yesterdayStart,
+            $lt: yesterdayEnd
+          },
+          status: { $ne: '已完成' }
+        });
+        
+        // 数据库中所有未完成的待办事项
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 对LLM生成的内容进行占位符替换处理
         if (llmSummary) {
           const workDetails = diaries.map(diary => {
@@ -360,6 +407,10 @@ ${index + 1}. ${diary.content}
             .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
             .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{todayTodosCreated\}\}/g, todayTodosCreated)
+            .replace(/\{\{todayTodosCompleted\}\}/g, todayTodosCompleted)
+            .replace(/\{\{todayTodosPending\}\}/g, todayTodosPending)
+            .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
             .replace(/\{\{workDetails\}\}/g, workDetails);
         }
         
@@ -497,12 +548,60 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           logger.info('使用默认模板生成的月度总结内容');
         }
         
+        // 统计月度待办事项数据
+        const monthStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+        const monthEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        
+        // 本月新增的待办事项
+        const monthTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: monthStart,
+            $lt: monthEnd
+          }
+        });
+        
+        // 本月完成的待办事项
+        const monthTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: {
+                $gte: monthStart,
+                $lt: monthEnd
+              }
+            }
+          }
+        });
+        
+        // 本月待完成的待办事项（本月新增但未完成的）
+        const monthTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: monthStart,
+            $lt: monthEnd
+          },
+          status: { $ne: '已完成' }
+        });
+        
+        // 数据库中所有未完成的待办事项
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 对LLM生成的内容进行占位符替换处理
         if (llmSummary) {
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, `${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月`)
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
             .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{monthTodosCreated\}\}/g, monthTodosCreated)
+            .replace(/\{\{monthTodosCompleted\}\}/g, monthTodosCompleted)
+            .replace(/\{\{monthTodosPending\}\}/g, monthTodosPending)
+            .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
             .replace(/\{\{workDetails\}\}/g, workDetails)
             .replace(/\{\{userName\}\}/g, user.profile?.name || user.username)
             .replace(/\{\{userPosition\}\}/g, user.workProfile?.position || '未设置')
@@ -836,12 +935,60 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           logger.info('使用默认模板生成的年度总结内容');
         }
         
+        // 统计年度待办事项数据
+        const yearStart = new Date(targetYear, 0, 1);
+        const yearEnd = new Date(targetYear, 11, 31, 23, 59, 59, 999);
+        
+        // 本年新增的待办事项
+        const yearTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: yearStart,
+            $lt: yearEnd
+          }
+        });
+        
+        // 本年完成的待办事项
+        const yearTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: {
+                $gte: yearStart,
+                $lt: yearEnd
+              }
+            }
+          }
+        });
+        
+        // 本年待完成的待办事项（本年新增但未完成的）
+        const yearTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: yearStart,
+            $lt: yearEnd
+          },
+          status: { $ne: '已完成' }
+        });
+        
+        // 数据库中所有未完成的待办事项
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 对LLM生成的内容进行占位符替换处理
         if (llmSummary) {
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, `${targetYear}年`)
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
             .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{yearTodosCreated\}\}/g, yearTodosCreated)
+            .replace(/\{\{yearTodosCompleted\}\}/g, yearTodosCompleted)
+            .replace(/\{\{yearTodosPending\}\}/g, yearTodosPending)
+            .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
             .replace(/\{\{workDetails\}\}/g, workDetails)
             .replace(/\{\{userName\}\}/g, user.profile?.name || user.username)
             .replace(/\{\{userPosition\}\}/g, user.workProfile?.position || '未设置')
@@ -1326,6 +1473,52 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
       logger.info('使用默认模板生成的今日总结内容');
     }
     
+    // 统计待办事项数据
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // 今日新增的待办事项
+    const todayTodosCreated = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: todayStart,
+        $lt: todayEnd
+      }
+    });
+    
+    // 今日完成的待办事项
+    const todayTodosCompleted = await Todo.countDocuments({
+      user: req.user.id,
+      status: '已完成',
+      'statusHistory': {
+        $elemMatch: {
+          status: '已完成',
+          changedAt: {
+            $gte: todayStart,
+            $lt: todayEnd
+          }
+        }
+      }
+    });
+    
+    // 今日待完成的待办事项（今日新增但未完成的）
+    const todayTodosPending = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: todayStart,
+        $lt: todayEnd
+      },
+      status: { $ne: '已完成' }
+    });
+    
+    // 数据库中所有未完成的待办事项
+    const totalPendingTodos = await Todo.countDocuments({
+      user: req.user.id,
+      status: { $in: ['待办'] }
+    });
+
     // 对LLM生成的内容进行占位符替换处理
     if (llmSummary) {
       const workDetails = diaries.map(diary => {
@@ -1337,6 +1530,10 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
         .replace(/\{\{date\}\}/g, today.toLocaleDateString('zh-CN'))
         .replace(/\{\{totalEntries\}\}/g, diaries.length)
         .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+        .replace(/\{\{todayTodosCreated\}\}/g, todayTodosCreated)
+        .replace(/\{\{todayTodosCompleted\}\}/g, todayTodosCompleted)
+        .replace(/\{\{todayTodosPending\}\}/g, todayTodosPending)
+        .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
         .replace(/\{\{workDetails\}\}/g, workDetails);
     }
     

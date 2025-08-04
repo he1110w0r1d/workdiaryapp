@@ -12,6 +12,10 @@
 - 年份: {{date}}
 - 工作条目数量: {{totalEntries}}
 - 总工作时长: {{totalTime}}分钟
+- 本年新增待办事项: {{yearTodosCreated}}个
+- 本年完成待办事项: {{yearTodosCompleted}}个
+- 本年待完成待办事项: {{yearTodosPending}}个
+- 总待完成待办事项: {{totalPendingTodos}}个
 
 **工作详情:**
 {{workDetails}}
@@ -37,6 +41,7 @@
 - 全年工作记录的完整性和规范性评估
 - 工作内容描述质量的提升轨迹
 - 工作记录习惯的养成和改进过程
+- 工作待办事项的完成率和效率分析
 
 ## 五、工作模式与状态变化
 - 年度工作模式和习惯的演变

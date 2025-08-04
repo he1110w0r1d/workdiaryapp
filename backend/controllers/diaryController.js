@@ -109,21 +109,70 @@ exports.getDiaryById = async (req, res) => {
 
 exports.updateDiary = async (req, res) => {
   try {
-    const { content, location, startTime, endTime, tags, workPriority } = req.body;
+    const { content, location, startTime, endTime, tags, workPriority, isTodo, todoDueDate } = req.body;
+    
+    // 准备更新数据
+    const updateData = {
+      content,
+      location,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      tags: tags || [],
+      workPriority: workPriority !== undefined ? workPriority : '中',
+      updatedAt: Date.now()
+    };
+    
+    // 处理待办相关字段
+    if (isTodo !== undefined) {
+      updateData.isTodo = isTodo;
+      if (isTodo && todoDueDate) {
+        updateData.todoDueDate = new Date(todoDueDate);
+      } else if (!isTodo) {
+        updateData.todoDueDate = null;
+      }
+    }
     
     const diary = await Diary.findOneAndUpdate(
       { _id: req.params.id, user: req.user.id },
-      {
-        content,
-        location,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        tags: tags || [],
-        workPriority: workPriority !== undefined ? workPriority : '中',
-        updatedAt: Date.now()
-      },
+      updateData,
       { new: true }
     );
+    
+    // 如果日记从待办状态改为非待办状态，需要删除关联的待办项
+    if (diary && diary.relatedTodo && !isTodo) {
+      await Todo.findByIdAndDelete(diary.relatedTodo);
+      diary.relatedTodo = null;
+      await diary.save();
+      logger.info(`日记编辑时删除了关联的待办项: ${diary.relatedTodo}`);
+    }
+    
+    // 如果日记从非待办状态改为待办状态，需要创建新的待办项
+    if (diary && isTodo && !diary.relatedTodo && todoDueDate) {
+      const todo = new Todo({
+        user: req.user.id,
+        content: content,
+        priority: workPriority || '中',
+        dueDate: new Date(todoDueDate),
+        relatedDiary: diary._id
+      });
+      
+      await todo.save();
+      diary.relatedTodo = todo._id;
+      await diary.save();
+      logger.info(`日记编辑时创建了新的待办项: ${todo._id}`);
+    }
+    
+    // 如果是待办日记且已有关联待办项，更新待办项内容
+    if (diary && isTodo && diary.relatedTodo && todoDueDate) {
+      const todoUpdateData = {
+        content: content,
+        priority: workPriority || '中',
+        dueDate: new Date(todoDueDate)
+      };
+      
+      await Todo.findByIdAndUpdate(diary.relatedTodo, todoUpdateData);
+      logger.info(`日记编辑时更新了关联的待办项: ${diary.relatedTodo}`);
+    }
 
     if (!diary) {
       return res.status(404).json({ message: '日记未找到' });

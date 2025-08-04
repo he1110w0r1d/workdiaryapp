@@ -12,6 +12,7 @@
 - 工作日期: {{date}}
 - 工作条目数量: {{totalEntries}}
 - 总工作时长: {{totalTime}}分钟
+- 待办事项统计: 本月新增{{monthTodosCreated}}项，完成{{monthTodosCompleted}}项，待完成{{monthTodosPending}}项，总待完成{{totalPendingTodos}}项
 
 ## 一、工作内容统计
 - 本月工作天数和总时长统计
@@ -27,6 +28,7 @@
 - 工作内容的丰富度和深度评估
 - 工作描述的完整性分析
 - 工作记录的规范性评价
+- 工作待办事项的完成率和效率分析
 
 ## 四、职责履行情况
 - 工作内容与岗位职责的匹配度分析
