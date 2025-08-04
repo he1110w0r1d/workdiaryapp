@@ -16,6 +16,7 @@ import {
 } from 'antd';
 import { UserOutlined, BulbOutlined, FileTextOutlined, CheckOutlined, LinkOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import Logger from '../utils/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -93,7 +94,7 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       setWorkProfile(prev => ({ ...prev, ...values }));
       setCurrent(current + 1);
     }).catch(info => {
-      console.log('Validate Failed:', info);
+      Logger.debug('表单验证失败:', info);
     });
   };
 
@@ -108,14 +109,13 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       const values = await form.validateFields();
       const finalProfile = { ...workProfile, ...values };
       
-      console.log('准备提交工作信息:', finalProfile);
-      console.log('当前token:', localStorage.getItem('token'));
+      Logger.user('准备提交工作信息:', finalProfile);
       
       setLoading(true);
       
       // 保存工作信息配置
       const response = await api.put('/users/work-profile', finalProfile);
-      console.log('工作信息保存成功:', response.data);
+      Logger.user('工作信息保存成功:', response.data);
       
       message.success('工作信息配置保存成功！');
       
@@ -126,9 +126,7 @@ const WorkProfileSetup = ({ visible, onClose, onComplete }) => {
       }, 1000);
       
     } catch (error) {
-      console.error('保存工作信息失败:', error);
-      console.error('错误详情:', error.response?.data);
-      console.error('错误状态:', error.response?.status);
+      Logger.error('保存工作信息失败:', error);
       message.error(`保存失败：${error.response?.data?.message || error.message}`);
     } finally {
       setLoading(false);

@@ -23,6 +23,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import api from '../utils/api';
+import Logger from '../utils/logger';
 
 const { Option } = Select;
 
@@ -39,22 +40,9 @@ const UserLLMSettings = () => {
     try {
       setLoading(true);
       const response = await api.get('/settings/user-llm');
-      console.log('=== API Response Debug ===');
-      console.log('Full response:', response);
-      console.log('Response data:', response.data);
-      console.log('Configs array:', response.data.configs);
+      Logger.api('获取LLM配置列表成功:', response.data);
       
       const configs = response.data.configs || [];
-      console.log('Configs length:', configs.length);
-      configs.forEach((config, index) => {
-        console.log(`Config ${index}:`, {
-          _id: config._id,
-          name: config.name,
-          isDefault: config.isDefault,
-          isDefaultType: typeof config.isDefault,
-          allKeys: Object.keys(config)
-        });
-      });
       
       setConfigs(configs);
     } catch (error) {
@@ -189,17 +177,10 @@ const UserLLMSettings = () => {
       dataIndex: 'name',
       key: 'name',
       render: (text, record) => {
-        console.log('=== Name Column Render Debug ===');
-        console.log('Text:', text);
-        console.log('Record:', record);
-        console.log('Record._id:', record._id);
-        console.log('Record.isDefault:', record.isDefault);
-        console.log('Record.isDefault type:', typeof record.isDefault);
-        console.log('All record keys:', Object.keys(record));
+        Logger.debug('渲染配置名称列:', { text, recordId: record._id, isDefault: record.isDefault });
         
         return (
           <div>
-            <span style={{ backgroundColor: 'yellow', color: 'red', fontWeight: 'bold', padding: '2px 4px' }}>【测试标记】</span>
             <span>{text}</span>
             {record.isDefault && <span style={{ color: 'green', fontWeight: 'bold' }}> ★默认</span>}
             {!record.isActive && <Tag color="red">已禁用</Tag>}
@@ -236,13 +217,7 @@ const UserLLMSettings = () => {
       title: '操作',
       key: 'actions',
       render: (_, record) => {
-        console.log('=== Table Row Render Debug ===');
-        console.log('Record:', record);
-        console.log('Record._id:', record._id);
-        console.log('Record.isDefault:', record.isDefault);
-        console.log('Record.isDefault type:', typeof record.isDefault);
-        console.log('Button disabled:', record.isDefault);
-        console.log('Button text:', record.isDefault ? '已是默认' : '设为默认');
+        Logger.debug('渲染操作按钮:', { recordId: record._id, isDefault: record.isDefault });
         
         return (
           <Space>

@@ -32,6 +32,8 @@ const DiaryList = () => {
   });
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [batchDeleteModalVisible, setBatchDeleteModalVisible] = useState(false);
+  const [viewModalVisible, setViewModalVisible] = useState(false);
+  const [viewingDiary, setViewingDiary] = useState(null);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -132,13 +134,32 @@ const DiaryList = () => {
       title: '工作内容',
       dataIndex: 'content',
       key: 'content',
-      render: (text) => (
-        <div style={{ 
-          maxWidth: '300px', 
-          overflow: 'hidden', 
-          textOverflow: 'ellipsis', 
-          whiteSpace: 'nowrap' 
-        }}>
+      render: (text, record) => (
+        <div 
+          style={{ 
+            maxWidth: '300px', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis', 
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+            color: '#1890ff',
+            transition: 'all 0.3s'
+          }}
+          onClick={() => {
+            setViewingDiary(record);
+            setViewModalVisible(true);
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#f0f8ff';
+            e.target.style.padding = '4px 8px';
+            e.target.style.borderRadius = '4px';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = 'transparent';
+            e.target.style.padding = '0';
+          }}
+          title="点击查看完整内容"
+        >
           {text}
         </div>
       )
@@ -314,6 +335,116 @@ const DiaryList = () => {
         okButtonProps={{ danger: true }}
       >
         <p>确定要删除选中的 {selectedRowKeys.length} 条工作日记吗？此操作不可撤销。</p>
+      </Modal>
+
+      <Modal
+        title="工作日记详情"
+        open={viewModalVisible}
+        onCancel={() => setViewModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setViewModalVisible(false)}>
+            关闭
+          </Button>,
+          viewingDiary && (
+            <Link key="edit" to={`/app/diaries/${viewingDiary._id}/edit`}>
+              <Button type="primary" icon={<EditOutlined />}>
+                编辑
+              </Button>
+            </Link>
+          )
+        ]}
+        width={800}
+      >
+        {viewingDiary && (
+          <div style={{ lineHeight: '1.8' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <strong style={{ color: '#1890ff', fontSize: '16px' }}>📝 工作内容：</strong>
+              <div style={{ 
+                marginTop: '8px', 
+                padding: '12px', 
+                backgroundColor: '#f9f9f9', 
+                borderRadius: '6px',
+                border: '1px solid #e8e8e8',
+                whiteSpace: 'pre-wrap',
+                fontSize: '14px',
+                lineHeight: '1.6'
+              }}>
+                {viewingDiary.content}
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <strong style={{ color: '#52c41a', fontSize: '14px' }}>📍 工作地点：</strong>
+              <span style={{ marginLeft: '8px', fontSize: '14px' }}>{viewingDiary.location || '未填写'}</span>
+            </div>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <strong style={{ color: '#fa8c16', fontSize: '14px' }}>⏰ 工作时间：</strong>
+              <div style={{ marginLeft: '8px', fontSize: '14px' }}>
+                <div>开始：{moment(viewingDiary.startTime).format('YYYY-MM-DD HH:mm')}</div>
+                <div>结束：{moment(viewingDiary.endTime).format('YYYY-MM-DD HH:mm')}</div>
+                <div style={{ color: '#666', fontSize: '12px' }}>
+                  时长：{moment.duration(moment(viewingDiary.endTime).diff(moment(viewingDiary.startTime))).humanize()}
+                </div>
+              </div>
+            </div>
+            
+            {viewingDiary.tags && viewingDiary.tags.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <strong style={{ color: '#722ed1', fontSize: '14px' }}>🏷️ 标签：</strong>
+                <div style={{ marginTop: '8px' }}>
+                  {viewingDiary.tags.map((tag) => {
+                    let color = tag.length > 5 ? 'geekblue' : 'green';
+                    if (tag === '紧急') {
+                      color = 'volcano';
+                    }
+                    return (
+                      <Tag color={color} key={tag} style={{ marginBottom: '4px' }}>
+                        {tag.toUpperCase()}
+                      </Tag>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            <div style={{ marginBottom: '16px' }}>
+              <strong style={{ color: '#eb2f96', fontSize: '14px' }}>⚡ 优先级：</strong>
+              <span style={{ marginLeft: '8px' }}>
+                {(() => {
+                  const priority = viewingDiary.workPriority || '中';
+                  let color = 'default';
+                  let emoji = '🟡';
+                  if (priority === '高') {
+                    color = 'red';
+                    emoji = '🔴';
+                  } else if (priority === '低') {
+                    color = 'green';
+                    emoji = '🟢';
+                  } else {
+                    color = 'orange';
+                    emoji = '🟡';
+                  }
+                  return (
+                    <Tag color={color}>
+                      {emoji} {priority}
+                    </Tag>
+                  );
+                })()}
+              </span>
+            </div>
+            
+            <div style={{ 
+              marginTop: '20px', 
+              paddingTop: '16px', 
+              borderTop: '1px solid #e8e8e8',
+              color: '#999',
+              fontSize: '12px'
+            }}>
+              创建时间：{moment(viewingDiary.createdAt).format('YYYY-MM-DD HH:mm:ss')}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -3,6 +3,7 @@ import { Card, Form, Input, Button, Avatar, Upload, message, Divider, Typography
 import { UserOutlined, SaveOutlined, UploadOutlined, LogoutOutlined, ToolOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import Logger from '../utils/logger';
 
 const { Title, Text } = Typography;
 
@@ -65,7 +66,7 @@ const UserSettings = () => {
       const response = await api.put('/users/profile', values);
       message.success('个人信息保存成功！');
       setUserInfo({ ...userInfo, ...values });
-      console.log('用户信息更新成功:', response.data);
+      Logger.user('用户信息更新成功:', response.data);
     } catch (error) {
       console.error('保存用户设置失败:', error);
       message.error('保存失败: ' + (error.response?.data?.message || error.message));
@@ -85,7 +86,7 @@ const UserSettings = () => {
     try {
       // 保存工作信息配置
       const response = await api.put('/users/work-profile', values);
-      console.log('工作信息配置更新成功:', response.data);
+      Logger.user('工作信息配置更新成功:', response.data);
       
       message.success('工作信息配置保存成功！');
       setWorkProfile({ ...workProfile, ...values });

@@ -17,6 +17,7 @@ import {
 import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import api from '../utils/api';  // 修改这里
 import moment from 'moment';
+import Logger from '../utils/logger';
 
 const { TextArea } = Input;
 
@@ -174,19 +175,15 @@ const SummaryList = () => {
 
   // 删除总结
   const handleDeleteSummary = async (summaryId, type) => {
-    console.log('删除总结被调用:', summaryId, type);
-    console.log('API URL:', `/summaries/${summaryId}`);
+    Logger.user('删除总结:', { summaryId, type });
     try {
       const response = await api.delete(`/summaries/${summaryId}`);
-      console.log('删除响应:', response);
+      Logger.api('删除总结成功:', response.data);
       message.success('总结删除成功');
       // 重新获取对应类型的总结列表
       fetchSummaries(type);
     } catch (error) {
-      console.error('删除总结失败 - 完整错误:', error);
-      console.error('错误响应:', error.response);
-      console.error('错误状态:', error.response?.status);
-      console.error('错误数据:', error.response?.data);
+      Logger.error('删除总结失败:', error);
       message.error('删除失败: ' + (error.response?.data?.message || error.message));
     }
   };
