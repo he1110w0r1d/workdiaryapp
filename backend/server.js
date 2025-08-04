@@ -58,13 +58,14 @@ const userRoutes = require('./routes/users');
 const diaryRoutes = require('./routes/diaries');
 const summaryRoutes = require('./routes/summaries');
 const settingsRoutes = require('./routes/settingsRoutes');
+const todoRoutes = require('./routes/todos');
 
 // 导入定时任务
 const { generateDailySummary, generateMonthlySummary, generateYearlySummary } = require('./controllers/summaryController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST 
+const HOST = process.env.HOST || 'localhost'; 
 // 启用trust proxy以正确获取客户端IP
 app.set('trust proxy', true);
 
@@ -87,7 +88,7 @@ app.use((req, res, next) => {
   logger.info(`访问请求来自IP: ${ip}`);
   
   // 允许本地访问
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
     return next();
   }
   
@@ -129,6 +130,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/diaries', diaryRoutes);
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/todos', todoRoutes);
 
 // 定时任务
 // 每天凌晨1点生成昨日总结
@@ -147,4 +149,7 @@ app.listen(PORT, HOST, () => {
   logger.info(`服务器运行在端口 ${PORT}`);
   logger.info(`局域网访问地址: http://${HOST}:${PORT}`);
   logger.info('注意: 此服务仅限192.168.1.x网段访问');
+  console.log(`服务器运行在端口 ${PORT}`);
+  console.log(`局域网访问地址: http://${HOST}:${PORT}`);
+  console.log('注意: 此服务仅限192.168.1.x网段访问');
 });

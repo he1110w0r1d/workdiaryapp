@@ -7,7 +7,8 @@ const {
   getDiaries,
   getDiaryById,
   updateDiary,
-  deleteDiary
+  deleteDiary,
+  updateTodoStatus
 } = require('../controllers/diaryController');
 
 router.route('/')
@@ -18,5 +19,8 @@ router.route('/:id')
   .get(protect, getDiaryById)
   .put(protect, updateDiary)
   .delete(protect, deleteDiary);
+
+// 更新日记待办状态
+router.put('/:id/todo-status', protect, updateTodoStatus);
 
 module.exports = router;

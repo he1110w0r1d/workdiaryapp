@@ -31,6 +31,27 @@ const diarySchema = new mongoose.Schema({
     enum: ['高', '中', '低'],
     default: '中'
   },
+  // 待办相关字段
+  isTodo: {
+    type: Boolean,
+    default: false
+  },
+  todoStatus: {
+    type: String,
+    enum: ['待办', '已完成', '已放弃', '已转交'],
+    default: '待办'
+  },
+  // 关联的待办项
+  relatedTodo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Todo',
+    default: null
+  },
+  // 状态变更描述
+  statusDescription: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

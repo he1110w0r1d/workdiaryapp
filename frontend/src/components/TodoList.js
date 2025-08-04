@@ -1,0 +1,324 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  List, 
+  Card, 
+  Button, 
+  Space, 
+  Tag, 
+  Modal, 
+  Form, 
+  Input, 
+  message, 
+  Empty,
+  Spin,
+  Typography
+} from 'antd';
+import { 
+  CheckOutlined, 
+  CloseOutlined, 
+  SwapOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
+import api from '../utils/api';
+import moment from 'moment';
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+const TodoList = () => {
+  const [todos, setTodos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [selectedTodo, setSelectedTodo] = useState(null);
+  const [actionType, setActionType] = useState('');
+  const [form] = Form.useForm();
+
+  // 获取待办列表
+  const fetchTodos = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/todos');
+      setTodos(response.data.todos || []);
+    } catch (error) {
+      console.error('获取待办列表失败:', error);
+      message.error('获取待办列表失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodos();
+  }, []);
+
+  // 处理待办状态更新
+  const handleTodoAction = async (values) => {
+    try {
+      const { summary } = values;
+      await api.put(`/todos/${selectedTodo._id}/status`, {
+        status: actionType,
+        summary
+      });
+      
+      message.success(`待办已${getActionText(actionType)}`);
+      setActionModalVisible(false);
+      form.resetFields();
+      fetchTodos(); // 重新获取列表
+      
+      // 触发自定义事件，通知其他组件待办状态已更新
+      window.dispatchEvent(new CustomEvent('todoStatusUpdated'));
+    } catch (error) {
+      console.error('更新待办状态失败:', error);
+      message.error('操作失败，请重试');
+    }
+  };
+
+  // 获取操作文本
+  const getActionText = (type) => {
+    switch (type) {
+      case '已完成': return '完成';
+      case '已放弃': return '放弃';
+      case '已转交': return '转交';
+      default: return '处理';
+    }
+  };
+
+
+
+  // 获取状态显示
+  const getStatusDisplay = (status) => {
+    switch (status) {
+      case '待办':
+        return { color: 'processing', emoji: '⏳', text: '待处理' };
+      case '已完成':
+        return { color: 'success', emoji: '✅', text: '已完成' };
+      case '已放弃':
+        return { color: 'default', emoji: '❌', text: '已放弃' };
+      case '已转交':
+        return { color: 'warning', emoji: '🔄', text: '已转交' };
+      default:
+        return { color: 'processing', emoji: '⏳', text: '待处理' };
+    }
+  };
+
+  // 打开操作弹窗
+  const openActionModal = (todo, type) => {
+    setSelectedTodo(todo);
+    setActionType(type);
+    setActionModalVisible(true);
+  };
+
+  // 过滤待处理的待办
+  const pendingTodos = todos.filter(todo => todo.status === '待办');
+  const completedTodos = todos.filter(todo => todo.status !== '待办');
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      <Title level={2} style={{ textAlign: 'center', marginBottom: '24px' }}>
+        📋 待办管理
+      </Title>
+      
+      {/* 待处理的待办 */}
+      <Card 
+        title={`⏳ 待处理 (${pendingTodos.length})`}
+        style={{ marginBottom: '24px' }}
+        styles={{ header: { backgroundColor: '#f0f8ff', fontWeight: 'bold' } }}
+      >
+        <Spin spinning={loading}>
+          {pendingTodos.length === 0 ? (
+            <Empty 
+              description="暂无待处理的待办事项" 
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          ) : (
+            <List
+              dataSource={pendingTodos}
+              renderItem={(todo) => {
+                const statusDisplay = getStatusDisplay(todo.status);
+                
+                return (
+                  <List.Item
+                    style={{
+                      border: '1px solid #f0f0f0',
+                      borderRadius: '8px',
+                      marginBottom: '12px',
+                      padding: '16px',
+                      backgroundColor: '#fafafa'
+                    }}
+                  >
+                    <div style={{ width: '100%' }}>
+                      {/* 头部信息 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: '8px' }}>
+                            {todo.content}
+                          </Text>
+                          <Space size="middle">
+                            <Tag color={statusDisplay.color}>
+                              {statusDisplay.emoji} {statusDisplay.text}
+                            </Tag>
+                          </Space>
+                        </div>
+                      </div>
+                      
+                      {/* 时间信息 */}
+                      <div style={{ marginBottom: '12px' }}>
+                        <Space size="large">
+                          <Text type="secondary">
+                            <CalendarOutlined /> 创建时间: {moment(todo.createdAt).format('YYYY-MM-DD HH:mm')}
+                          </Text>
+                          {todo.dueDate && (
+                            <Text type={moment(todo.dueDate).isBefore(moment()) ? 'danger' : 'secondary'}>
+                              <ClockCircleOutlined /> 截止时间: {moment(todo.dueDate).format('YYYY-MM-DD')}
+                            </Text>
+                          )}
+                        </Space>
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div style={{ textAlign: 'right' }}>
+                        <Space>
+                          <Button 
+                            type="primary" 
+                            icon={<CheckOutlined />}
+                            size="small"
+                            onClick={() => openActionModal(todo, '已完成')}
+                          >
+                            已完成
+                          </Button>
+                          <Button 
+                            danger 
+                            icon={<CloseOutlined />}
+                            size="small"
+                            onClick={() => openActionModal(todo, '已放弃')}
+                          >
+                            放弃
+                          </Button>
+                          <Button 
+                            type="default" 
+                            icon={<SwapOutlined />}
+                            size="small"
+                            onClick={() => openActionModal(todo, '已转交')}
+                          >
+                            转交
+                          </Button>
+                        </Space>
+                      </div>
+                    </div>
+                  </List.Item>
+                );
+              }}
+            />
+          )}
+        </Spin>
+      </Card>
+      
+      {/* 已处理的待办 */}
+      {completedTodos.length > 0 && (
+        <Card 
+          title={`📁 已处理 (${completedTodos.length})`}
+          styles={{ header: { backgroundColor: '#f6ffed', fontWeight: 'bold' } }}
+        >
+          <List
+            dataSource={completedTodos}
+            renderItem={(todo) => {
+              const statusDisplay = getStatusDisplay(todo.status);
+              
+              return (
+                <List.Item
+                  style={{
+                    border: '1px solid #f0f0f0',
+                    borderRadius: '8px',
+                    marginBottom: '12px',
+                    padding: '16px',
+                    backgroundColor: '#f9f9f9',
+                    opacity: 0.8
+                  }}
+                >
+                  <div style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <Text style={{ fontSize: '16px', display: 'block', marginBottom: '8px' }}>
+                          {todo.content}
+                        </Text>
+                        <Space size="middle">
+                          <Tag color={statusDisplay.color}>
+                            {statusDisplay.emoji} {statusDisplay.text}
+                          </Tag>
+                        </Space>
+                        <div style={{ marginTop: '8px' }}>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            处理时间: {moment(todo.updatedAt).format('YYYY-MM-DD HH:mm')}
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </List.Item>
+              );
+            }}
+          />
+        </Card>
+      )}
+      
+      {/* 操作确认弹窗 */}
+      <Modal
+        title={`${getActionText(actionType)}待办事项`}
+        open={actionModalVisible}
+        onCancel={() => {
+          setActionModalVisible(false);
+          form.resetFields();
+        }}
+        footer={null}
+        width={500}
+      >
+        {selectedTodo && (
+          <div>
+            <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '6px' }}>
+              <Text strong>待办内容：</Text>
+              <div style={{ marginTop: '4px' }}>{selectedTodo.content}</div>
+            </div>
+            
+            <Form
+              form={form}
+              onFinish={handleTodoAction}
+              layout="vertical"
+            >
+              <Form.Item
+                name="summary"
+                label={`请填写${getActionText(actionType)}简述`}
+                rules={[
+                  { required: true, message: `请填写${getActionText(actionType)}简述` }
+                ]}
+              >
+                <TextArea 
+                  rows={4} 
+                  placeholder={`请详细说明${getActionText(actionType)}的原因或情况...`}
+                  maxLength={500}
+                  showCount
+                />
+              </Form.Item>
+              
+              <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+                <Space>
+                  <Button onClick={() => {
+                    setActionModalVisible(false);
+                    form.resetFields();
+                  }}>
+                    取消
+                  </Button>
+                  <Button type="primary" htmlType="submit">
+                    确认{getActionText(actionType)}
+                  </Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default TodoList;

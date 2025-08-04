@@ -1,18 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Table, 
+  List, 
+  Card, 
   Button, 
   Space, 
   Tag, 
   Modal, 
-  message, 
+  Input, 
   DatePicker, 
-  Input,
-  Typography 
+  Select, 
+  message,
+  Pagination,
+  Typography,
+  Tooltip,
+  Form,
+  Table
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined, 
+  SearchOutlined,
+  EyeOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../utils/api';  // 修改这里
+import api from '../utils/api';
 import moment from 'moment';
 
 const { Title } = Typography;
@@ -34,6 +48,9 @@ const DiaryList = () => {
   const [batchDeleteModalVisible, setBatchDeleteModalVisible] = useState(false);
   const [viewModalVisible, setViewModalVisible] = useState(false);
   const [viewingDiary, setViewingDiary] = useState(null);
+  const [todoStatusModalVisible, setTodoStatusModalVisible] = useState(false);
+  const [todoStatusForm] = Form.useForm();
+  const [currentTodoAction, setCurrentTodoAction] = useState(null);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -52,6 +69,19 @@ const DiaryList = () => {
   useEffect(() => {
     fetchDiaries();
   }, [pagination.current, searchText, dateRange]);
+
+  // 监听待办状态更新事件
+  useEffect(() => {
+    const handleTodoStatusUpdate = () => {
+      fetchDiaries(); // 重新获取日记数据以更新待办状态显示
+    };
+
+    window.addEventListener('todoStatusUpdated', handleTodoStatusUpdate);
+    
+    return () => {
+      window.removeEventListener('todoStatusUpdated', handleTodoStatusUpdate);
+    };
+  }, []);
 
   const fetchDiaries = async () => {
     setLoading(true);
@@ -221,6 +251,51 @@ const DiaryList = () => {
         return (
           <Tag color={color}>
             {emoji} {actualPriority}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '待办状态',
+      key: 'todoStatus',
+      render: (_, record) => {
+        if (!record.isTodo) {
+          return <Tag color="default">📝 普通日记</Tag>;
+        }
+        
+        const status = record.todoStatus || '待办';
+        let color, emoji, text;
+        
+        switch (status) {
+          case '待办':
+            color = 'processing';
+            emoji = '⏳';
+            text = '待处理';
+            break;
+          case '已完成':
+            color = 'success';
+            emoji = '✅';
+            text = '已完成';
+            break;
+          case '已放弃':
+            color = 'default';
+            emoji = '❌';
+            text = '已放弃';
+            break;
+          case '已转交':
+            color = 'warning';
+            emoji = '🔄';
+            text = '已转交';
+            break;
+          default:
+            color = 'processing';
+            emoji = '⏳';
+            text = '待处理';
+        }
+        
+        return (
+          <Tag color={color}>
+            {emoji} {text}
           </Tag>
         );
       },
@@ -410,7 +485,7 @@ const DiaryList = () => {
             
             <div style={{ marginBottom: '16px' }}>
               <strong style={{ color: '#eb2f96', fontSize: '14px' }}>⚡ 优先级：</strong>
-              <span style={{ marginLeft: '8px' }}>
+              <div style={{ marginTop: '8px' }}>
                 {(() => {
                   const priority = viewingDiary.workPriority || '中';
                   let color = 'default';
@@ -431,7 +506,113 @@ const DiaryList = () => {
                     </Tag>
                   );
                 })()}
-              </span>
+              </div>
+            </div>
+            
+            {/* 待办状态显示与管理 */}
+            <div style={{ marginBottom: '16px' }}>
+              <strong style={{ color: '#13c2c2', fontSize: '14px' }}>📋 待办状态：</strong>
+              <div style={{ marginTop: '8px' }}>
+                {(() => {
+                  // 判断是否为待办日记 - 使用isTodo字段
+                  const isTodoItem = viewingDiary.isTodo === true;
+                  
+                  if (!isTodoItem) {
+                    return (
+                      <Tag color="default">
+                        📝 无待办状态
+                      </Tag>
+                    );
+                  }
+                  
+                  const status = viewingDiary.todoStatus || '待办';
+                  let color, emoji, text;
+                  
+                  switch (status) {
+                    case '待办':
+                      color = 'processing';
+                      emoji = '⏳';
+                      text = '待处理';
+                      break;
+                    case '已完成':
+                      color = 'success';
+                      emoji = '✅';
+                      text = '已完成';
+                      break;
+                    case '已放弃':
+                      color = 'error';
+                      emoji = '❌';
+                      text = '已放弃';
+                      break;
+                    case '已转交':
+                      color = 'warning';
+                      emoji = '🔄';
+                      text = '已转交';
+                      break;
+                    default:
+                      color = 'processing';
+                      emoji = '⏳';
+                      text = '待处理';
+                  }
+                  
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <Tag color={color}>
+                        {emoji} {text}
+                      </Tag>
+                      {/* 待办管理按钮 */}
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {status !== '已完成' && (
+                          <Button 
+                            size="small" 
+                            type="primary" 
+                            onClick={() => {
+                              setCurrentTodoAction({ status: '已完成', label: '完成' });
+                              setTodoStatusModalVisible(true);
+                            }}
+                          >
+                            ✅ 完成
+                          </Button>
+                        )}
+                        {status !== '已放弃' && (
+                          <Button 
+                            size="small" 
+                            danger
+                            onClick={() => {
+                              setCurrentTodoAction({ status: '已放弃', label: '放弃' });
+                              setTodoStatusModalVisible(true);
+                            }}
+                          >
+                            ❌ 放弃
+                          </Button>
+                        )}
+                        {status !== '已转交' && (
+                          <Button 
+                            size="small" 
+                            onClick={() => {
+                              setCurrentTodoAction({ status: '已转交', label: '转交' });
+                              setTodoStatusModalVisible(true);
+                            }}
+                          >
+                            🔄 转交
+                          </Button>
+                        )}
+                        {status !== '待办' && (
+                          <Button 
+                            size="small" 
+                            onClick={() => {
+                              setCurrentTodoAction({ status: '待办', label: '重置' });
+                              setTodoStatusModalVisible(true);
+                            }}
+                          >
+                            ⏳ 重置
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             
             <div style={{ 
@@ -445,6 +626,50 @@ const DiaryList = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 待办状态更新Modal */}
+      <Modal
+        title={`${currentTodoAction?.label}待办`}
+        open={todoStatusModalVisible}
+        onOk={async () => {
+          try {
+            const values = await todoStatusForm.validateFields();
+            await api.put(`/diaries/${viewingDiary._id}/todo-status`, {
+              todoStatus: currentTodoAction.status,
+              statusDescription: values.description
+            });
+            message.success(`待办状态已更新为${currentTodoAction.status}`);
+            setViewingDiary({...viewingDiary, todoStatus: currentTodoAction.status});
+            window.dispatchEvent(new CustomEvent('todoStatusUpdated'));
+            setTodoStatusModalVisible(false);
+            todoStatusForm.resetFields();
+          } catch (error) {
+            message.error('更新状态失败');
+          }
+        }}
+        onCancel={() => {
+          setTodoStatusModalVisible(false);
+          todoStatusForm.resetFields();
+        }}
+        okText="确认"
+        cancelText="取消"
+      >
+        <Form
+          form={todoStatusForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="description"
+            label="简述"
+            rules={[{ required: true, message: '请填写简述' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder={`请简述${currentTodoAction?.label}的原因或详情...`}
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

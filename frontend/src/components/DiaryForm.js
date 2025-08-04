@@ -8,12 +8,14 @@ import {
   Button, 
   Card, 
   message,
-  Row,
-  Col,
   Space,
   Typography,
   Tag,
-  Radio
+  Radio,
+  Switch,
+  Divider,
+  Row,
+  Col
 } from 'antd';
 import {
   SaveOutlined,
@@ -61,7 +63,10 @@ const DiaryForm = () => {
         endDate: today,
         startTime: now,
         endTime: now.add(1, 'hour'),
-        workPriority: '中'
+        workPriority: '中',
+        isTodo: false,
+        todoDueDate: today.add(1, 'day'),
+        todoPriority: '中'
       };
       
       setInitialValues(defaultValues);
@@ -85,8 +90,13 @@ const DiaryForm = () => {
         startDate: startMoment,
         endDate: endMoment,
         startTime: startMoment,
-        endTime: endMoment
+        endTime: endMoment,
+        isTodo: diary.isTodo || false,
+        todoDueDate: diary.isTodo ? dayjs().add(1, 'day') : dayjs().add(1, 'day'),
+        todoPriority: diary.workPriority || '中'
       };
+      
+      setIsTodo(diary.isTodo || false);
       
       setInitialValues(initialValues);
       form.setFieldsValue(initialValues);
@@ -115,7 +125,9 @@ const DiaryForm = () => {
           .minute(values.endTime.minute())
           .second(0)
           .millisecond(0)
-          .toISOString()
+          .toISOString(),
+        isTodo: values.isTodo || false,
+        todoDueDate: values.isTodo ? values.todoDueDate.toISOString() : null
         };
 
       if (isEdit) {
@@ -138,6 +150,7 @@ const DiaryForm = () => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [workPriority, setWorkPriority] = useState('中');
   const [customTagInput, setCustomTagInput] = useState('');
+  const [isTodo, setIsTodo] = useState(false);
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -166,6 +179,9 @@ const DiaryForm = () => {
         }}
         className="float"
       >
+        <div style={{ fontSize: '14px', color: '#666', marginBottom: '20px', padding: '12px 16px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+          💡 为了更好地使用系统，建议每次只填写单项工作内容，多项工作请分别填写
+        </div>
         <Form
           form={form}
           layout="vertical"
@@ -363,7 +379,7 @@ const DiaryForm = () => {
         <div style={{ marginBottom: '24px' }}>
           <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>优先级选择：</div>
           <div>
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               {['高', '中', '低'].map(priority => {
                 const isSelected = workPriority === priority;
                 let color, bgColor, shadowColor, emoji;
@@ -418,6 +434,69 @@ const DiaryForm = () => {
             </div>
           </div>
         </div>
+
+        {/* 待办功能区域 */}
+        <Divider orientation="left" style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
+          📋 待办设置
+        </Divider>
+        
+        <Form.Item name="isTodo" valuePropName="checked">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <Switch 
+              checked={isTodo}
+              onChange={(checked) => {
+                setIsTodo(checked);
+                form.setFieldsValue({ isTodo: checked });
+              }}
+              style={{ backgroundColor: isTodo ? '#52c41a' : '#d9d9d9' }}
+            />
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>
+              {isTodo ? '✅ 设为待办事项' : '⭕ 不设为待办'}
+            </span>
+          </div>
+        </Form.Item>
+        
+        {isTodo && (
+          <div style={{ 
+            backgroundColor: '#fafafa', 
+            border: '1px solid #e8e8e8', 
+            borderRadius: '8px', 
+            padding: '16px', 
+            marginTop: '16px' 
+          }}>
+            <Form.Item
+              name="todoDueDate"
+              label="待办截止日期"
+              rules={[{ required: isTodo, message: '请选择待办截止日期' }]}
+              style={{ marginBottom: '16px' }}
+            >
+              <DatePicker 
+                format="YYYY-MM-DD" 
+                style={{ width: '100%' }} 
+                placeholder="请选择截止日期"
+                locale={locale}
+                disabledDate={(current) => current && current < dayjs().startOf('day')}
+              />
+            </Form.Item>
+            
+
+            
+            <div style={{ 
+              backgroundColor: '#f0f8ff', 
+              border: '1px solid #d6e4ff', 
+              borderRadius: '6px', 
+              padding: '12px', 
+              marginTop: '16px'
+            }}>
+              <div style={{ fontSize: '12px', color: '#1890ff', marginBottom: '4px' }}>
+                💡 待办提示：
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                设为待办后，此工作内容将出现在待办列表中，您可以在导航栏的待办区域进行管理。
+              </div>
+            </div>
+          </div>
+        )}
 
         <Form.Item>
           <Space size="large" style={{ width: '100%', justifyContent: 'center' }}>

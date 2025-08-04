@@ -12,6 +12,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './components/Dashboard';
 import DiaryList from './components/DiaryList';
 import DiaryForm from './components/DiaryForm';
+import TodoList from './components/TodoList';
 import SummaryList from './components/SummaryList';
 import UserSettings from './components/UserSettings';
 import UserSettingsPage from './components/UserSettingsPage';
@@ -40,6 +41,7 @@ function App() {
               <Route path="diaries" element={<DiaryList />} />
               <Route path="diaries/new" element={<DiaryForm />} />
               <Route path="diaries/:id/edit" element={<DiaryForm />} />
+              <Route path="todos" element={<TodoList />} />
               <Route path="summaries" element={<SummaryList />} />
               <Route path="model-settings" element={<ModelSettings />} />
               <Route path="user-settings" element={<UserSettingsPage />} />
