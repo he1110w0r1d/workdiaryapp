@@ -97,6 +97,7 @@ const DiaryForm = () => {
       };
       
       setIsTodo(diary.isTodo || false);
+      setSelectedTags(diary.tags || []);
       
       setInitialValues(initialValues);
       form.setFieldsValue(initialValues);
@@ -109,6 +110,26 @@ const DiaryForm = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
+      // 检查并保存新的自定义标签
+      const currentTags = values.tags || [];
+      console.log('表单提交 - 当前标签:', currentTags);
+      console.log('表单提交 - 预设标签:', commonTags);
+      console.log('表单提交 - 用户自定义标签:', userCustomTags);
+      
+      const newCustomTags = currentTags.filter(tag => !commonTags.includes(tag) && !userCustomTags.includes(tag));
+      console.log('表单提交 - 发现新自定义标签:', newCustomTags);
+      
+      if (newCustomTags.length > 0) {
+        const updatedCustomTags = [...userCustomTags, ...newCustomTags];
+        console.log('表单提交 - 准备保存自定义标签:', updatedCustomTags);
+        setUserCustomTags(updatedCustomTags);
+        setCommonTags([...commonTags, ...newCustomTags]);
+        // 保存到后端
+        await saveCustomTagsToBackend(updatedCustomTags);
+      } else {
+        console.log('表单提交 - 没有新的自定义标签需要保存');
+      }
+      
       const diaryData = {
         content: values.content,
         location: values.location || '',
@@ -146,11 +167,71 @@ const DiaryForm = () => {
     }
   };
 
-  const commonTags = ['会议', '工地现场', '沟通', '紧急', '重要'];
+  const [commonTags, setCommonTags] = useState(['会议', '工地现场', '沟通', '紧急', '重要']);
+  const [userCustomTags, setUserCustomTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [workPriority, setWorkPriority] = useState('中');
   const [customTagInput, setCustomTagInput] = useState('');
+
+  // 获取用户自定义标签
+  const fetchUserCustomTags = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.log('没有找到token，跳过获取用户自定义标签');
+        return;
+      }
+      
+      console.log('开始获取用户自定义标签...');
+      const response = await api.get('/users/profile');
+      
+      console.log('用户profile响应:', response);
+      if (response.status === 200) {
+        const userData = response.data;
+        console.log('用户数据:', userData);
+        const customTags = userData.workProfile?.customTags || [];
+        console.log('提取的自定义标签:', customTags);
+        setUserCustomTags(customTags);
+        // 将用户自定义标签合并到commonTags中
+        setCommonTags(prev => {
+          const defaultTags = ['会议', '工地现场', '沟通', '紧急', '重要'];
+          const allTags = [...defaultTags, ...customTags];
+          const uniqueTags = [...new Set(allTags)];
+          console.log('合并后的标签列表:', uniqueTags);
+          return uniqueTags;
+        });
+      }
+    } catch (error) {
+      console.error('获取用户自定义标签失败:', error);
+    }
+  };
+
+  // 保存自定义标签到后端
+  const saveCustomTagsToBackend = async (tags) => {
+    try {
+      const response = await api.put('/users/custom-tags', {
+        customTags: tags
+      });
+      if (response.status === 200) {
+        const result = response.data;
+        console.log('自定义标签保存成功:', result);
+      }
+    } catch (error) {
+      console.error('保存自定义标签失败:', error);
+    }
+  };
   const [isTodo, setIsTodo] = useState(false);
+
+  // 组件加载时获取用户自定义标签
+  useEffect(() => {
+    // 确保基础标签始终存在
+    const defaultTags = ['会议', '工地现场', '沟通', '紧急', '重要'];
+    setCommonTags(defaultTags);
+    
+    // 然后尝试获取用户自定义标签
+    fetchUserCustomTags();
+  }, []);
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -254,48 +335,103 @@ const DiaryForm = () => {
           </Col>
         </Row>
 
-        <Form.Item name="tags" label="标签">
-          <Input type="hidden" />
-        </Form.Item>
-        
-        {/* 标签选择区域 - 移到Form.Item外部 */}
+        {/* 标签选择区域 */}
+        <div style={{ marginBottom: '16px', fontSize: '14px', fontWeight: '500', color: '#262626', textAlign: 'left' }}>标签</div>
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>标签选择：</div>
-          <div>
-            {/* 预设标签按钮 */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+          {/* 预设标签按钮 */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
               {commonTags.map(tag => {
                 const isSelected = selectedTags.includes(tag);
+                const isCustomTag = userCustomTags.includes(tag);
                 return (
-                  <Tag.CheckableTag
+                  <div
                     key={tag}
-                    checked={isSelected}
-                    onChange={(checked) => {
-                      if (checked) {
-                        const newTags = [...selectedTags, tag];
-                        setSelectedTags(newTags);
-                        form.setFieldsValue({ tags: newTags });
-                      } else {
-                        const newTags = selectedTags.filter(t => t !== tag);
-                        setSelectedTags(newTags);
-                        form.setFieldsValue({ tags: newTags });
+                    style={{
+                      position: 'relative',
+                      display: 'inline-block'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (isCustomTag) {
+                        const deleteBtn = e.currentTarget.querySelector('.delete-btn');
+                        if (deleteBtn) deleteBtn.style.display = 'flex';
                       }
                     }}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '20px',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      border: isSelected ? '2px solid #1890ff' : '2px solid #d9d9d9',
-                      backgroundColor: isSelected ? '#e6f7ff' : '#fafafa',
-                      color: isSelected ? '#1890ff' : '#666',
-                      boxShadow: isSelected ? '0 2px 8px rgba(24, 144, 255, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+                    onMouseLeave={(e) => {
+                      if (isCustomTag) {
+                        const deleteBtn = e.currentTarget.querySelector('.delete-btn');
+                        if (deleteBtn) deleteBtn.style.display = 'none';
+                      }
                     }}
                   >
-                    {tag}
-                  </Tag.CheckableTag>
+                    <Tag.CheckableTag
+                      checked={isSelected}
+                      onChange={(checked) => {
+                        if (checked) {
+                          const newTags = [...selectedTags, tag];
+                          setSelectedTags(newTags);
+                          form.setFieldsValue({ tags: newTags });
+                        } else {
+                          const newTags = selectedTags.filter(t => t !== tag);
+                          setSelectedTags(newTags);
+                          form.setFieldsValue({ tags: newTags });
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        border: isSelected ? '2px solid #1890ff' : '2px solid #d9d9d9',
+                        backgroundColor: isSelected ? '#e6f7ff' : '#fafafa',
+                        color: isSelected ? '#1890ff' : '#666',
+                        boxShadow: isSelected ? '0 2px 8px rgba(24, 144, 255, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      {tag}
+                    </Tag.CheckableTag>
+                    {isCustomTag && (
+                      <div
+                        className="delete-btn"
+                        style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '-8px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ff4d4f',
+                          color: 'white',
+                          display: 'none',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          zIndex: 10,
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          // 从所有相关状态中移除该标签
+                          const updatedCustomTags = userCustomTags.filter(t => t !== tag);
+                          const updatedCommonTags = commonTags.filter(t => t !== tag);
+                          const updatedSelectedTags = selectedTags.filter(t => t !== tag);
+                          
+                          setUserCustomTags(updatedCustomTags);
+                          setCommonTags(updatedCommonTags);
+                          setSelectedTags(updatedSelectedTags);
+                          form.setFieldsValue({ tags: updatedSelectedTags });
+                          
+                          // 保存到后端
+                          await saveCustomTagsToBackend(updatedCustomTags);
+                        }}
+                      >
+                        ×
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -306,11 +442,20 @@ const DiaryForm = () => {
                 placeholder="输入自定义标签"
                 value={customTagInput}
                 onChange={(e) => setCustomTagInput(e.target.value)}
-                onPressEnter={() => {
+                onPressEnter={async () => {
                   if (customTagInput.trim() && !selectedTags.includes(customTagInput.trim())) {
-                    const newTags = [...selectedTags, customTagInput.trim()];
+                    const newTag = customTagInput.trim();
+                    const newTags = [...selectedTags, newTag];
                     setSelectedTags(newTags);
                     form.setFieldsValue({ tags: newTags });
+                    // 如果新标签不在预设标签中，则添加到预设标签列表和用户自定义标签
+                    if (!commonTags.includes(newTag)) {
+                      setCommonTags([...commonTags, newTag]);
+                      const updatedCustomTags = [...userCustomTags, newTag];
+                      setUserCustomTags(updatedCustomTags);
+                      // 保存到后端
+                      await saveCustomTagsToBackend(updatedCustomTags);
+                    }
                     setCustomTagInput('');
                   }
                 }}
@@ -323,11 +468,20 @@ const DiaryForm = () => {
               <Button
                 type="primary"
                 size="small"
-                onClick={() => {
+                onClick={async () => {
                   if (customTagInput.trim() && !selectedTags.includes(customTagInput.trim())) {
-                    const newTags = [...selectedTags, customTagInput.trim()];
+                    const newTag = customTagInput.trim();
+                    const newTags = [...selectedTags, newTag];
                     setSelectedTags(newTags);
                     form.setFieldsValue({ tags: newTags });
+                    // 如果新标签不在预设标签中，则添加到预设标签列表和用户自定义标签
+                    if (!commonTags.includes(newTag)) {
+                      setCommonTags([...commonTags, newTag]);
+                      const updatedCustomTags = [...userCustomTags, newTag];
+                      setUserCustomTags(updatedCustomTags);
+                      // 保存到后端
+                      await saveCustomTagsToBackend(updatedCustomTags);
+                    }
                     setCustomTagInput('');
                   }
                 }}
@@ -368,11 +522,9 @@ const DiaryForm = () => {
                 </div>
               </div>
             )}
-          </div>
         </div>
 
-        <Form.Item name="workPriority" label="工作优先级">
-          <Input type="hidden" />
+        <Form.Item label="工作优先级">
         </Form.Item>
         
         {/* 工作优先级选择区域 - 移到Form.Item外部 */}
@@ -440,6 +592,11 @@ const DiaryForm = () => {
           📋 待办设置
         </Divider>
         
+        {/* 隐藏的tags字段，用于表单提交 */}
+        <Form.Item name="tags" style={{ display: 'none' }}>
+          <Input />
+        </Form.Item>
+
         <Form.Item name="isTodo" valuePropName="checked">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
             <Switch 

@@ -150,11 +150,6 @@ const AppLayout = ({ children }) => {
       label: <Link to="/app/todos">待办管理</Link>,
     },
     {
-      key: '/app/recycle',
-      icon: <DeleteOutlined />,
-      label: <Link to="/app/recycle">日记回收站</Link>,
-    },
-    {
       key: '/app/summaries',
       icon: <BarChartOutlined />,
       label: <Link to="/app/summaries">工作总结</Link>,
@@ -168,6 +163,11 @@ const AppLayout = ({ children }) => {
       key: '/app/user-settings',
       icon: <UserOutlined />,
       label: <Link to="/app/user-settings">用户设置</Link>,
+    },
+    {
+      key: '/app/recycle',
+      icon: <DeleteOutlined />,
+      label: <Link to="/app/recycle">日记回收站</Link>,
     },
   ];
 

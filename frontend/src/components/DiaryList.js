@@ -39,6 +39,10 @@ const DiaryList = () => {
   const [selectedDiary, setSelectedDiary] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [selectedPriority, setSelectedPriority] = useState('');
+  const [selectedTodoStatus, setSelectedTodoStatus] = useState('');
+  const [availableTags, setAvailableTags] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -68,7 +72,25 @@ const DiaryList = () => {
 
   useEffect(() => {
     fetchDiaries();
-  }, [pagination.current, searchText, dateRange]);
+  }, [pagination.current, searchText, dateRange, selectedTags, selectedPriority, selectedTodoStatus]);
+
+  // 获取可用标签
+  const fetchAvailableTags = async () => {
+    try {
+      console.log('开始获取可用标签...');
+      const response = await api.get('/diaries/tags');
+      console.log('获取标签响应:', response.data);
+      setAvailableTags(response.data.tags || []);
+      console.log('设置可用标签:', response.data.tags || []);
+    } catch (error) {
+      console.error('获取标签失败:', error);
+      console.error('错误详情:', error.response?.data);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableTags();
+  }, []);
 
   // 监听待办状态更新事件
   useEffect(() => {
@@ -98,6 +120,18 @@ const DiaryList = () => {
       if (dateRange && dateRange.length === 2) {
         params.startDate = dateRange[0].format('YYYY-MM-DD');
         params.endDate = dateRange[1].format('YYYY-MM-DD');
+      }
+
+      if (selectedTags.length > 0) {
+        params.tags = selectedTags.join(',');
+      }
+
+      if (selectedPriority) {
+        params.priority = selectedPriority;
+      }
+
+      if (selectedTodoStatus) {
+        params.todoStatus = selectedTodoStatus;
       }
 
       const response = await api.get('/diaries', { params });  // 修改这里
@@ -349,24 +383,65 @@ const DiaryList = () => {
         </Link>
       </div>
 
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center' }}>
-        <Input
-          placeholder="搜索工作内容"
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{ width: 200 }}
-        />
-        <RangePicker 
-          onChange={setDateRange}
-          placeholder={['开始日期', '结束日期']}
-        />
-        <Button onClick={() => {
-          setSearchText('');
-          setDateRange(null);
-        }}>
-          清除筛选
-        </Button>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 12 }}>
+          <Input
+            placeholder="搜索工作内容"
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 200 }}
+          />
+          <RangePicker 
+            onChange={setDateRange}
+            placeholder={['开始日期', '结束日期']}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Select
+            mode="multiple"
+            placeholder="选择标签"
+            value={selectedTags}
+            onChange={setSelectedTags}
+            style={{ minWidth: 150 }}
+            allowClear
+          >
+            {availableTags.map(tag => (
+              <Select.Option key={tag} value={tag}>{tag}</Select.Option>
+            ))}
+          </Select>
+          <Select
+            placeholder="选择优先级"
+            value={selectedPriority}
+            onChange={setSelectedPriority}
+            style={{ width: 120 }}
+            allowClear
+          >
+            <Select.Option value="高">🔴 高</Select.Option>
+            <Select.Option value="中">🟡 中</Select.Option>
+            <Select.Option value="低">🟢 低</Select.Option>
+          </Select>
+          <Select
+            placeholder="待办状态"
+            value={selectedTodoStatus}
+            onChange={setSelectedTodoStatus}
+            style={{ width: 120 }}
+            allowClear
+          >
+            <Select.Option value="待办">⏳ 待办</Select.Option>
+            <Select.Option value="已完成">✅ 已完成</Select.Option>
+            <Select.Option value="已取消">❌ 已取消</Select.Option>
+          </Select>
+          <Button onClick={() => {
+            setSearchText('');
+            setDateRange(null);
+            setSelectedTags([]);
+            setSelectedPriority('');
+            setSelectedTodoStatus('');
+          }}>
+            清除筛选
+          </Button>
+        </div>
         {selectedRowKeys.length > 0 && (
           <Button 
             danger

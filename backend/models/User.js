@@ -90,7 +90,12 @@ const userSchema = new mongoose.Schema({
     isProfileCompleted: {
       type: Boolean,
       default: false
-    }
+    },
+    // 用户自定义标签
+    customTags: [{
+      type: String,
+      trim: true
+    }]
   },
   // LLM配置（用户级别）
   llmConfigs: [{

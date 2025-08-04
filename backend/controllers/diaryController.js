@@ -47,7 +47,7 @@ exports.createDiary = async (req, res) => {
 
 exports.getDiaries = async (req, res) => {
   try {
-    const { startDate, endDate, search, page = 1, limit = 10 } = req.query;
+    const { startDate, endDate, search, tags, priority, todoStatus, page = 1, limit = 10 } = req.query;
     
     let query = { user: req.user.id, isDeleted: false };
     
@@ -69,6 +69,22 @@ exports.getDiaries = async (req, res) => {
         { location: { $regex: search, $options: 'i' } },
         { tags: { $in: [new RegExp(search, 'i')] } }
       ];
+    }
+
+    // 标签筛选
+    if (tags) {
+      const tagArray = tags.split(',').map(tag => tag.trim());
+      query.tags = { $in: tagArray };
+    }
+
+    // 优先级筛选
+    if (priority) {
+      query.workPriority = priority;
+    }
+
+    // 待办状态筛选
+    if (todoStatus) {
+      query.todoStatus = todoStatus;
     }
 
     const diaries = await Diary.find(query)
@@ -371,7 +387,23 @@ exports.updateTodoStatus = async (req, res) => {
     logger.info(`用户 ${req.user.id} 更新了日记待办状态: ${diary._id} -> ${todoStatus}`);
     res.json({ success: true, diary });
   } catch (error) {
-    logger.error('更新日记待办状态失败:', error);
+    logger.error('更新待办状态失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 获取用户的所有可用标签
+exports.getAvailableTags = async (req, res) => {
+  try {
+    const tags = await Diary.distinct('tags', { 
+      user: req.user.id, 
+      isDeleted: false,
+      tags: { $exists: true, $ne: [] }
+    });
+    
+    res.json({ tags: tags.filter(tag => tag && tag.trim() !== '') });
+  } catch (error) {
+    logger.error('获取可用标签失败:', error);
     res.status(500).json({ message: error.message });
   }
 };

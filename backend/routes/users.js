@@ -2,7 +2,7 @@ const express = require('express');
 const logger = require('../utils/logger');
 const router = express.Router();
 const { register, login } = require('../controllers/authController');
-const { getUserProfile, updateUserProfile, uploadAvatar, upload, updateWorkProfile, generateCustomPrompts } = require('../controllers/userController');
+const { getUserProfile, updateUserProfile, uploadAvatar, upload, updateWorkProfile, generateCustomPrompts, updateCustomTags } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 
 router.post('/register', register);
@@ -13,5 +13,6 @@ router.post('/upload-avatar', protect, upload.single('avatar'), uploadAvatar);
 router.put('/work-profile', protect, updateWorkProfile);
 router.post('/generate-custom-prompts', protect, generateCustomPrompts);
 router.get('/generate-custom-prompts', protect, generateCustomPrompts);
+router.put('/custom-tags', protect, updateCustomTags);
 
 module.exports = router;

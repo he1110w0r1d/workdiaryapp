@@ -11,12 +11,16 @@ const {
   updateTodoStatus,
   getDeletedDiaries,
   restoreDiary,
-  permanentDeleteDiary
+  permanentDeleteDiary,
+  getAvailableTags
 } = require('../controllers/diaryController');
 
 router.route('/')
   .post(protect, createDiary)
   .get(protect, getDiaries);
+
+// 获取可用标签 - 必须在 /:id 路由之前
+router.get('/tags', protect, getAvailableTags);
 
 router.route('/:id')
   .get(protect, getDiaryById)

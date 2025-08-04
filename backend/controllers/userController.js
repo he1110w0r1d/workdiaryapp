@@ -200,6 +200,11 @@ const updateWorkProfile = async (req, res) => {
         .filter(item => item.length > 0);
     }
 
+    // 处理customTags字段：确保是数组格式
+    if (workProfileData.customTags && !Array.isArray(workProfileData.customTags)) {
+      workProfileData.customTags = [];
+    }
+
     // 更新工作信息
     user.workProfile = {
       ...user.workProfile,
@@ -519,11 +524,59 @@ const getDefaultPrompts = (prompts, userContext) => {
   };
 };
 
+// 更新用户自定义标签
+const updateCustomTags = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { customTags } = req.body;
+
+    logger.info('收到自定义标签更新请求:', {
+      userId,
+      customTags
+    });
+
+    const user = await User.findById(userId);
+    if (!user) {
+      logger.error('用户不存在:', userId);
+      return res.status(404).json({ message: '用户不存在' });
+    }
+
+    // 确保customTags是数组格式
+    const tagsArray = Array.isArray(customTags) ? customTags : [];
+    
+    // 过滤空标签并去重
+    const filteredTags = [...new Set(tagsArray.filter(tag => tag && tag.trim()))];
+
+    // 更新用户的自定义标签
+    if (!user.workProfile) {
+      user.workProfile = {};
+    }
+    user.workProfile.customTags = filteredTags;
+    user.updatedAt = new Date();
+
+    await user.save();
+
+    logger.user('用户自定义标签更新成功:', {
+      userId,
+      customTags: filteredTags
+    });
+
+    res.json({
+      message: '自定义标签更新成功',
+      customTags: filteredTags
+    });
+  } catch (error) {
+    logger.error('更新自定义标签失败:', error);
+    res.status(500).json({ message: '更新自定义标签失败' });
+  }
+};
+
 module.exports = {
   getUserProfile,
   updateUserProfile,
   uploadAvatar,
   upload,
   updateWorkProfile,
-  generateCustomPrompts
+  generateCustomPrompts,
+  updateCustomTags
 };
