@@ -12,7 +12,10 @@ const {
   generateCurrentMonthlySummary,
   generateYearlySummary,
   getPromptTemplate,
-  updatePromptTemplate
+  updatePromptTemplate,
+  markSummaryAsRead,
+  getUnreadSummariesCount,
+  markAllSummariesAsRead
 } = require('../controllers/summaryController');
 
 router.route('/')
@@ -40,5 +43,15 @@ router.route('/generate/yearly')
 router.route('/prompt/:type')
   .get(protect, getPromptTemplate)
   .put(protect, updatePromptTemplate);
+
+// 已读/未读相关路由
+router.route('/unread/count')
+  .get(protect, getUnreadSummariesCount);
+
+router.route('/:id/read')
+  .put(protect, markSummaryAsRead);
+
+router.route('/read/all')
+  .put(protect, markAllSummariesAsRead);
 
 module.exports = router;

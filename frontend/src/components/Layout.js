@@ -95,6 +95,7 @@ const AppLayout = ({ children }) => {
   const [userInfo, setUserInfo] = useState(null);
   const [showWorkProfileSetup, setShowWorkProfileSetup] = useState(false);
   const [pendingTodosCount, setPendingTodosCount] = useState(0);
+  const [unreadSummariesCount, setUnreadSummariesCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -126,9 +127,20 @@ const AppLayout = ({ children }) => {
     }
   };
 
+  // 获取未读总结数量
+  const fetchUnreadSummariesCount = async () => {
+    try {
+      const response = await api.get('/summaries/unread/count');
+      setUnreadSummariesCount(response.data.total || 0);
+    } catch (error) {
+      console.error('获取未读总结数量失败:', error);
+    }
+  };
+
   useEffect(() => {
     fetchUserInfo();
     fetchPendingTodosCount();
+    fetchUnreadSummariesCount();
 
     // 监听用户信息更新事件
     const handleUserInfoUpdate = () => {
@@ -140,12 +152,19 @@ const AppLayout = ({ children }) => {
       fetchPendingTodosCount();
     };
 
+    // 监听总结更新事件
+    const handleSummariesUpdate = () => {
+      fetchUnreadSummariesCount();
+    };
+
     window.addEventListener('userInfoUpdated', handleUserInfoUpdate);
     window.addEventListener('todosUpdated', handleTodosUpdate);
+    window.addEventListener('summariesUpdated', handleSummariesUpdate);
     
     return () => {
         window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
         window.removeEventListener('todosUpdated', handleTodosUpdate);
+        window.removeEventListener('summariesUpdated', handleSummariesUpdate);
       };
     }, []);
   
@@ -176,7 +195,11 @@ const AppLayout = ({ children }) => {
     {
       key: '/app/summaries',
       icon: <BarChartOutlined />,
-      label: <Link to="/app/summaries">工作总结</Link>,
+      label: (
+        <Link to="/app/summaries">
+          工作总结{unreadSummariesCount > 0 && `（${unreadSummariesCount}）`}
+        </Link>
+      ),
     },
     {
       key: '/app/model-settings',

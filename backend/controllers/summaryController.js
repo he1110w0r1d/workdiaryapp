@@ -1851,3 +1851,90 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
     logger.error('批量生成年度总结失败:', error);
   }
 };
+
+// 标记总结为已读
+exports.markSummaryAsRead = async (req, res) => {
+  try {
+    const summary = await Summary.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
+
+    if (!summary) {
+      return res.status(404).json({ message: '总结未找到' });
+    }
+
+    summary.isRead = true;
+    summary.readAt = new Date();
+    await summary.save();
+
+    res.json({ message: '已标记为已读', summary });
+  } catch (error) {
+    logger.error('标记总结已读失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 获取未读总结数量统计
+exports.getUnreadSummariesCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // 统计各类型未读总结数量
+    const dailyUnreadCount = await Summary.countDocuments({
+      user: userId,
+      type: 'daily',
+      isRead: false
+    });
+    
+    const monthlyUnreadCount = await Summary.countDocuments({
+      user: userId,
+      type: 'monthly',
+      isRead: false
+    });
+    
+    const yearlyUnreadCount = await Summary.countDocuments({
+      user: userId,
+      type: 'yearly',
+      isRead: false
+    });
+    
+    const totalUnreadCount = dailyUnreadCount + monthlyUnreadCount + yearlyUnreadCount;
+    
+    res.json({
+      total: totalUnreadCount,
+      daily: dailyUnreadCount,
+      monthly: monthlyUnreadCount,
+      yearly: yearlyUnreadCount
+    });
+  } catch (error) {
+    logger.error('获取未读总结数量失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 批量标记总结为已读
+exports.markAllSummariesAsRead = async (req, res) => {
+  try {
+    const { type } = req.body; // 可选：指定类型，如果不指定则标记所有
+    const userId = req.user.id;
+    
+    let query = { user: userId, isRead: false };
+    if (type) {
+      query.type = type;
+    }
+    
+    const result = await Summary.updateMany(query, {
+      isRead: true,
+      readAt: new Date()
+    });
+    
+    res.json({ 
+      message: '批量标记已读成功', 
+      modifiedCount: result.modifiedCount 
+    });
+  } catch (error) {
+    logger.error('批量标记总结已读失败:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

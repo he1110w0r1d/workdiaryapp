@@ -29,6 +29,15 @@ const summarySchema = new mongoose.Schema({
     type: String,
     default: null // 存储生成的HTML文件路径
   },
+  // 已读/未读状态
+  isRead: {
+    type: Boolean,
+    default: false
+  },
+  readAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

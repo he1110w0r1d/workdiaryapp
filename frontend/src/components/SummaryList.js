@@ -45,11 +45,42 @@ const SummaryList = () => {
     monthly: { current: 1, pageSize: 10, total: 0 },
     yearly: { current: 1, pageSize: 10, total: 0 }
   });
+  const [unreadCounts, setUnreadCounts] = useState({
+    daily: 0,
+    monthly: 0,
+    yearly: 0
+  });
+
+  // 获取未读数量
+  const fetchUnreadCounts = async () => {
+    try {
+      const response = await api.get('/summaries/unread/count');
+      setUnreadCounts({
+        daily: response.data.daily || 0,
+        monthly: response.data.monthly || 0,
+        yearly: response.data.yearly || 0
+      });
+    } catch (error) {
+      console.error('获取未读数量失败:', error);
+    }
+  };
 
   useEffect(() => {
     fetchSummaries('daily');
     fetchSummaries('monthly');
     fetchSummaries('yearly');
+    fetchUnreadCounts();
+
+    // 监听总结更新事件
+    const handleSummariesUpdate = () => {
+      fetchUnreadCounts();
+    };
+
+    window.addEventListener('summariesUpdated', handleSummariesUpdate);
+
+    return () => {
+      window.removeEventListener('summariesUpdated', handleSummariesUpdate);
+    };
   }, []);
 
   const fetchSummaries = async (type) => {
@@ -251,6 +282,22 @@ const SummaryList = () => {
     }
   };
 
+  // 标记总结为已读
+  const markAsRead = async (summaryId, type) => {
+    try {
+      await api.put(`/summaries/${summaryId}/read`);
+      message.success('已标记为已读');
+      // 刷新数据
+      fetchSummaries(type);
+      fetchUnreadCounts();
+      // 触发导航栏更新
+      window.dispatchEvent(new CustomEvent('summariesUpdated'));
+    } catch (error) {
+      console.error('标记已读失败:', error);
+      message.error('标记已读失败');
+    }
+  };
+
   const getColumns = (type) => [
     {
       title: '类型',
@@ -275,6 +322,16 @@ const SummaryList = () => {
       sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
     },
     {
+      title: '状态',
+      dataIndex: 'isRead',
+      key: 'isRead',
+      render: (isRead) => (
+        <Tag color={isRead ? 'green' : 'orange'}>
+          {isRead ? '已读' : '未读'}
+        </Tag>
+      )
+    },
+    {
       title: '操作',
       key: 'action',
       render: (_, record) => (
@@ -282,10 +339,25 @@ const SummaryList = () => {
           <Button 
             icon={<FileTextOutlined />} 
             size="small"
-            onClick={() => setSelectedSummary(record)}
+            onClick={() => {
+              setSelectedSummary(record);
+              // 如果是未读状态，自动标记为已读
+              if (!record.isRead) {
+                markAsRead(record._id, type);
+              }
+            }}
           >
             查看详情
           </Button>
+          {!record.isRead && (
+            <Button 
+              size="small"
+              type="default"
+              onClick={() => markAsRead(record._id, type)}
+            >
+              标记已读
+            </Button>
+          )}
           {(type === 'monthly' || type === 'yearly') && record.htmlFilePath && (
             <Button 
               icon={<LinkOutlined />} 
@@ -362,7 +434,7 @@ const SummaryList = () => {
             label: (
               <span>
                 <CalendarOutlined />
-                每日总结
+                每日总结{unreadCounts.daily > 0 && `（${unreadCounts.daily}）`}
               </span>
             ),
             children: (
@@ -413,7 +485,7 @@ const SummaryList = () => {
             label: (
               <span>
                 <BarChartOutlined />
-                月底总结
+                月底总结{unreadCounts.monthly > 0 && `（${unreadCounts.monthly}）`}
               </span>
             ),
             children: (
@@ -464,7 +536,7 @@ const SummaryList = () => {
             label: (
               <span>
                 <TrophyOutlined />
-                年底总结
+                年底总结{unreadCounts.yearly > 0 && `（${unreadCounts.yearly}）`}
               </span>
             ),
             children: (
