@@ -718,7 +718,7 @@ const DiaryList = () => {
             });
             message.success(`待办状态已更新为${currentTodoAction.status}`);
             setViewingDiary({...viewingDiary, todoStatus: currentTodoAction.status});
-            window.dispatchEvent(new CustomEvent('todoStatusUpdated'));
+            window.dispatchEvent(new CustomEvent('todosUpdated'));
             setTodoStatusModalVisible(false);
             todoStatusForm.resetFields();
           } catch (error) {

@@ -159,6 +159,11 @@ const DiaryForm = () => {
         message.success('日记创建成功');
       }
       
+      // 如果涉及待办事项，触发事件通知其他组件更新
+      if (values.isTodo) {
+        window.dispatchEvent(new CustomEvent('todosUpdated'));
+      }
+      
       navigate('/app/diaries');
     } catch (error) {
       message.error(error.response?.data?.message || '操作失败');

@@ -67,7 +67,7 @@ const TodoList = () => {
       fetchTodos(); // 重新获取列表
       
       // 触发自定义事件，通知其他组件待办状态已更新
-      window.dispatchEvent(new CustomEvent('todoStatusUpdated'));
+      window.dispatchEvent(new CustomEvent('todosUpdated'));
     } catch (error) {
       console.error('更新待办状态失败:', error);
       message.error('操作失败，请重试');

@@ -94,6 +94,7 @@ const AppLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [showWorkProfileSetup, setShowWorkProfileSetup] = useState(false);
+  const [pendingTodosCount, setPendingTodosCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -114,20 +115,39 @@ const AppLayout = ({ children }) => {
     }
   };
 
+  // 获取待办事项数量
+  const fetchPendingTodosCount = async () => {
+    try {
+      const response = await api.get('/todos?status=待办');
+      const pendingTodos = response.data.todos || [];
+      setPendingTodosCount(pendingTodos.length);
+    } catch (error) {
+      console.error('获取待办事项数量失败:', error);
+    }
+  };
+
   useEffect(() => {
     fetchUserInfo();
+    fetchPendingTodosCount();
 
     // 监听用户信息更新事件
     const handleUserInfoUpdate = () => {
       fetchUserInfo();
     };
 
+    // 监听待办事项更新事件
+    const handleTodosUpdate = () => {
+      fetchPendingTodosCount();
+    };
+
     window.addEventListener('userInfoUpdated', handleUserInfoUpdate);
+    window.addEventListener('todosUpdated', handleTodosUpdate);
     
     return () => {
-      window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
-    };
-  }, []);
+        window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
+        window.removeEventListener('todosUpdated', handleTodosUpdate);
+      };
+    }, []);
   
   const {
     token: { colorBgContainer },
@@ -147,7 +167,11 @@ const AppLayout = ({ children }) => {
     {
       key: '/app/todos',
       icon: <CheckSquareOutlined />,
-      label: <Link to="/app/todos">待办管理</Link>,
+      label: (
+        <Link to="/app/todos">
+          待办管理{pendingTodosCount > 0 && `（${pendingTodosCount}）`}
+        </Link>
+      ),
     },
     {
       key: '/app/summaries',

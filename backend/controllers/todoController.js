@@ -9,7 +9,7 @@ exports.getTodos = async (req, res) => {
     const userId = req.user.id;
     
     // 构建查询条件
-    const query = { user: userId };
+    const query = { user: userId, isDeleted: false };
     if (status) {
       query.status = status;
     }
@@ -103,7 +103,7 @@ exports.updateTodoStatus = async (req, res) => {
     }
     
     // 查找待办项
-    const todo = await Todo.findOne({ _id: id, user: userId });
+    const todo = await Todo.findOne({ _id: id, user: userId, isDeleted: false });
     if (!todo) {
       return res.status(404).json({ success: false, message: '待办项不存在' });
     }
@@ -151,7 +151,7 @@ exports.deleteTodo = async (req, res) => {
     const userId = req.user.id;
     
     // 查找并删除待办项
-    const todo = await Todo.findOneAndDelete({ _id: id, user: userId });
+    const todo = await Todo.findOneAndDelete({ _id: id, user: userId, isDeleted: false });
     if (!todo) {
       return res.status(404).json({ success: false, message: '待办项不存在' });
     }
@@ -184,7 +184,7 @@ exports.getTodoStats = async (req, res) => {
     
     // 统计各状态的待办数量
     const stats = await Todo.aggregate([
-      { $match: { user: userId } },
+      { $match: { user: userId, isDeleted: false } },
       {
         $group: {
           _id: '$status',
@@ -195,7 +195,7 @@ exports.getTodoStats = async (req, res) => {
     
     // 统计优先级分布
     const priorityStats = await Todo.aggregate([
-      { $match: { user: userId, status: '待办' } },
+      { $match: { user: userId, status: '待办', isDeleted: false } },
       {
         $group: {
           _id: '$priority',
@@ -211,7 +211,8 @@ exports.getTodoStats = async (req, res) => {
     const upcomingTodos = await Todo.countDocuments({
       user: userId,
       status: '待办',
-      dueDate: { $lte: upcomingDeadline }
+      dueDate: { $lte: upcomingDeadline },
+      isDeleted: false
     });
     
     res.json({
