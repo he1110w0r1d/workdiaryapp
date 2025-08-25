@@ -9,7 +9,7 @@ const summarySchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['daily', 'monthly', 'yearly'],
+    enum: ['daily', 'weekly', 'monthly', 'yearly'],
     required: true
   },
   date: {

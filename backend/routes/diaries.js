@@ -12,7 +12,10 @@ const {
   getDeletedDiaries,
   restoreDiary,
   permanentDeleteDiary,
-  getAvailableTags
+  getAvailableTags,
+  exportDiaries,
+  importDiaries,
+  uploadMiddleware
 } = require('../controllers/diaryController');
 
 router.route('/')
@@ -21,6 +24,10 @@ router.route('/')
 
 // 获取可用标签 - 必须在 /:id 路由之前
 router.get('/tags', protect, getAvailableTags);
+
+// 导入导出功能 - 必须在 /:id 路由之前
+router.get('/export', protect, exportDiaries);
+router.post('/import', protect, uploadMiddleware, importDiaries);
 
 router.route('/:id')
   .get(protect, getDiaryById)

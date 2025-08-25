@@ -14,7 +14,8 @@ import {
   Typography,
   Tooltip,
   Form,
-  Table
+  Table,
+  Upload
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -23,7 +24,9 @@ import {
   SearchOutlined,
   EyeOutlined,
   CalendarOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  DownloadOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
@@ -55,6 +58,9 @@ const DiaryList = () => {
   const [todoStatusModalVisible, setTodoStatusModalVisible] = useState(false);
   const [todoStatusForm] = Form.useForm();
   const [currentTodoAction, setCurrentTodoAction] = useState(null);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -152,6 +158,68 @@ const DiaryList = () => {
     setPagination(pagination);
   };
 
+  // 导出功能
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const params = {};
+      
+      if (searchText) params.search = searchText;
+      if (dateRange && dateRange.length === 2) {
+        params.startDate = dateRange[0].format('YYYY-MM-DD');
+        params.endDate = dateRange[1].format('YYYY-MM-DD');
+      }
+      if (selectedTags.length > 0) params.tags = selectedTags.join(',');
+      if (selectedPriority) params.priority = selectedPriority;
+      if (selectedTodoStatus) params.todoStatus = selectedTodoStatus;
+      
+      const response = await api.get('/diaries/export', { 
+        params
+      });
+      
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `工作日记导出_${moment().format('YYYY-MM-DD_HH-mm-ss')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      message.success('导出成功');
+    } catch (error) {
+      message.error('导出失败');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // 导入功能
+  const handleImport = async (file) => {
+    setImportLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post('/diaries/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      message.success(`导入成功，共导入 ${response.data.importedCount} 条日记`);
+      setImportModalVisible(false);
+      fetchDiaries(); // 刷新列表
+    } catch (error) {
+      message.error(error.response?.data?.message || '导入失败');
+    } finally {
+      setImportLoading(false);
+    }
+    
+    return false; // 阻止默认上传行为
+  };
+
   const handleDelete = async () => {
     try {
       await api.delete(`/diaries/${selectedDiary._id}`);  // 修改这里
@@ -209,9 +277,15 @@ const DiaryList = () => {
             color: '#1890ff',
             transition: 'all 0.3s'
           }}
-          onClick={() => {
-            setViewingDiary(record);
-            setViewModalVisible(true);
+          onClick={async () => {
+            try {
+              // 重新获取包含relatedTodo信息的完整日记数据
+              const response = await api.get(`/diaries/${record._id}`);
+              setViewingDiary(response.data);
+              setViewModalVisible(true);
+            } catch (error) {
+              message.error('获取日记详情失败');
+            }
           }}
           onMouseEnter={(e) => {
             e.target.style.backgroundColor = '#f0f8ff';
@@ -376,15 +450,30 @@ const DiaryList = () => {
         marginBottom: 16 
       }}>
         <Title level={2}>工作日记</Title>
-        <Link to="/app/diaries/new">
-          <Button type="primary" icon={<PlusOutlined />}>
-            新增日记
+        <Space>
+          <Button 
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            loading={exportLoading}
+          >
+            导出
           </Button>
-        </Link>
+          <Button 
+            icon={<UploadOutlined />}
+            onClick={() => setImportModalVisible(true)}
+          >
+            导入
+          </Button>
+          <Link to="/app/diaries/new">
+            <Button type="primary" icon={<PlusOutlined />}>
+              新增日记
+            </Button>
+          </Link>
+        </Space>
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input
             placeholder="搜索工作内容"
             prefix={<SearchOutlined />}
@@ -396,8 +485,6 @@ const DiaryList = () => {
             onChange={setDateRange}
             placeholder={['开始日期', '结束日期']}
           />
-        </div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <Select
             mode="multiple"
             placeholder="选择标签"
@@ -412,9 +499,9 @@ const DiaryList = () => {
           </Select>
           <Select
             placeholder="选择优先级"
-            value={selectedPriority}
+            value={selectedPriority || undefined}
             onChange={setSelectedPriority}
-            style={{ width: 120 }}
+            style={{ width: 140 }}
             allowClear
           >
             <Select.Option value="高">🔴 高</Select.Option>
@@ -422,10 +509,10 @@ const DiaryList = () => {
             <Select.Option value="低">🟢 低</Select.Option>
           </Select>
           <Select
-            placeholder="待办状态"
-            value={selectedTodoStatus}
+            placeholder="选择待办状态"
+            value={selectedTodoStatus || undefined}
             onChange={setSelectedTodoStatus}
-            style={{ width: 120 }}
+            style={{ width: 140 }}
             allowClear
           >
             <Select.Option value="待办">⏳ 待办</Select.Option>
@@ -633,59 +720,145 @@ const DiaryList = () => {
                   }
                   
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <Tag color={color}>
-                        {emoji} {text}
-                      </Tag>
-                      {/* 待办管理按钮 */}
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {status !== '已完成' && (
-                          <Button 
-                            size="small" 
-                            type="primary" 
-                            onClick={() => {
-                              setCurrentTodoAction({ status: '已完成', label: '完成' });
-                              setTodoStatusModalVisible(true);
-                            }}
-                          >
-                            ✅ 完成
-                          </Button>
-                        )}
-                        {status !== '已放弃' && (
-                          <Button 
-                            size="small" 
-                            danger
-                            onClick={() => {
-                              setCurrentTodoAction({ status: '已放弃', label: '放弃' });
-                              setTodoStatusModalVisible(true);
-                            }}
-                          >
-                            ❌ 放弃
-                          </Button>
-                        )}
-                        {status !== '已转交' && (
-                          <Button 
-                            size="small" 
-                            onClick={() => {
-                              setCurrentTodoAction({ status: '已转交', label: '转交' });
-                              setTodoStatusModalVisible(true);
-                            }}
-                          >
-                            🔄 转交
-                          </Button>
-                        )}
-                        {status !== '待办' && (
-                          <Button 
-                            size="small" 
-                            onClick={() => {
-                              setCurrentTodoAction({ status: '待办', label: '重置' });
-                              setTodoStatusModalVisible(true);
-                            }}
-                          >
-                            ⏳ 重置
-                          </Button>
-                        )}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                        <Tag color={color}>
+                          {emoji} {text}
+                        </Tag>
+                        {/* 待办管理按钮 */}
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {status !== '已完成' && (
+                            <Button 
+                              size="small" 
+                              type="primary" 
+                              onClick={() => {
+                                setCurrentTodoAction({ status: '已完成', label: '完成' });
+                                setTodoStatusModalVisible(true);
+                              }}
+                            >
+                              ✅ 完成
+                            </Button>
+                          )}
+                          {status !== '已放弃' && (
+                            <Button 
+                              size="small" 
+                              danger
+                              onClick={() => {
+                                setCurrentTodoAction({ status: '已放弃', label: '放弃' });
+                                setTodoStatusModalVisible(true);
+                              }}
+                            >
+                              ❌ 放弃
+                            </Button>
+                          )}
+                          {status !== '已转交' && (
+                            <Button 
+                              size="small" 
+                              onClick={() => {
+                                setCurrentTodoAction({ status: '已转交', label: '转交' });
+                                setTodoStatusModalVisible(true);
+                              }}
+                            >
+                              🔄 转交
+                            </Button>
+                          )}
+                          {status !== '待办' && (
+                            <Button 
+                              size="small" 
+                              onClick={() => {
+                                setCurrentTodoAction({ status: '待办', label: '重置' });
+                                setTodoStatusModalVisible(true);
+                              }}
+                            >
+                              ⏳ 重置
+                            </Button>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* 待办简述显示 */}
+                      {viewingDiary.relatedTodo && viewingDiary.relatedTodo.statusHistory && viewingDiary.relatedTodo.statusHistory.length > 0 && (
+                        <div style={{ 
+                          marginTop: '12px',
+                          padding: '12px',
+                          backgroundColor: '#f6ffed',
+                          border: '1px solid #b7eb8f',
+                          borderRadius: '6px'
+                        }}>
+                          <div style={{ marginBottom: '8px', fontWeight: 'bold', color: '#389e0d', fontSize: '13px' }}>
+                            📝 状态变更记录：
+                          </div>
+                          {viewingDiary.relatedTodo.statusHistory
+                            .slice(-3) // 只显示最近3条记录
+                            .reverse() // 最新的在前
+                            .map((history, index) => {
+                              const historyStatus = history.status;
+                              let statusColor, statusEmoji, statusText;
+                              
+                              switch (historyStatus) {
+                                case '待办':
+                                  statusColor = '#1890ff';
+                                  statusEmoji = '⏳';
+                                  statusText = '待处理';
+                                  break;
+                                case '已完成':
+                                  statusColor = '#52c41a';
+                                  statusEmoji = '✅';
+                                  statusText = '已完成';
+                                  break;
+                                case '已放弃':
+                                  statusColor = '#ff4d4f';
+                                  statusEmoji = '❌';
+                                  statusText = '已放弃';
+                                  break;
+                                case '已转交':
+                                  statusColor = '#fa8c16';
+                                  statusEmoji = '🔄';
+                                  statusText = '已转交';
+                                  break;
+                                default:
+                                  statusColor = '#1890ff';
+                                  statusEmoji = '⏳';
+                                  statusText = '待处理';
+                              }
+                              
+                              return (
+                                <div key={index} style={{ 
+                                  marginBottom: index < viewingDiary.relatedTodo.statusHistory.slice(-3).length - 1 ? '8px' : '0',
+                                  padding: '8px',
+                                  backgroundColor: '#fff',
+                                  borderRadius: '4px',
+                                  border: '1px solid #e8f5e8'
+                                }}>
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'space-between', 
+                                    alignItems: 'center',
+                                    marginBottom: '4px'
+                                  }}>
+                                    <span style={{ color: statusColor, fontWeight: 'bold', fontSize: '12px' }}>
+                                      {statusEmoji} {statusText}
+                                    </span>
+                                    <span style={{ color: '#999', fontSize: '11px' }}>
+                                      {moment(history.changedAt).format('MM-DD HH:mm')}
+                                    </span>
+                                  </div>
+                                  {history.reason && (
+                                    <div style={{ 
+                                      fontSize: '12px', 
+                                      color: '#666',
+                                      lineHeight: '1.4',
+                                      fontStyle: 'italic'
+                                    }}>
+                                      "{history.reason}"
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          }
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -747,6 +920,45 @@ const DiaryList = () => {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 导入模态框 */}
+      <Modal
+        title="导入工作日记"
+        open={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ padding: '20px 0' }}>
+          <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f0f9ff', border: '1px solid #bae7ff', borderRadius: '6px' }}>
+            <div style={{ fontSize: '14px', color: '#1890ff', marginBottom: '8px' }}>
+              📋 导入说明：
+            </div>
+            <ul style={{ fontSize: '12px', color: '#666', margin: 0, paddingLeft: '20px' }}>
+              <li>支持导入JSON格式的工作日记文件</li>
+              <li>文件应包含标准的日记数据结构</li>
+              <li>导入的日记将添加到您的账户中</li>
+              <li>重复的日记将被自动跳过</li>
+            </ul>
+          </div>
+          
+          <Upload.Dragger
+            name="file"
+            accept=".json"
+            beforeUpload={handleImport}
+            showUploadList={false}
+            loading={importLoading}
+          >
+            <p className="ant-upload-drag-icon">
+              <UploadOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+            </p>
+            <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
+            <p className="ant-upload-hint">
+              支持单个JSON文件上传，文件大小不超过10MB
+            </p>
+          </Upload.Dragger>
+        </div>
       </Modal>
     </div>
   );

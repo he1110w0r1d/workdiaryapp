@@ -365,6 +365,25 @@ class ExternalLLM {
           .replace('{{workDetails}}', this._formatDailyWorkDetails(data.diaries));
         break;
         
+      case 'weekly':
+        // 计算周的日期范围
+        const weekStart = new Date(data.date);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        
+        filledTemplate = filledTemplate
+          .replace('{{date}}', `${weekStart.toLocaleDateString('zh-CN')} 到 ${weekEnd.toLocaleDateString('zh-CN')}`)
+          .replace('{{totalEntries}}', data.diaries.length)
+          .replace('{{totalTime}}', `${Math.floor(data.totalWorkTime / 60)}小时${data.totalWorkTime % 60}分钟`)
+          .replace('{{workDetails}}', data.workDetails || '')
+          .replace('{{summaryData}}', JSON.stringify({
+            totalEntries: data.totalEntries,
+            totalTime: data.totalWorkTime,
+            dailyWork: data.dailyWork,
+            tagDistribution: data.tagDistribution
+          }, null, 2));
+        break;
+        
       case 'monthly':
         filledTemplate = filledTemplate
           .replace('{{date}}', `${data.date.getFullYear()}年${data.date.getMonth() + 1}月`)

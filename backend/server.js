@@ -61,7 +61,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const todoRoutes = require('./routes/todos');
 
 // 导入定时任务
-const { generateDailySummary, generateMonthlySummary, generateYearlySummary } = require('./controllers/summaryController');
+const { generateDailySummary, generateMonthlySummary, generateYearlySummary, batchGenerateWeeklySummary } = require('./controllers/summaryController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -135,6 +135,8 @@ app.use('/api/todos', todoRoutes);
 // 定时任务
 // 每天凌晨1点生成昨日总结
 cron.schedule('0 1 * * *', generateDailySummary);
+// 每周一凌晨1点30分生成上周总结
+cron.schedule('30 1 * * 1', batchGenerateWeeklySummary);
 // 每月1日凌晨2点生成上月总结
 cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary);
 // 每年1月1日凌晨3点生成上年总结

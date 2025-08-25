@@ -93,7 +93,7 @@ exports.createTodo = async (req, res) => {
 exports.updateTodoStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, reason, transferTo } = req.body;
+    const { status, reason, summary, transferTo } = req.body;
     const userId = req.user.id;
     
     // 验证状态值
@@ -111,7 +111,7 @@ exports.updateTodoStatus = async (req, res) => {
     // 添加状态变更记录
     const statusChange = {
       status,
-      reason: reason || '',
+      reason: summary || reason || '',
       changedAt: new Date()
     };
     

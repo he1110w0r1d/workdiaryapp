@@ -306,19 +306,37 @@ const AppLayout = ({ children }) => {
               onClick={() => {
                 Modal.info({
                   title: '使用说明',
-                  width: 600,
+                  width: 700,
                   content: (
                     <div>
                       <h4>📝 工作日记系统使用指南</h4>
+                      
+                      <h5 style={{ marginTop: '20px', color: '#1890ff' }}>🏠 核心功能模块</h5>
                       <ul style={{ lineHeight: '1.8' }}>
-                        <li><strong>日记管理：</strong>记录每日工作内容，支持富文本编辑</li>
-                        <li><strong>AI总结：</strong>自动生成工作总结，提升效率</li>
-                        <li><strong>数据统计：</strong>查看工作数据分析和趋势</li>
-                        <li><strong>系统设置：</strong>配置AI助手和个人偏好</li>
-                        <li><strong>用户设置：</strong>管理个人信息和头像</li>
+                        <li><strong>📊 仪表板：</strong>查看工作数据统计、图表分析和工作趋势概览</li>
+                        <li><strong>📝 工作日记：</strong>记录每日工作内容，支持标签分类、优先级设置、时间管理和待办事项创建</li>
+                        <li><strong>✅ 待办管理：</strong>管理待办事项，支持状态跟踪（待处理/已完成/已放弃/已转交）和简述记录</li>
+                        <li><strong>📋 工作总结：</strong>AI智能生成每日、月度、年度工作总结，支持HTML格式导出</li>
+                        <li><strong>🤖 模型设置：</strong>配置AI助手参数，支持本地和云端LLM服务</li>
+                        <li><strong>👤 用户设置：</strong>管理个人信息、工作档案和AI总结偏好设置</li>
+                        <li><strong>🗑️ 日记回收站：</strong>管理已删除的日记，支持恢复和永久删除</li>
                       </ul>
-                      <p style={{ marginTop: '16px', color: '#666' }}>
-                        💡 提示：点击左侧菜单可快速导航到各个功能模块
+                      
+                      <h5 style={{ marginTop: '20px', color: '#1890ff' }}>✨ 特色功能</h5>
+                      <ul style={{ lineHeight: '1.8' }}>
+                        <li><strong>智能筛选：</strong>支持按日期、标签、优先级、待办状态等多维度筛选</li>
+                        <li><strong>状态跟踪：</strong>待办事项状态变更历史记录和简述内容展示</li>
+                        <li><strong>数据可视化：</strong>工作时长统计、标签分布、月度趋势等图表展示</li>
+                        <li><strong>个性化AI：</strong>根据工作档案生成专属的AI总结提示词</li>
+                        <li><strong>批量操作：</strong>支持批量删除日记和待办事项管理</li>
+                      </ul>
+                      
+                      <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
+                        💡 <strong>使用提示：</strong><br/>
+                        • 点击左侧菜单可快速导航到各个功能模块<br/>
+                        • 首次使用建议先完善用户设置中的工作档案信息<br/>
+                        • 配置AI助手后可享受智能总结功能<br/>
+                        • 支持键盘快捷键和批量操作提升效率
                       </p>
                     </div>
                   )

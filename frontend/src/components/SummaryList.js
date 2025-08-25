@@ -15,6 +15,7 @@ import {
   Input
 } from 'antd';
 import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import ReactMarkdown from 'react-markdown';
 import api from '../utils/api';  // 修改这里
 import moment from 'moment';
 import Logger from '../utils/logger';
@@ -25,11 +26,13 @@ const { Title } = Typography;
 
 const SummaryList = () => {
   const [dailySummaries, setDailySummaries] = useState([]);
+  const [weeklySummaries, setWeeklySummaries] = useState([]);
   const [monthlySummaries, setMonthlySummaries] = useState([]);
   const [yearlySummaries, setYearlySummaries] = useState([]);
-  const [loading, setLoading] = useState({ daily: false, monthly: false, yearly: false });
+  const [loading, setLoading] = useState({ daily: false, weekly: false, monthly: false, yearly: false });
   const [regenerateLoading, setRegenerateLoading] = useState(false);
   const [generateTodayLoading, setGenerateTodayLoading] = useState(false);
+  const [generateWeeklyLoading, setGenerateWeeklyLoading] = useState(false);
   const [generateMonthlyLoading, setGenerateMonthlyLoading] = useState(false);
   const [generateCurrentMonthlyLoading, setGenerateCurrentMonthlyLoading] = useState(false);
   const [generateYearlyLoading, setGenerateYearlyLoading] = useState(false);
@@ -42,11 +45,13 @@ const SummaryList = () => {
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [pagination, setPagination] = useState({
     daily: { current: 1, pageSize: 10, total: 0 },
+    weekly: { current: 1, pageSize: 10, total: 0 },
     monthly: { current: 1, pageSize: 10, total: 0 },
     yearly: { current: 1, pageSize: 10, total: 0 }
   });
   const [unreadCounts, setUnreadCounts] = useState({
     daily: 0,
+    weekly: 0,
     monthly: 0,
     yearly: 0
   });
@@ -57,6 +62,7 @@ const SummaryList = () => {
       const response = await api.get('/summaries/unread/count');
       setUnreadCounts({
         daily: response.data.daily || 0,
+        weekly: response.data.weekly || 0,
         monthly: response.data.monthly || 0,
         yearly: response.data.yearly || 0
       });
@@ -67,6 +73,7 @@ const SummaryList = () => {
 
   useEffect(() => {
     fetchSummaries('daily');
+    fetchSummaries('weekly');
     fetchSummaries('monthly');
     fetchSummaries('yearly');
     fetchUnreadCounts();
@@ -99,6 +106,8 @@ const SummaryList = () => {
       
       if (type === 'daily') {
         setDailySummaries(summaries);
+      } else if (type === 'weekly') {
+        setWeeklySummaries(summaries);
       } else if (type === 'monthly') {
         setMonthlySummaries(summaries);
       } else if (type === 'yearly') {
@@ -155,6 +164,22 @@ const SummaryList = () => {
        setGenerateTodayLoading(false);
      }
    };
+
+  // 生成每周总结
+  const handleGenerateWeeklySummary = async () => {
+    setGenerateWeeklyLoading(true);
+    try {
+      const response = await api.post('/summaries/generate/weekly');
+      message.success(response.data.message);
+      // 重新获取每周总结列表
+      fetchSummaries('weekly');
+    } catch (error) {
+      console.error('生成每周总结失败:', error);
+      message.error('生成失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setGenerateWeeklyLoading(false);
+    }
+  };
 
   // 生成月度总结
   const handleGenerateMonthlySummary = async () => {
@@ -222,6 +247,7 @@ const SummaryList = () => {
   const getTypeText = (type) => {
     switch (type) {
       case 'daily': return '每日总结';
+      case 'weekly': return '每周总结';
       case 'monthly': return '月度总结';
       case 'yearly': return '年度总结';
       default: return '未知';
@@ -231,6 +257,7 @@ const SummaryList = () => {
   const getTypeColor = (type) => {
     switch (type) {
       case 'daily': return 'blue';
+      case 'weekly': return 'cyan';
       case 'monthly': return 'green';
       case 'yearly': return 'purple';
       default: return 'default';
@@ -276,6 +303,7 @@ const SummaryList = () => {
   const getPromptTypeText = (type) => {
     switch (type) {
       case 'daily': return '每日总结提示词';
+      case 'weekly': return '每周总结提示词';
       case 'monthly': return '月度总结提示词';
       case 'yearly': return '年度总结提示词';
       default: return '提示词';
@@ -358,7 +386,7 @@ const SummaryList = () => {
               标记已读
             </Button>
           )}
-          {(type === 'monthly' || type === 'yearly') && record.htmlFilePath && (
+          {(type === 'weekly' || type === 'monthly' || type === 'yearly') && record.htmlFilePath && (
             <Button 
               icon={<LinkOutlined />} 
               size="small"
@@ -481,6 +509,47 @@ const SummaryList = () => {
             )
           },
           {
+            key: 'weekly',
+            label: (
+              <span>
+                <BarChartOutlined />
+                每周总结{unreadCounts.weekly > 0 && `（${unreadCounts.weekly}）`}
+              </span>
+            ),
+            children: (
+              <Card
+                title={
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>每周工作总结</span>
+                    <Space>
+                      <Button 
+                        type="text" 
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewPrompt('weekly')}
+                        size="small"
+                        title="查看提示词"
+                      >
+                        查看提示词
+                      </Button>
+                      <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />}
+                        loading={generateWeeklyLoading}
+                        onClick={handleGenerateWeeklySummary}
+                        size="small"
+                        style={{ backgroundColor: '#13c2c2', borderColor: '#13c2c2' }}
+                      >
+                        立即生成每周总结
+                      </Button>
+                    </Space>
+                  </div>
+                }
+              >
+                {renderSummaryTable(weeklySummaries, 'weekly')}
+              </Card>
+            )
+          },
+          {
             key: 'monthly',
             label: (
               <span>
@@ -588,15 +657,63 @@ const SummaryList = () => {
         styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
       >
         {selectedSummary && (
-          <div 
-            dangerouslySetInnerHTML={{ 
-              __html: selectedSummary.content
-                .replace(/(?:\r\n|\r|\n)/g, '<br>')
-                .replace(/^# (.*?)<br>/gm, '<h2>$1</h2>')
-                .replace(/^## (.*?)<br>/gm, '<h3>$1</h3>')
-                .replace(/^\d+\. (.*?)<br>/gm, '<li>$1</li>')
-            }} 
-          />
+          <div style={{
+            fontSize: '14px',
+            lineHeight: '1.6',
+            color: '#333'
+          }}>
+            <ReactMarkdown
+              components={{
+                h1: ({children}) => <h2 style={{color: '#1890ff', borderBottom: '2px solid #1890ff', paddingBottom: '8px'}}>{children}</h2>,
+                h2: ({children}) => <h3 style={{color: '#1890ff', marginTop: '24px', marginBottom: '12px'}}>{children}</h3>,
+                h3: ({children}) => <h4 style={{color: '#666', marginTop: '20px', marginBottom: '10px'}}>{children}</h4>,
+                p: ({children}) => <p style={{marginBottom: '12px', textAlign: 'justify'}}>{children}</p>,
+                ul: ({children}) => <ul style={{paddingLeft: '20px', marginBottom: '12px'}}>{children}</ul>,
+                ol: ({children}) => <ol style={{paddingLeft: '20px', marginBottom: '12px'}}>{children}</ol>,
+                li: ({children}) => <li style={{marginBottom: '4px'}}>{children}</li>,
+                strong: ({children}) => <strong style={{color: '#1890ff', fontWeight: 600}}>{children}</strong>,
+                em: ({children}) => <em style={{color: '#666', fontStyle: 'italic'}}>{children}</em>,
+                blockquote: ({children}) => (
+                  <blockquote style={{
+                    borderLeft: '4px solid #1890ff',
+                    paddingLeft: '16px',
+                    margin: '16px 0',
+                    backgroundColor: '#f6f8ff',
+                    padding: '12px 16px',
+                    borderRadius: '4px'
+                  }}>
+                    {children}
+                  </blockquote>
+                ),
+                code: ({children}) => (
+                  <code style={{
+                    backgroundColor: '#f5f5f5',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                    fontSize: '13px',
+                    fontFamily: 'Monaco, Consolas, monospace'
+                  }}>
+                    {children}
+                  </code>
+                ),
+                pre: ({children}) => (
+                  <pre style={{
+                    backgroundColor: '#f5f5f5',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    overflow: 'auto',
+                    fontSize: '13px',
+                    fontFamily: 'Monaco, Consolas, monospace',
+                    border: '1px solid #e8e8e8'
+                  }}>
+                    {children}
+                  </pre>
+                )
+              }}
+            >
+              {selectedSummary.content}
+            </ReactMarkdown>
+          </div>
         )}
       </Modal>
 

@@ -8,6 +8,7 @@ const {
   deleteSummary,
   regenerateDailySummary,
   generateTodaySummary,
+  generateWeeklySummary,
   generateMonthlySummary,
   generateCurrentMonthlySummary,
   generateYearlySummary,
@@ -30,6 +31,9 @@ router.route('/regenerate/daily')
 
 router.route('/generate/today')
   .post(protect, generateTodaySummary);
+
+router.route('/generate/weekly')
+  .post(protect, generateWeeklySummary);
 
 router.route('/generate/monthly')
   .post(protect, generateMonthlySummary);

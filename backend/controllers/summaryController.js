@@ -113,7 +113,13 @@ const generateHTMLPage = async (summaryData, type, summaryContent = '', userId =
         .replace('{{summaryContent}}', summaryContent || '暂无总结内容');
     } else {
       // 如果模板文件不存在，使用原来的简单提示词
-      htmlPrompt = `请根据以下${type === 'monthly' ? '月度' : '年度'}工作总结数据，生成一个美观的HTML网页来展示工作成果。要求：
+      const typeMap = {
+        'daily': '每日',
+        'weekly': '每周',
+        'monthly': '月度',
+        'yearly': '年度'
+      };
+      htmlPrompt = `请根据以下${typeMap[type] || '工作'}总结数据，生成一个美观的HTML网页来展示工作成果。要求：
 1. 使用现代化的CSS样式，包含响应式设计
 2. 使用图表库（如Chart.js）来可视化数据
 3. 包含工作时长统计、标签分布等图表
@@ -148,12 +154,26 @@ const generateDefaultHTML = (summaryData, type) => {
   const year = date.getFullYear();
   const month = type === 'monthly' ? date.getMonth() + 1 : null;
   
+  // 生成标题
+  let title = '';
+  if (type === 'daily') {
+    title = `${year}年${date.getMonth() + 1}月${date.getDate()}日工作总结`;
+  } else if (type === 'weekly') {
+    title = `${year}年第${Math.ceil((date.getDate() + new Date(year, date.getMonth(), 1).getDay()) / 7)}周工作总结`;
+  } else if (type === 'monthly') {
+    title = `${year}年${month}月工作总结`;
+  } else if (type === 'yearly') {
+    title = `${year}年工作总结`;
+  } else {
+    title = `${year}年工作总结`;
+  }
+  
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${year}年${month ? month + '月' : ''}工作总结</title>
+    <title>${title}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -434,6 +454,324 @@ ${index + 1}. ${diary.content}
   } catch (error) {
       logger.error('生成每日总结失败', { error: error.message, stack: error.stack });
     }
+};
+
+exports.generateWeeklySummary = async (req, res) => {
+  try {
+    logger.system('开始生成每周总结...');
+    
+    const now = new Date();
+    // 计算本周的时间范围（周一到周日）
+    const thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 1);
+    const thisWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 7);
+    thisWeekStart.setHours(0, 0, 0, 0);
+    thisWeekEnd.setHours(23, 59, 59, 999);
+    
+    // 只为当前登录用户生成总结
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '用户不存在' });
+    }
+    
+    logger.info(`为用户 ${user.username} 生成每周总结`);
+    
+    const diaries = await Diary.find({
+      user: user._id,
+      startTime: {
+        $gte: thisWeekStart,
+        $lt: thisWeekEnd
+      }
+    });
+    
+    logger.info(`用户 ${user.username} 在 ${thisWeekStart.toLocaleDateString('zh-CN')} 到 ${thisWeekEnd.toLocaleDateString('zh-CN')} 有 ${diaries.length} 条日记`);
+    
+    if (diaries.length > 0) {
+      let totalWorkTime = 0;
+      const dailyWork = {};
+      
+      diaries.forEach(diary => {
+        totalWorkTime += calculateWorkTime(diary.startTime, diary.endTime);
+        
+        const dateKey = new Date(diary.startTime).toDateString();
+        dailyWork[dateKey] = (dailyWork[dateKey] || 0) + calculateWorkTime(diary.startTime, diary.endTime);
+      });
+      
+      // 准备基础总结内容
+      const baseContent = `
+# ${thisWeekStart.toLocaleDateString('zh-CN')} 到 ${thisWeekEnd.toLocaleDateString('zh-CN')} 工作总结
+
+## 周度概览
+- 工作天数: ${Object.keys(dailyWork).length}
+- 工作条目数量: ${diaries.length}
+- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 日均工作时长: ${Math.floor(totalWorkTime / Object.keys(dailyWork).length / 60)}小时${Math.floor((totalWorkTime / Object.keys(dailyWork).length) % 60)}分钟
+
+## 工作分布
+${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
+
+## 每日工作统计
+${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocaleDateString('zh-CN')}: ${Math.floor(minutes / 60)}小时${minutes % 60}分钟`).join('\n')}
+      `.trim();
+      
+      // 构建工作详情 - 按日期分组，提供更详细的结构化数据
+      const workDetailsByDate = {};
+      diaries.forEach(diary => {
+        const dateKey = new Date(diary.startTime).toLocaleDateString('zh-CN');
+        const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+        
+        if (!workDetailsByDate[dateKey]) {
+          workDetailsByDate[dateKey] = {
+            date: dateKey,
+            entries: [],
+            totalTime: 0
+          };
+        }
+        
+        workDetailsByDate[dateKey].entries.push({
+          content: diary.content,
+          startTime: new Date(diary.startTime).toLocaleTimeString('zh-CN'),
+          endTime: new Date(diary.endTime).toLocaleTimeString('zh-CN'),
+          workTime: workTime,
+          tags: diary.tags.join(', '),
+          location: diary.location || '未记录地点',
+          detailedContent: diary.content // 保留原始内容供LLM直接引用
+        });
+        workDetailsByDate[dateKey].totalTime += workTime;
+      });
+      
+      // 格式化工作详情 - 提供更结构化的数据供LLM引用
+      const workDetails = Object.values(workDetailsByDate)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map(dateGroup => {
+          const dateHeader = `### ${dateGroup.date} (总时长: ${Math.floor(dateGroup.totalTime / 60)}小时${dateGroup.totalTime % 60}分钟)`;
+          const entries = dateGroup.entries.map((entry, index) => 
+            `**工作条目 ${index + 1}**\n` +
+            `- 具体工作内容: ${entry.detailedContent}\n` +
+            `- 工作时间: ${entry.startTime} - ${entry.endTime} (${entry.workTime}分钟)\n` +
+            `- 工作标签: ${entry.tags}\n` +
+            `- 工作地点: ${entry.location}`
+          ).join('\n\n');
+          return `${dateHeader}\n\n${entries}`;
+        }).join('\n\n');
+
+      // 准备LLM所需数据
+      const tagDistribution = generateTagDistribution(diaries);
+      const llmData = {
+        date: thisWeekStart,
+        diaries: diaries,
+        totalWorkTime: totalWorkTime,
+        totalEntries: diaries.length,
+        workDetails: workDetails,
+        dailyWork: dailyWork,
+        tagDistribution: tagDistribution,
+        user: user
+      };
+      
+      // 尝试使用LLM生成总结
+      let summaryContent = baseContent;
+      let llmSummary = null;
+      
+      // 动态创建LLM实例以获取最新配置
+      const { localLLM, externalLLM } = await createLLMInstances(user._id);
+      
+      // 首先尝试使用外部LLM（如果可用）
+      if (externalLLM) {
+        try {
+          llmSummary = await externalLLM.generateSummary(llmData, 'weekly', {}, user._id);
+          if (llmSummary) {
+            logger.llm('使用外部LLM生成的每周总结内容');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          logger.info('外部LLM生成每周总结失败，尝试本地LLM:', error.message);
+        }
+      }
+      
+      // 如果外部LLM失败或不可用，尝试本地LLM
+      if (!llmSummary && localLLM) {
+        try {
+          llmSummary = await localLLM.generateSummary(llmData, 'weekly', {}, user._id);
+          if (llmSummary) {
+            logger.llm('使用本地LLM生成的每周总结内容');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          logger.info('本地LLM生成每周总结失败:', error.message);
+        }
+      }
+      
+      // 如果所有LLM都失败，使用默认模板
+      if (!llmSummary) {
+        logger.info('使用默认模板生成的每周总结内容');
+      }
+      
+      // 统计周度待办事项数据
+      const weekStart = new Date(thisWeekStart);
+        const weekEnd = new Date(thisWeekEnd);
+      
+      // 本周新增的待办事项
+      const weekTodosCreated = await Todo.countDocuments({
+        user: user._id,
+        createdAt: {
+          $gte: weekStart,
+          $lt: weekEnd
+        }
+      });
+      
+      // 本周完成的待办事项
+      const weekTodosCompleted = await Todo.countDocuments({
+        user: user._id,
+        status: '已完成',
+        'statusHistory': {
+          $elemMatch: {
+            status: '已完成',
+            changedAt: {
+              $gte: weekStart,
+              $lt: weekEnd
+            }
+          }
+        }
+      });
+      
+      // 本周待完成的待办事项（本周新增但未完成的）
+      const weekTodosPending = await Todo.countDocuments({
+        user: user._id,
+        createdAt: {
+          $gte: weekStart,
+          $lt: weekEnd
+        },
+        status: { $ne: '已完成' }
+      });
+      
+      // 数据库中所有未完成的待办事项
+      const totalPendingTodos = await Todo.countDocuments({
+        user: user._id,
+        status: { $in: ['待办'] }
+      });
+
+      // 构建summaryData对象用于嵌套占位符替换
+      const workDetailsByDateArray = Object.values(workDetailsByDate).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const avgDailyHours = workDetailsByDateArray.length > 0 ? Math.round((totalWorkTime / 60) / workDetailsByDateArray.length * 10) / 10 : 0;
+      
+      // 找出最高效的工作日
+      let mostProductiveDay = '无数据';
+      let mostTasks = 0;
+      workDetailsByDateArray.forEach(dayData => {
+        if (dayData.entries.length > mostTasks) {
+          mostTasks = dayData.entries.length;
+          mostProductiveDay = dayData.date;
+        }
+      });
+      
+      // 统计高优先级任务数量（假设包含"重要"、"紧急"等标签的为高优先级）
+      const highPriorityTasks = diaries.filter(diary => 
+        diary.tags.some(tag => tag.includes('重要') || tag.includes('紧急') || tag.includes('优先'))
+      ).length;
+      
+      const summaryData = {
+        avgDailyHours: avgDailyHours,
+        mostProductiveDay: mostProductiveDay,
+        mostTasks: mostTasks,
+        highPriorityTasks: highPriorityTasks
+      };
+      
+      // 构建workDetails嵌套对象
+      const workDetailsObj = {};
+      workDetailsByDateArray.forEach((dayData, index) => {
+        const dayKey = `day${index + 1}`;
+        workDetailsObj[dayKey] = {
+          date: dayData.date,
+          task1: dayData.entries[0]?.detailedContent || '无工作记录',
+          time1: dayData.entries[0] ? `${dayData.entries[0].workTime}分钟` : '0分钟',
+          task2: dayData.entries[1]?.detailedContent || '',
+          issue1: dayData.entries.find(e => e.detailedContent.includes('问题') || e.detailedContent.includes('困难'))?.detailedContent || '',
+          deliverable1: dayData.entries.find(e => e.detailedContent.includes('完成') || e.detailedContent.includes('提交'))?.detailedContent || '',
+          meeting1: dayData.entries.find(e => e.detailedContent.includes('会议') || e.detailedContent.includes('讨论'))?.detailedContent || '',
+          decision1: dayData.entries.find(e => e.detailedContent.includes('决定') || e.detailedContent.includes('决议'))?.detailedContent || ''
+        };
+      });
+
+      // 对LLM生成的内容进行占位符替换处理
+      if (llmSummary) {
+        summaryContent = summaryContent
+          .replace(/\{\{date\}\}/g, `${thisWeekStart.toLocaleDateString('zh-CN')} 到 ${thisWeekEnd.toLocaleDateString('zh-CN')}`)
+          .replace(/\{\{totalEntries\}\}/g, diaries.length)
+          .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+          .replace(/\{\{weekTodosCreated\}\}/g, weekTodosCreated)
+          .replace(/\{\{weekTodosCompleted\}\}/g, weekTodosCompleted)
+          .replace(/\{\{weekTodosPending\}\}/g, weekTodosPending)
+          .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
+          .replace(/\{\{workDetails\}\}/g, workDetails)
+          .replace(/\{\{userName\}\}/g, user.profile?.name || user.username)
+          .replace(/\{\{userPosition\}\}/g, user.workProfile?.position || '未设置')
+          .replace(/\{\{userDepartment\}\}/g, user.workProfile?.department || '未设置')
+          .replace(/\{\{userLevel\}\}/g, user.workProfile?.level || '未设置')
+          .replace(/\{\{userIndustry\}\}/g, user.workProfile?.industry || '未设置')
+          .replace(/\{\{userResponsibilities\}\}/g, user.workProfile?.responsibilities || '未设置')
+          // 处理summaryData嵌套占位符
+          .replace(/\{\{summaryData\.avgDailyHours\}\}/g, summaryData.avgDailyHours)
+          .replace(/\{\{summaryData\.mostProductiveDay\}\}/g, summaryData.mostProductiveDay)
+          .replace(/\{\{summaryData\.mostTasks\}\}/g, summaryData.mostTasks)
+          .replace(/\{\{summaryData\.highPriorityTasks\}\}/g, summaryData.highPriorityTasks);
+          
+        // 处理workDetails嵌套占位符
+        Object.keys(workDetailsObj).forEach(dayKey => {
+          const dayData = workDetailsObj[dayKey];
+          Object.keys(dayData).forEach(field => {
+            const placeholder = `\{\{workDetails\.${dayKey}\.${field}\}\}`;
+            const regex = new RegExp(placeholder, 'g');
+            summaryContent = summaryContent.replace(regex, dayData[field]);
+          });
+        });
+      }
+      
+      // 生成HTML网页
+      let htmlFilePath = null;
+      try {
+        logger.system('开始生成每周总结HTML网页...');
+        const htmlData = {
+          date: thisWeekStart,
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          dailyWork: dailyWork,
+          tagDistribution: tagDistribution
+        };
+        
+        const htmlContent = await generateHTMLPage(htmlData, 'weekly', summaryContent, user._id);
+        htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'weekly', thisWeekStart);
+        logger.info('每周总结HTML网页生成成功:', htmlFilePath);
+      } catch (error) {
+        logger.error('生成每周总结HTML网页失败:', error);
+      }
+      
+      const summary = new Summary({
+        user: user._id,
+        type: 'weekly',
+        date: thisWeekStart,
+        content: summaryContent,
+        htmlFilePath: htmlFilePath,
+        statistics: {
+          totalEntries: diaries.length,
+          totalTime: totalWorkTime,
+          tagDistribution: tagDistribution
+        }
+      });
+      
+      await summary.save();
+      logger.info(`为用户 ${user.username} 生成每周总结完成`);
+      
+      res.json({ 
+        success: true, 
+        message: `每周总结生成成功`,
+        summary: summary
+      });
+    } else {
+      res.status(404).json({ success: false, message: '指定周没有日记数据' });
+    }
+  } catch (error) {
+    logger.error('生成每周总结失败:', error);
+    res.status(500).json({ success: false, message: '生成每周总结失败', error: error.message });
+  }
 };
 
 exports.generateMonthlySummary = async (req, res) => {
@@ -1133,7 +1471,7 @@ exports.getPromptTemplate = async (req, res) => {
   try {
     const { type } = req.params; // daily, monthly, yearly, html_generation
     
-    const validTypes = ['daily', 'monthly', 'yearly', 'html_generation'];
+    const validTypes = ['daily', 'weekly', 'monthly', 'yearly', 'html_generation'];
     if (!validTypes.includes(type)) {
       return res.status(400).json({ message: '无效的提示词类型' });
     }
@@ -1177,7 +1515,7 @@ exports.updatePromptTemplate = async (req, res) => {
     const { type } = req.params;
     const { content } = req.body;
     
-    const validTypes = ['daily', 'monthly', 'yearly', 'html_generation'];
+    const validTypes = ['daily', 'weekly', 'monthly', 'yearly', 'html_generation'];
     if (!validTypes.includes(type)) {
       return res.status(400).json({ message: '无效的提示词类型' });
     }
@@ -1561,6 +1899,266 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
 
 // ==================== 定时任务专用批量处理函数 ====================
 
+// 批量生成所有用户的周报总结（定时任务专用）
+exports.batchGenerateWeeklySummary = async () => {
+  try {
+    logger.system('开始批量生成周报总结...');
+    
+    const now = new Date();
+    // 计算上周的时间范围（周一到周日）
+    const lastWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() - 6);
+    const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    lastWeekStart.setHours(0, 0, 0, 0);
+    lastWeekEnd.setHours(23, 59, 59, 999);
+    
+    const users = await User.find();
+    logger.info(`找到 ${users.length} 个用户`);
+    
+    let totalSummariesGenerated = 0;
+    
+    for (const user of users) {
+      const diaries = await Diary.find({
+        user: user._id,
+        startTime: {
+          $gte: lastWeekStart,
+          $lt: lastWeekEnd
+        }
+      });
+      
+      logger.info(`用户 ${user.username} 在 ${lastWeekStart.toLocaleDateString('zh-CN')} 到 ${lastWeekEnd.toLocaleDateString('zh-CN')} 有 ${diaries.length} 条日记`);
+      
+      if (diaries.length > 0) {
+        let totalWorkTime = 0;
+        const dailyWork = {};
+        
+        diaries.forEach(diary => {
+          totalWorkTime += calculateWorkTime(diary.startTime, diary.endTime);
+          
+          const dateKey = new Date(diary.startTime).toDateString();
+          dailyWork[dateKey] = (dailyWork[dateKey] || 0) + calculateWorkTime(diary.startTime, diary.endTime);
+        });
+        
+        // 准备基础总结内容
+        const baseContent = `
+# ${lastWeekStart.toLocaleDateString('zh-CN')} 到 ${lastWeekEnd.toLocaleDateString('zh-CN')} 工作总结
+
+## 周度概览
+- 工作天数: ${Object.keys(dailyWork).length}
+- 工作条目数量: ${diaries.length}
+- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 平均每日工作时长: ${Math.floor(totalWorkTime / Object.keys(dailyWork).length / 60)}小时${Math.floor((totalWorkTime / Object.keys(dailyWork).length) % 60)}分钟
+
+## 工作内容分析
+${diaries.map(diary => {
+  const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+  return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleDateString('zh-CN')} ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+}).join('\n\n')}
+        `.trim();
+        
+        let summaryContent = baseContent;
+        
+        // 准备LLM所需数据
+        const tagDistribution = generateTagDistribution(diaries);
+        const llmData = {
+          date: lastWeekStart,
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: diaries.map(diary => {
+            const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+            return {
+              date: new Date(diary.startTime).toLocaleDateString('zh-CN'),
+              time: `${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}`,
+              duration: `${workTime}分钟`,
+              content: diary.content,
+              tags: diary.tags,
+              priority: diary.workPriority || '中',
+              location: diary.location || ''
+            };
+          }),
+          dailyWork: dailyWork,
+          tagDistribution: tagDistribution,
+          user: user
+        };
+        
+        let llmSummary = null;
+        
+        // 动态创建LLM实例以获取最新配置
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
+        
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'weekly', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用外部LLM生成的周报总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            logger.info('外部LLM生成周报总结失败，尝试本地LLM:', error.message);
+          }
+        }
+        
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
+          try {
+            llmSummary = await localLLM.generateSummary(llmData, 'weekly', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用本地LLM生成的周报总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            logger.info('本地LLM生成周报总结失败:', error.message);
+          }
+        }
+        
+        // 如果所有LLM都失败，使用默认模板
+        if (!llmSummary) {
+          logger.info('使用默认模板生成的周报总结内容');
+        }
+        
+        // 统计周度待办事项数据
+        const weekStart = new Date(lastWeekStart);
+        const weekEnd = new Date(lastWeekEnd);
+        
+        // 本周新增的待办事项
+        const weekTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: {
+            $gte: weekStart,
+            $lt: weekEnd
+          }
+        });
+        
+        // 本周完成的待办事项
+        const weekTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: {
+                $gte: weekStart,
+                $lt: weekEnd
+              }
+            }
+          }
+        });
+        
+        // 本周待处理的待办事项
+        const weekTodosPending = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待处理', '进行中'] },
+          createdAt: {
+            $gte: weekStart,
+            $lt: weekEnd
+          }
+        });
+        
+        // 总待处理待办事项
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待处理', '进行中'] }
+        });
+        
+        // 构建summaryData和workDetails对象用于占位符替换
+        const summaryData = {
+          avgDailyHours: Object.keys(dailyWork).length > 0 ? (totalWorkTime / Object.keys(dailyWork).length / 60).toFixed(1) : '0',
+          mostProductiveDay: Object.keys(dailyWork).reduce((a, b) => dailyWork[a] > dailyWork[b] ? a : b, Object.keys(dailyWork)[0] || ''),
+          highPriorityTasks: diaries.filter(d => d.workPriority === '高').length
+        };
+        
+        // 按日期分组构建workDetails对象
+        const workDetailsObj = {};
+        const weekDays = ['day1', 'day2', 'day3', 'day4', 'day5', 'day6', 'day7'];
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(lastWeekStart);
+          currentDate.setDate(currentDate.getDate() + i);
+          const dateStr = currentDate.toLocaleDateString('zh-CN');
+          const dayDiaries = diaries.filter(d => new Date(d.startTime).toLocaleDateString('zh-CN') === dateStr);
+          
+          workDetailsObj[weekDays[i]] = {
+            date: dateStr,
+            tasks: dayDiaries.length,
+            hours: dayDiaries.reduce((sum, d) => sum + calculateWorkTime(d.startTime, d.endTime), 0) / 60
+          };
+        }
+        
+        // 替换占位符
+        if (llmSummary) {
+          summaryContent = summaryContent
+            .replace(/\{\{date\}\}/g, `${lastWeekStart.toLocaleDateString('zh-CN')} 到 ${lastWeekEnd.toLocaleDateString('zh-CN')}`)
+            .replace(/\{\{totalEntries\}\}/g, diaries.length)
+            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+            .replace(/\{\{weekTodosCreated\}\}/g, weekTodosCreated)
+            .replace(/\{\{weekTodosCompleted\}\}/g, weekTodosCompleted)
+            .replace(/\{\{weekTodosPending\}\}/g, weekTodosPending)
+            .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
+            .replace(/\{\{userName\}\}/g, user.username || '')
+            .replace(/\{\{userPosition\}\}/g, user.position || '')
+            .replace(/\{\{userDepartment\}\}/g, user.department || '');
+          
+          // 替换summaryData嵌套占位符
+          Object.keys(summaryData).forEach(key => {
+            const regex = new RegExp(`\\{\\{summaryData\\.${key}\\}\\}`, 'g');
+            summaryContent = summaryContent.replace(regex, summaryData[key]);
+          });
+          
+          // 替换workDetails嵌套占位符
+          Object.keys(workDetailsObj).forEach(day => {
+            Object.keys(workDetailsObj[day]).forEach(prop => {
+              const regex = new RegExp(`\\{\\{workDetails\\.${day}\\.${prop}\\}\\}`, 'g');
+              summaryContent = summaryContent.replace(regex, workDetailsObj[day][prop]);
+            });
+          });
+        }
+        
+        // 生成HTML网页
+        let htmlFilePath = null;
+        try {
+          logger.system('开始生成周报总结HTML网页...');
+          const htmlData = {
+            date: lastWeekStart,
+            diaries: diaries,
+            totalWorkTime: totalWorkTime,
+            dailyWork: dailyWork,
+            tagDistribution: tagDistribution
+          };
+          
+          const htmlContent = await generateHTMLPage(htmlData, 'weekly', summaryContent, user._id);
+          htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'weekly', lastWeekStart);
+          logger.info('周报总结HTML网页生成成功:', htmlFilePath);
+        } catch (error) {
+          logger.error('生成周报总结HTML网页失败:', error);
+        }
+        
+        const summary = new Summary({
+          user: user._id,
+          type: 'weekly',
+          date: lastWeekStart,
+          content: summaryContent,
+          htmlFilePath: htmlFilePath,
+          statistics: {
+            totalEntries: diaries.length,
+            totalTime: totalWorkTime,
+            tagDistribution: tagDistribution
+          }
+        });
+        
+        await summary.save();
+        totalSummariesGenerated++;
+        logger.info(`为用户 ${user.username} 生成周报总结完成`);
+      } else {
+        logger.info(`用户 ${user.username} 在指定周没有日记数据，跳过生成`);
+      }
+    }
+    
+    logger.info(`周报总结生成完成，共生成 ${totalSummariesGenerated} 个总结`);
+  } catch (error) {
+    logger.error('批量生成周报总结失败:', error);
+  }
+};
+
 // 批量生成所有用户的月度总结（定时任务专用）
 exports.batchGenerateMonthlySummary = async () => {
   try {
@@ -1887,6 +2485,12 @@ exports.getUnreadSummariesCount = async (req, res) => {
       isRead: false
     });
     
+    const weeklyUnreadCount = await Summary.countDocuments({
+      user: userId,
+      type: 'weekly',
+      isRead: false
+    });
+    
     const monthlyUnreadCount = await Summary.countDocuments({
       user: userId,
       type: 'monthly',
@@ -1899,11 +2503,12 @@ exports.getUnreadSummariesCount = async (req, res) => {
       isRead: false
     });
     
-    const totalUnreadCount = dailyUnreadCount + monthlyUnreadCount + yearlyUnreadCount;
+    const totalUnreadCount = dailyUnreadCount + weeklyUnreadCount + monthlyUnreadCount + yearlyUnreadCount;
     
     res.json({
       total: totalUnreadCount,
       daily: dailyUnreadCount,
+      weekly: weeklyUnreadCount,
       monthly: monthlyUnreadCount,
       yearly: yearlyUnreadCount
     });
