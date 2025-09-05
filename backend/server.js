@@ -133,14 +133,31 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
 
 // 定时任务
+const cronTimeZone = 'Asia/Shanghai';
+
 // 每天凌晨1点生成昨日总结
-cron.schedule('0 1 * * *', generateDailySummary);
+cron.schedule('0 1 * * *', generateDailySummary, {
+  timezone: cronTimeZone
+});
+logger.info(`每日总结定时任务已设置，将在每天凌晨1点（${cronTimeZone}）运行`);
+
 // 每周一凌晨1点30分生成上周总结
-cron.schedule('30 1 * * 1', batchGenerateWeeklySummary);
+cron.schedule('30 1 * * 1', batchGenerateWeeklySummary, {
+  timezone: cronTimeZone
+});
+logger.info(`每周总结定时任务已设置，将在每周一凌晨1点30分（${cronTimeZone}）运行`);
+
 // 每月1日凌晨2点生成上月总结
-cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary);
+cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary, {
+  timezone: cronTimeZone
+});
+logger.info(`每月总结定时任务已设置，将在每月1日凌晨2点（${cronTimeZone}）运行`);
+
 // 每年1月1日凌晨3点生成上年总结
-cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary);
+cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary, {
+  timezone: cronTimeZone
+});
+logger.info(`每年总结定时任务已设置，将在每年1月1日凌晨3点（${cronTimeZone}）运行`);
 
 // 启动定时清理任务
 const { scheduleCleanup } = require('./utils/cleanup');
