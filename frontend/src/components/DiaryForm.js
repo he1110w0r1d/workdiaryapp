@@ -669,7 +669,7 @@ const DiaryForm = () => {
               size="large"
               icon={<SaveOutlined />}
               style={{
-                background: 'linear-gradient(135deg, #1890ff, #52c41a)',
+                background: '#3B82F6',
                 border: 'none',
                 borderRadius: '8px',
                 height: '48px',
@@ -677,7 +677,6 @@ const DiaryForm = () => {
                 fontSize: '16px',
                 fontWeight: 'bold'
               }}
-              className="pulse"
             >
               {id ? '💾 更新日记' : '✨ 创建日记'}
             </Button>

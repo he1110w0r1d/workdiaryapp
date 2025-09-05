@@ -59,6 +59,7 @@ const diaryRoutes = require('./routes/diaries');
 const summaryRoutes = require('./routes/summaries');
 const settingsRoutes = require('./routes/settingsRoutes');
 const todoRoutes = require('./routes/todos');
+const backupRoutes = require('./routes/backup');
 
 // 导入定时任务
 const { generateDailySummary, generateMonthlySummary, generateYearlySummary, batchGenerateWeeklySummary } = require('./controllers/summaryController');
@@ -131,6 +132,7 @@ app.use('/api/diaries', diaryRoutes);
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
+app.use('/api/backup', backupRoutes);
 
 // 定时任务
 // 每天凌晨1点生成昨日总结
