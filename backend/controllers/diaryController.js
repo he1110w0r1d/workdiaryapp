@@ -537,7 +537,7 @@ exports.exportDiaries = async (req, res) => {
     };
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="工作日记导出_${new Date().toISOString().split('T')[0]}.json"`);
+    res.setHeader('Content-Disposition', `attachment; filename="workdiary_export_${new Date().toISOString().split('T')[0]}.json"`);
     
     logger.info(`用户 ${req.user.id} 导出了 ${diaries.length} 条日记`);
     res.json(exportData);

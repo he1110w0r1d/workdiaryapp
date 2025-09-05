@@ -18,6 +18,13 @@ const { Title } = Typography;
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const currentTheme = {
+    colors: {
+      primary: '#1E3A8A',
+      secondary: '#2563EB', 
+      accent: '#3B82F6'
+    }
+  };
   const [stats, setStats] = useState({
     totalDiaries: 0,
     todayDiaries: 0,
@@ -26,7 +33,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [tagData, setTagData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
-  const [workHoursData, setWorkHoursData] = useState([]);
   const [dailyTrendData, setDailyTrendData] = useState([]);
 
   useEffect(() => {
@@ -94,15 +100,17 @@ const Dashboard = () => {
       const dateLabel = date.format('MM-DD');
       dailyStats[dateKey] = {
         date: dateLabel,
-        count: 0
+        hours: 0
       };
     }
     
-    // 统计每日工作数量
+    // 统计每日工作时长
     diaries.forEach(diary => {
       const diaryDate = moment(diary.createdAt).format('YYYY-MM-DD');
       if (dailyStats[diaryDate]) {
-        dailyStats[diaryDate].count += 1;
+        // 计算工作时长（小时）
+        const workDuration = (new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60 * 60);
+        dailyStats[diaryDate].hours += workDuration;
       }
     });
     
@@ -180,18 +188,18 @@ const Dashboard = () => {
               onClick={() => navigate('/app/diaries')}
               style={{ 
                 cursor: 'pointer',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: currentTheme.colors.primary,
                 color: 'white',
-                border: 'none'
+                border: 'none',
+                borderRadius: '12px'
               }}
-              className="float"
             >
               <Statistic
                 title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>总工作日记</span>}
                 value={stats.totalDiaries}
                 valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<FileTextOutlined style={{ color: '#ffd700', fontSize: '1.2em' }} className="pulse" />}
-                suffix={<TrophyOutlined style={{ color: '#ffd700', marginLeft: '8px' }} />}
+                prefix={<FileTextOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
+                suffix={<TrophyOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
               />
             </Card>
           </Badge.Ribbon>
@@ -206,18 +214,18 @@ const Dashboard = () => {
               }}
               style={{ 
                 cursor: 'pointer',
-                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                background: currentTheme.colors.secondary,
                 color: 'white',
-                border: 'none'
+                border: 'none',
+                borderRadius: '12px'
               }}
-              className="pulse"
             >
               <Statistic
                 title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>今日新增</span>}
                 value={stats.todayDiaries}
                 valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<ClockCircleOutlined style={{ color: '#ffd700', fontSize: '1.2em' }} className="float" />}
-                suffix={<FireOutlined style={{ color: '#ff4500', marginLeft: '8px' }} className="pulse" />}
+                prefix={<ClockCircleOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
+                suffix={<FireOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
               />
             </Card>
           </Badge.Ribbon>
@@ -229,18 +237,18 @@ const Dashboard = () => {
               onClick={() => navigate('/summaries')}
               style={{ 
                 cursor: 'pointer',
-                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                background: currentTheme.colors.accent,
                 color: 'white',
-                border: 'none'
+                border: 'none',
+                borderRadius: '12px'
               }}
-              className="float"
             >
               <Statistic
                 title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>总结报告</span>}
                 value={stats.totalSummaries}
                 valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<BarChartOutlined style={{ color: '#ffd700', fontSize: '1.2em' }} className="pulse" />}
-                suffix={<RocketOutlined style={{ color: '#00ff00', marginLeft: '8px' }} className="float" />}
+                prefix={<BarChartOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
+                suffix={<RocketOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
               />
             </Card>
           </Badge.Ribbon>
@@ -297,7 +305,7 @@ const Dashboard = () => {
       {/* 日工作趋势折线图 */}
       <Row gutter={16} style={{ marginTop: 24 }}>
         <Col span={24}>
-          <Card title="日工作趋势（最近30天）">
+          <Card title="日工作时长趋势（最近30天）">
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={dailyTrendData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -307,17 +315,17 @@ const Dashboard = () => {
                   interval={4} // 每5个点显示一个标签
                 />
                 <YAxis 
-                  domain={[0, 10]} 
+                  domain={[0, 'dataMax + 2']} 
                   tick={{ fontSize: 12 }}
-                  label={{ value: '工作数量', angle: -90, position: 'insideLeft' }}
+                  label={{ value: '工作时长(小时)', angle: -90, position: 'insideLeft' }}
                 />
                 <Tooltip 
-                  formatter={(value) => [value, '工作数量']}
+                  formatter={(value) => [`${value.toFixed(1)}`, '工作时长']}
                   labelFormatter={(label) => `日期: ${label}`}
                 />
                 <Line 
                   type="monotone" 
-                  dataKey="count" 
+                  dataKey="hours" 
                   stroke="#1890ff" 
                   strokeWidth={2}
                   dot={{ fill: '#1890ff', strokeWidth: 2, r: 4 }}
@@ -330,6 +338,7 @@ const Dashboard = () => {
       </Row>
 
       {/* 如果需要单独显示工作时长趋势，可以添加这个卡片 */}
+      {/* workHoursData 功能暂未实现，先注释掉
       {workHoursData.length > 0 && (
         <Row gutter={16} style={{ marginTop: 24 }}>
           <Col span={24}>
@@ -347,6 +356,7 @@ const Dashboard = () => {
           </Col>
         </Row>
       )}
+      */}
     </div>
   );
 };

@@ -11,7 +11,8 @@ import {
   LogoutOutlined,
   RobotOutlined,
   CheckSquareOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CloudDownloadOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -98,6 +99,18 @@ const AppLayout = ({ children }) => {
   const [unreadSummariesCount, setUnreadSummariesCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
+  const currentTheme = {
+    colors: {
+      primary: '#1E3A8A',
+      secondary: '#2563EB', 
+      accent: '#3B82F6',
+      background: '#F8FAFC',
+      surface: '#FFFFFF',
+      text: '#1F2937',
+      textSecondary: '#6B7280',
+      border: '#E5E7EB'
+    }
+  };
 
   // 获取用户信息
   const fetchUserInfo = async () => {
@@ -216,6 +229,11 @@ const AppLayout = ({ children }) => {
       icon: <DeleteOutlined />,
       label: <Link to="/app/recycle">日记回收站</Link>,
     },
+    {
+      key: '/app/backup',
+      icon: <CloudDownloadOutlined />,
+      label: <Link to="/app/backup">数据备份</Link>,
+    },
   ];
 
   const handleLogout = () => {
@@ -240,24 +258,23 @@ const AppLayout = ({ children }) => {
           bottom: 0,
           zIndex: 1000,
           height: '100vh',
-          overflow: 'auto'
+          overflow: 'auto',
+          backgroundColor: currentTheme.colors.primary
         }}
       >
         <div 
-          className="logo pulse" 
+          className="logo" 
           style={{ 
             height: '48px', 
             margin: '16px', 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: currentTheme.colors.secondary,
             color: 'white',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '16px',
             fontWeight: 'bold',
-            borderRadius: '12px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease'
+            borderRadius: '8px'
           }}
         >
           {collapsed ? '📝' : '📝 工作日记'}
@@ -272,20 +289,20 @@ const AppLayout = ({ children }) => {
       <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
         <Header style={{ 
           padding: '0 24px', 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: currentTheme.colors.primary,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          height: '80px'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          height: '64px',
+          borderBottom: `1px solid ${currentTheme.colors.border}`
         }}>
           <div style={{ 
             color: 'white', 
-            fontSize: '18px', 
-            fontWeight: 'bold',
-            textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+            fontSize: '16px', 
+            fontWeight: '600'
           }}>
-            ✨ 欢迎使用工作日记系统
+            工作日记系统
           </div>
           
           {/* 中间信息区域 - 时间、农历显示 */}
@@ -299,56 +316,40 @@ const AppLayout = ({ children }) => {
             <TimeInfo />
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            
             <Button
               type="text"
               icon={<QuestionCircleOutlined />}
               onClick={() => {
                 Modal.info({
                   title: '使用说明',
-                  width: 700,
+                  width: 600,
                   content: (
                     <div>
-                      <h4>📝 工作日记系统使用指南</h4>
+                      <h4>工作日记系统使用指南</h4>
                       
-                      <h5 style={{ marginTop: '20px', color: '#1890ff' }}>🏠 核心功能模块</h5>
-                      <ul style={{ lineHeight: '1.8' }}>
-                        <li><strong>📊 仪表板：</strong>查看工作数据统计、图表分析和工作趋势概览</li>
-                        <li><strong>📝 工作日记：</strong>记录每日工作内容，支持标签分类、优先级设置、时间管理和待办事项创建</li>
-                        <li><strong>✅ 待办管理：</strong>管理待办事项，支持状态跟踪（待处理/已完成/已放弃/已转交）和简述记录</li>
-                        <li><strong>📋 工作总结：</strong>AI智能生成每日、月度、年度工作总结，支持HTML格式导出</li>
-                        <li><strong>🤖 模型设置：</strong>配置AI助手参数，支持本地和云端LLM服务</li>
-                        <li><strong>👤 用户设置：</strong>管理个人信息、工作档案和AI总结偏好设置</li>
-                        <li><strong>🗑️ 日记回收站：</strong>管理已删除的日记，支持恢复和永久删除</li>
+                      <h5 style={{ marginTop: '16px' }}>核心功能模块</h5>
+                      <ul style={{ lineHeight: '1.6' }}>
+                        <li><strong>仪表板：</strong>查看工作数据统计和图表分析</li>
+                        <li><strong>工作日记：</strong>记录每日工作内容</li>
+                        <li><strong>待办管理：</strong>管理待办事项</li>
+                        <li><strong>工作总结：</strong>AI智能生成总结</li>
+                        <li><strong>模型设置：</strong>配置AI助手参数</li>
+                        <li><strong>用户设置：</strong>管理个人信息</li>
                       </ul>
-                      
-                      <h5 style={{ marginTop: '20px', color: '#1890ff' }}>✨ 特色功能</h5>
-                      <ul style={{ lineHeight: '1.8' }}>
-                        <li><strong>智能筛选：</strong>支持按日期、标签、优先级、待办状态等多维度筛选</li>
-                        <li><strong>状态跟踪：</strong>待办事项状态变更历史记录和简述内容展示</li>
-                        <li><strong>数据可视化：</strong>工作时长统计、标签分布、月度趋势等图表展示</li>
-                        <li><strong>个性化AI：</strong>根据工作档案生成专属的AI总结提示词</li>
-                        <li><strong>批量操作：</strong>支持批量删除日记和待办事项管理</li>
-                      </ul>
-                      
-                      <p style={{ marginTop: '16px', color: '#666', fontSize: '14px' }}>
-                        💡 <strong>使用提示：</strong><br/>
-                        • 点击左侧菜单可快速导航到各个功能模块<br/>
-                        • 首次使用建议先完善用户设置中的工作档案信息<br/>
-                        • 配置AI助手后可享受智能总结功能<br/>
-                        • 支持键盘快捷键和批量操作提升效率
-                      </p>
                     </div>
                   )
                 });
               }}
               style={{ 
                 color: 'white',
-                fontSize: '16px'
+                fontSize: '14px',
+                fontWeight: 'normal'
               }}
               title="使用说明"
             >
-              使用说明
+              帮助
             </Button>
             
             <Button
@@ -357,27 +358,26 @@ const AppLayout = ({ children }) => {
               onClick={handleLogout}
               style={{ 
                 color: 'white',
-                fontSize: '16px'
+                fontSize: '14px',
+                fontWeight: 'normal'
               }}
               title="退出登录"
             >
-              退出登录
+              退出
             </Button>
             
             <Avatar 
-              size="large" 
+              size="default" 
               src={userInfo?.avatar ? `${process.env.REACT_APP_API_URL.replace('/api', '')}${userInfo.avatar}` : undefined}
               icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
               onClick={handleAvatarClick}
               title="点击进入用户设置"
               style={{ 
                 cursor: 'pointer',
-                background: userInfo?.avatar ? 'transparent' : 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-                color: '#333',
-                border: '2px solid white',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                background: userInfo?.avatar ? 'transparent' : currentTheme.colors.accent,
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)'
               }} 
-              className="float"
             />
           </div>
         </Header>
