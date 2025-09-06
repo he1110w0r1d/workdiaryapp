@@ -1,4 +1,6 @@
 const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
 const Diary = require('../models/Diary');
 const Todo = require('../models/Todo');
 const logger = require('./logger');
@@ -42,6 +44,9 @@ const scheduleCleanup = () => {
       if (diariesToDelete.length === 0 && todosToDelete.length === 0) {
         logger.info('没有需要清理的记录');
       }
+      
+      // 清理旧的备份文件（保留最近7天的备份）
+      await cleanupOldBackups();
       
       logger.info('定时清理任务执行完成');
     } catch (error) {
@@ -92,7 +97,53 @@ const manualCleanup = async () => {
   }
 };
 
+// 清理旧的备份文件（保留最近7天的备份）
+const cleanupOldBackups = async () => {
+  try {
+    const backupDir = path.join(__dirname, '../backup');
+    
+    if (!fs.existsSync(backupDir)) {
+      return;
+    }
+    
+    const files = fs.readdirSync(backupDir);
+    const backupFiles = files.filter(file => file.startsWith('backup-') && file.endsWith('.json'));
+    
+    if (backupFiles.length === 0) {
+      return;
+    }
+    
+    // 计算7天前的日期
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    let deletedCount = 0;
+    
+    for (const file of backupFiles) {
+      const filePath = path.join(backupDir, file);
+      const stats = fs.statSync(filePath);
+      
+      // 如果文件创建时间超过7天，则删除
+      if (stats.mtime < sevenDaysAgo) {
+        fs.unlinkSync(filePath);
+        deletedCount++;
+        logger.info(`删除了旧的备份文件: ${file}`);
+      }
+    }
+    
+    if (deletedCount > 0) {
+      logger.info(`共删除了 ${deletedCount} 个旧的备份文件`);
+    } else {
+      logger.info('没有需要删除的旧备份文件');
+    }
+    
+  } catch (error) {
+    logger.error('清理备份文件失败:', error);
+  }
+};
+
 module.exports = {
   scheduleCleanup,
-  manualCleanup
+  manualCleanup,
+  cleanupOldBackups
 };

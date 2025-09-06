@@ -113,16 +113,28 @@ const BackupRestore = () => {
   };
 
   // 下载备份文件
-  const downloadBackup = () => {
-    if (!backupInfo?.downloadUrl) return;
+  const downloadBackup = async () => {
+    if (!backupInfo?.fileName) return;
     
-    const link = document.createElement('a');
-    link.href = backupInfo.downloadUrl;
-    link.download = `workdiary-backup-${backupInfo.timestamp}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setModalVisible(false);
+    try {
+      const response = await api.get(`/backup/download/${backupInfo.fileName}`, {
+        responseType: 'blob'
+      });
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `workdiary-backup-${backupInfo.timestamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setModalVisible(false);
+    } catch (error) {
+      console.error('下载失败:', error);
+      message.error('下载失败: ' + (error.response?.data?.message || error.message));
+    }
   };
 
   return (

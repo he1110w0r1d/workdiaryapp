@@ -19,9 +19,9 @@ const createBackup = async (req, res) => {
 
     // 获取用户的所有数据
     const [diaries, todos, summaries] = await Promise.all([
-      Diary.find({ userId }).lean(),
-      Todo.find({ userId }).lean(),
-      Summary.find({ userId }).lean()
+      Diary.find({ user: userId }).lean(),
+      Todo.find({ user: userId }).lean(),
+      Summary.find({ user: userId }).lean()
     ]);
 
     // 创建备份数据对象
@@ -71,7 +71,7 @@ const createBackup = async (req, res) => {
       backup: {
         timestamp,
         fileName: backupFileName,
-        downloadUrl: `/api/backup/download/${backupFileName}`,
+        downloadUrl: `/backup/download/${backupFileName}`,
         stats: {
           diaries: diaries.length,
           todos: todos.length,
@@ -132,9 +132,9 @@ const restoreBackup = async (req, res) => {
     try {
       // 删除用户现有数据
       await Promise.all([
-        Diary.deleteMany({ userId }).session(session),
-        Todo.deleteMany({ userId }).session(session),
-        Summary.deleteMany({ userId }).session(session)
+        Diary.deleteMany({ user: userId }).session(session),
+        Todo.deleteMany({ user: userId }).session(session),
+        Summary.deleteMany({ user: userId }).session(session)
       ]);
 
       // 恢复数据
@@ -225,7 +225,7 @@ const getBackupStatus = async (req, res) => {
           fileName: file,
           size: stats.size,
           created: stats.mtime,
-          downloadUrl: `/api/backup/download/${file}`
+          downloadUrl: `/backup/download/${file}`
         });
       }
     }
