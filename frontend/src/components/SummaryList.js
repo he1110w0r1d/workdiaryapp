@@ -339,7 +339,20 @@ const SummaryList = () => {
       title: '日期',
       dataIndex: 'date',
       key: 'date',
-      render: (text) => moment(text).format('YYYY-MM-DD'),
+      render: (text, record) => {
+        if (record.type === 'monthly') {
+          return moment(text).format('YYYY年M月');
+        }
+        if (record.type === 'weekly') {
+          const startDate = moment(text);
+          const endDate = moment(text).add(6, 'days');
+          return `${startDate.format('M月D日')}-${endDate.format('M月D日')}`;
+        }
+        if (record.type === 'yearly') {
+          return moment(text).format('YYYY年');
+        }
+        return moment(text).format('YYYY-MM-DD');
+      },
       sorter: (a, b) => new Date(a.date) - new Date(b.date)
     },
     {

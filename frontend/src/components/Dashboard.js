@@ -106,7 +106,7 @@ const Dashboard = () => {
     
     // 统计每日工作时长
     diaries.forEach(diary => {
-      const diaryDate = moment(diary.createdAt).format('YYYY-MM-DD');
+      const diaryDate = moment(diary.startTime).format('YYYY-MM-DD');
       if (dailyStats[diaryDate]) {
         // 计算工作时长（小时）
         const workDuration = (new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60 * 60);
