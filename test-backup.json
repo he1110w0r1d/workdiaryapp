@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "userId": "test",
+    "exportDate": "2025-01-01T00:00:00.000Z"
+  },
+  "data": {
+    "diaries": [],
+    "todos": [],
+    "summaries": []
+  }
+}

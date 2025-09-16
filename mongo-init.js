@@ -3,13 +3,17 @@
 
 db = db.getSiblingDB('workdiary');
 
-// 创建应用用户
+// 创建admin用户（与docker-compose.yml中定义的root用户一致）
 db.createUser({
-  user: 'workdiaryuser',
-  pwd: 'workdiarypass123',
+  user: 'admin',
+  pwd: 'adminpassword123',
   roles: [
     {
       role: 'readWrite',
+      db: 'workdiary'
+    },
+    {
+      role: 'dbAdmin',
       db: 'workdiary'
     }
   ]

@@ -94,107 +94,92 @@ const restoreBackup = async (req, res) => {
   try {
     const userId = req.user.id;
     
-    if (!req.files || !req.files.backupFile) {
+    logger.info('开始恢复备份', { 
+      userId, 
+      hasFile: !!req.file,
+      fileType: req.file ? req.file.mimetype : 'none',
+      fileName: req.file ? req.file.originalname : 'none'
+    });
+    
+    // 检查是否有上传的文件
+    if (!req.file) {
+      logger.warn('恢复备份失败: 未上传文件', { userId });
       return res.status(400).json({
         success: false,
         message: '请上传备份文件'
       });
     }
 
-    const backupFile = req.files.backupFile;
-    const tempFilePath = path.join(__dirname, '../temp', backupFile.name);
+    const backupFilePath = req.file.path;
+    logger.info('接收到上传文件', { userId, filePath: backupFilePath, fileName: req.file.originalname });
     
-    // 确保临时目录存在
-    const tempDir = path.join(__dirname, '../temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    // 保存上传的文件
-    await backupFile.mv(tempFilePath);
-
     // 读取备份文件
-    const backupData = JSON.parse(fs.readFileSync(tempFilePath, 'utf8'));
+    const backupData = JSON.parse(fs.readFileSync(backupFilePath, 'utf8'));
 
     // 验证备份文件格式
     if (!backupData.metadata || !backupData.data) {
-      fs.unlinkSync(tempFilePath);
+      fs.unlinkSync(backupFilePath);
+      logger.warn('恢复备份失败: 无效的备份文件格式', { userId });
       return res.status(400).json({
         success: false,
         message: '无效的备份文件格式'
       });
     }
 
-    // 开始事务恢复数据
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // 删除用户现有数据（不使用事务）
+    await Promise.all([
+      Diary.deleteMany({ user: userId }),
+      Todo.deleteMany({ user: userId }),
+      Summary.deleteMany({ user: userId })
+    ]);
 
-    try {
-      // 删除用户现有数据
-      await Promise.all([
-        Diary.deleteMany({ user: userId }).session(session),
-        Todo.deleteMany({ user: userId }).session(session),
-        Summary.deleteMany({ user: userId }).session(session)
-      ]);
+    // 恢复数据
+    const { diaries, todos, summaries } = backupData.data;
 
-      // 恢复数据
-      const { diaries, todos, summaries } = backupData.data;
-
-      // 恢复日记
-      if (diaries && diaries.length > 0) {
-        const diariesWithUserId = diaries.map(diary => ({
-          ...diary,
-          userId,
-          _id: new mongoose.Types.ObjectId()
-        }));
-        await Diary.insertMany(diariesWithUserId, { session });
-      }
-
-      // 恢复待办事项
-      if (todos && todos.length > 0) {
-        const todosWithUserId = todos.map(todo => ({
-          ...todo,
-          userId,
-          _id: new mongoose.Types.ObjectId()
-        }));
-        await Todo.insertMany(todosWithUserId, { session });
-      }
-
-      // 恢复总结
-      if (summaries && summaries.length > 0) {
-        const summariesWithUserId = summaries.map(summary => ({
-          ...summary,
-          userId,
-          _id: new mongoose.Types.ObjectId()
-        }));
-        await Summary.insertMany(summariesWithUserId, { session });
-      }
-
-
-      await session.commitTransaction();
-      session.endSession();
-
-      // 删除临时文件
-      fs.unlinkSync(tempFilePath);
-
-      logger.info('数据恢复成功', { userId });
-
-      res.json({
-        success: true,
-        message: '数据恢复成功',
-        restored: {
-          diaries: diaries?.length || 0,
-          todos: todos?.length || 0,
-          summaries: summaries?.length || 0
-        }
-      });
-
-    } catch (transactionError) {
-      await session.abortTransaction();
-      session.endSession();
-      fs.unlinkSync(tempFilePath);
-      throw transactionError;
+    // 恢复日记
+    if (diaries && diaries.length > 0) {
+      const diariesWithUserId = diaries.map(diary => ({
+        ...diary,
+        user: userId,
+        _id: new mongoose.Types.ObjectId()
+      }));
+      await Diary.insertMany(diariesWithUserId);
     }
+
+    // 恢复待办事项
+    if (todos && todos.length > 0) {
+      const todosWithUserId = todos.map(todo => ({
+        ...todo,
+        user: userId,
+        _id: new mongoose.Types.ObjectId()
+      }));
+      await Todo.insertMany(todosWithUserId);
+    }
+
+    // 恢复总结
+    if (summaries && summaries.length > 0) {
+      const summariesWithUserId = summaries.map(summary => ({
+        ...summary,
+        user: userId,
+        _id: new mongoose.Types.ObjectId()
+      }));
+      await Summary.insertMany(summariesWithUserId);
+    }
+
+    // 删除临时文件
+    fs.unlinkSync(backupFilePath);
+
+    logger.info('数据恢复成功', { userId });
+
+    res.json({
+      success: true,
+      message: '数据恢复成功',
+      restored: {
+        diaries: diaries?.length || 0,
+        todos: todos?.length || 0,
+        summaries: summaries?.length || 0
+      }
+    });
 
   } catch (error) {
     logger.error('恢复备份失败:', error);

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
+const multer = require('multer');
 
 const logger = require('./utils/logger');
 // 加载环境变量
@@ -12,6 +13,29 @@ dotenv.config();
 const fs = require('fs');
 const path = require('path');
 const settingsFilePath = path.join(__dirname, 'config/llm-settings.json');
+
+// 配置multer文件上传
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    cb(null, tempDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB限制
+  }
+  // 移除fileFilter，让后端控制器自己处理文件类型验证
+});
 
 // 在启动时加载LLM配置到环境变量
 if (fs.existsSync(settingsFilePath)) {
@@ -77,41 +101,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// IP访问限制中间件 - 只允许局域网192.168.1.x访问
-app.use((req, res, next) => {
-  const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 
-    (req.connection.socket ? req.connection.socket.remoteAddress : null);
-  
-  // 获取真实IP（处理代理情况）
-  const realIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || clientIP;
-  const ip = realIP ? realIP.split(',')[0].trim() : clientIP;
-  
-  logger.info(`访问请求来自IP: ${ip}`);
-  
-  // 允许本地访问
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
-    return next();
-  }
-  
-  // 检查是否为192.168.1.x网段
-  const ipv4Regex = /^192\.168\.1\.(\d{1,3})$/;
-  const ipv6MappedRegex = /^::ffff:192\.168\.1\.(\d{1,3})$/;
-  
-  if (ipv4Regex.test(ip) || ipv6MappedRegex.test(ip)) {
-    return next();
-  }
-  
-  // 拒绝访问
-  logger.info(`拒绝来自IP ${ip} 的访问请求`);
-  return res.status(403).json({ 
-    error: '访问被拒绝', 
-    message: '此服务仅限局域网192.168.1.x网段访问' 
-  });
-});
+// 配置CORS
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
 
 // 中间件
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -132,7 +132,8 @@ app.use('/api/diaries', diaryRoutes);
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
-app.use('/api/backup', backupRoutes);
+// 对于备份路由，使用带有文件上传中间件的路由
+app.use('/api/backup', upload.single('backupFile'), backupRoutes);
 
 // 定时任务
 const cronTimeZone = 'Asia/Shanghai';
@@ -207,8 +208,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, HOST, () => {
   logger.info(`服务器运行在端口 ${PORT}`);
   logger.info(`局域网访问地址: http://${HOST}:${PORT}`);
-  logger.info('注意: 此服务仅限192.168.1.x网段访问');
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`局域网访问地址: http://${HOST}:${PORT}`);
-  console.log('注意: 此服务仅限192.168.1.x网段访问');
 });
