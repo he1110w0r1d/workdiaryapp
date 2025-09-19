@@ -101,9 +101,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// 配置CORS
+// 请求日志记录中间件
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(`[${req.method}] ${req.path} - ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
+
+// 配置CORS - 动态设置允许的源
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // 允许没有origin的请求（如移动应用或直接浏览器请求）
+    if (!origin) return callback(null, true);
+    
+    // 允许localhost来源
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
+    }
+    
+    // 允许局域网IP地址来源
+    if (origin.match(/^http:\/\/192\.168\.\d+\.\d+:/) || origin.match(/^http:\/\/172\.\d+\.\d+\.\d+:/)) {
+      return callback(null, true);
+    }
+    
+    // 拒绝其他来源
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };
