@@ -31,6 +31,45 @@
   text-align: center;
 }
 
+/* Brain Storm 图片样式 */
+.brain-storm-image {
+  position: relative;
+  overflow: hidden;
+}
+
+.brain-storm-image::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(255,0,255,0.1), rgba(0,255,255,0.1), rgba(255,255,0,0.1));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+.brain-storm-image:hover::before {
+  opacity: 1;
+}
+
+.brain-storm-image img {
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1));
+  transition: filter 0.3s ease;
+}
+
+.brain-storm-image:hover img {
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.2)) brightness(1.1);
+}
+
+.brain-storm-image:active {
+  transform: scale(0.98) !important;
+}
+
 .calendar-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);

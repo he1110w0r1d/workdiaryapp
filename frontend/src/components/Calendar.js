@@ -161,22 +161,57 @@ const Calendar = () => {
         marginBottom: 24 
       }}>
         <Title level={2}>工作日历</Title>
-        <div className="calendar-navigation">
-          <button 
-            className="nav-button" 
-            onClick={() => navigateMonth(-1)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="calendar-navigation">
+            <button 
+              className="nav-button" 
+              onClick={() => navigateMonth(-1)}
+            >
+              ← 上月
+            </button>
+            <span className="current-month">
+              {currentDate.format('YYYY年MM月')}
+            </span>
+            <button 
+              className="nav-button" 
+              onClick={() => navigateMonth(1)}
+            >
+              下月 →
+            </button>
+          </div>
+          
+          {/* 添加图片链接 - 位于导航按钮右侧 */}
+          <div 
+            className="brain-storm-image"
+            onClick={() => window.open('http://localhost:11188', '_blank')}
+            style={{
+              cursor: 'pointer',
+              padding: '8px',
+              borderRadius: '8px',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'scale(1.05)';
+              e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'scale(1)';
+              e.target.style.boxShadow = 'none';
+            }}
           >
-            ← 上月
-          </button>
-          <span className="current-month">
-            {currentDate.format('YYYY年MM月')}
-          </span>
-          <button 
-            className="nav-button" 
-            onClick={() => navigateMonth(1)}
-          >
-            下月 →
-          </button>
+            <img 
+              src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjYwIiB2aWV3Qm94PSIwIDAgMTIwIDYwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjYwIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIiBzdHJva2U9InVybCgjZ3JhZGllbnQxKSIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50MCIgeDE9IjAiIHkxPSIwIiB4Mj0iMTIwIiB5Mj0iNjAiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzE4MjMzNCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzNzQxNTEiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDEiIHgxPSIwIiB5MT0iMCIgeDI9IjEyMCIgeTI9IjYwIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiNGRjAwRkYiLz4KPHN0b3Agb2Zmc2V0PSIwLjUiIHN0b3AtY29sb3I9IiMwMEZGRkYiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZGRjAwIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPHRleHQgeD0iNjAiIHk9IjM4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+YnJhaW4gc3Rvcm08L3RleHQ+Cjwvc3ZnPgo="
+              alt="Brain Storm"
+              style={{
+                width: '120px',
+                height: '60px',
+                borderRadius: '8px'
+              }}
+            />
+          </div>
         </div>
       </div>
 
