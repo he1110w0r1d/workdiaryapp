@@ -107,7 +107,7 @@ const userSchema = new mongoose.Schema({
     },
     provider: {
       type: String,
-      enum: ['local', 'openai', 'anthropic', 'custom'],
+      enum: ['local', 'openai', 'anthropic', 'openrouter', 'deepseek', 'qwen', 'doubao', 'siliconflow', 'zhipu', 'custom'],
       required: true,
       default: 'custom'
     },

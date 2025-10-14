@@ -321,29 +321,70 @@ const ModelSettings = () => {
           >
             <Select placeholder="选择AI服务商">
               <Option value="openai">OpenAI</Option>
-              <Option value="anthropic">Anthropic</Option>
+              <Option value="anthropic">Anthropic (Claude)</Option>
+              <Option value="openrouter">OpenRouter</Option>
+              <Option value="deepseek">DeepSeek</Option>
+              <Option value="qwen">Qwen (通义千问)</Option>
+              <Option value="doubao">豆包 (字节跳动)</Option>
+              <Option value="siliconflow">硅基流动</Option>
+              <Option value="zhipu">智谱AI</Option>
               <Option value="local">本地部署</Option>
               <Option value="custom">自定义</Option>
             </Select>
           </Form.Item>
 
           <Form.Item
-            name="apiKey"
-            label="API密钥"
-            rules={[{ required: true, message: '请输入API密钥' }]}
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.provider !== currentValues.provider}
           >
-            <Input.Password placeholder="输入您的API密钥" />
-          </Form.Item>
+            {({ getFieldValue }) => {
+              const provider = getFieldValue('provider');
+              const getApiUrl = () => {
+                const urls = {
+                  openai: 'https://api.openai.com/v1/chat/completions',
+                  anthropic: 'https://api.anthropic.com/v1/messages',
+                  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+                  deepseek: 'https://api.deepseek.com/v1/chat/completions',
+                  qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+                  doubao: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+                  siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
+                  zhipu: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+                  local: 'http://localhost:11434/api/generate',
+                  custom: 'https://api.example.com/v1/chat/completions'
+                };
+                return urls[provider] || 'https://api.example.com/v1/chat/completions';
+              };
+              
+              // 当提供商改变时，自动设置URL
+              const currentApiUrl = getFieldValue('apiUrl');
+              const defaultApiUrl = getApiUrl();
+              if (!currentApiUrl || currentApiUrl === '' || currentApiUrl.includes('example.com')) {
+                form.setFieldsValue({ apiUrl: defaultApiUrl });
+              }
+              
+              return (
+                <>
+                  <Form.Item
+                    name="apiKey"
+                    label="API密钥"
+                    rules={[{ required: true, message: '请输入API密钥' }]}
+                  >
+                    <Input.Password placeholder="输入您的API密钥" />
+                  </Form.Item>
 
-          <Form.Item
-            name="apiUrl"
-            label="连接URL"
-            rules={[
-              { required: true, message: '请输入API连接URL' },
-              { type: 'url', message: '请输入有效的URL' }
-            ]}
-          >
-            <Input placeholder="https://api.openai.com/v1" />
+                  <Form.Item
+                    name="apiUrl"
+                    label="连接URL"
+                    rules={[
+                      { required: true, message: '请输入API连接URL' },
+                      { type: 'url', message: '请输入有效的URL' }
+                    ]}
+                  >
+                    <Input placeholder={defaultApiUrl} />
+                  </Form.Item>
+                </>
+              );
+            }}
           </Form.Item>
 
           <Form.Item

@@ -35,7 +35,9 @@ const createLLMInstances = async (userId = null) => {
             model: userConfig.model,
             timeout: userConfig.timeout,
             temperature: userConfig.temperature,
-            maxTokens: userConfig.maxTokens
+            maxTokens: userConfig.maxTokens,
+            enabled: true,  // 确保启用外部LLM
+            provider: userConfig.provider  // 确保设置提供商类型
           })
         };
       }
@@ -45,7 +47,9 @@ const createLLMInstances = async (userId = null) => {
   // 回退到全局配置
   return {
     localLLM: new LocalLLM(),
-    externalLLM: new ExternalLLM()
+    externalLLM: new ExternalLLM({
+      enabled: process.env.LLM_TYPE === 'external'  // 根据环境变量设置启用状态
+    })
   };
 };
 

@@ -139,33 +139,21 @@ const UserLLMSettings = () => {
     }
   };
 
-  // 设置为默认配置
-  const handleSetDefault = async (configId, configName) => {
-    Modal.confirm({
-      title: '切换默认模型',
-      content: `切换${configName}为默认模型吗？`,
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await api.put(`/settings/user-llm/${configId}`, { isDefault: true });
-          message.success('已设置为默认配置');
-          fetchConfigs();
-        } catch (error) {
-          console.error('设置默认配置失败:', error);
-          message.error('设置默认配置失败');
-        }
-      }
-    });
-  };
+
 
   // 根据提供商获取模型占位符
   const getModelPlaceholder = (provider) => {
     const placeholders = {
-      openai: '例如: gpt-3.5-turbo, gpt-4',
-      anthropic: '例如: claude-3-sonnet-20240229',
+      openai: '例如: gpt-3.5-turbo, gpt-4, gpt-4-turbo',
+      anthropic: '例如: claude-3-sonnet-20240229, claude-3-haiku-20240307',
+      openrouter: '例如: openai/gpt-3.5-turbo, anthropic/claude-3-sonnet',
+      deepseek: '例如: deepseek-chat, deepseek-coder',
+      qwen: '例如: qwen-turbo, qwen-plus, qwen-max',
+      doubao: '例如: doubao-7b, doubao-7b-chat',
+      siliconflow: '例如: Skywork/Skywork-13B-Chat, Qwen/Qwen2-7B-Instruct',
+      zhipu: '例如: glm-4, glm-3-turbo',
       custom: '例如: deepseek-ai/DeepSeek-V3',
-      local: '例如: qwen3:4b'
+      local: '例如: qwen3:4b, llama3:8b'
     };
     return placeholders[provider] || '请输入模型名称';
   };
@@ -197,6 +185,12 @@ const UserLLMSettings = () => {
           local: '本地LLM',
           openai: 'OpenAI',
           anthropic: 'Anthropic',
+          openrouter: 'OpenRouter',
+          deepseek: 'DeepSeek',
+          qwen: '通义千问',
+          doubao: '豆包',
+          siliconflow: '硅基流动',
+          zhipu: '智谱AI',
           custom: '自定义API'
         };
         return providerNames[provider] || provider;
@@ -319,7 +313,13 @@ const UserLLMSettings = () => {
             <Select placeholder="请选择提供商">
               <Option value="local">本地LLM</Option>
               <Option value="openai">OpenAI</Option>
-              <Option value="anthropic">Anthropic</Option>
+              <Option value="anthropic">Anthropic (Claude)</Option>
+              <Option value="openrouter">OpenRouter</Option>
+              <Option value="deepseek">DeepSeek</Option>
+              <Option value="qwen">Qwen (通义千问)</Option>
+              <Option value="doubao">豆包 (字节跳动)</Option>
+              <Option value="siliconflow">硅基流动</Option>
+              <Option value="zhipu">智谱AI</Option>
               <Option value="custom">自定义API</Option>
             </Select>
           </Form.Item>
@@ -330,6 +330,28 @@ const UserLLMSettings = () => {
           >
             {({ getFieldValue }) => {
               const provider = getFieldValue('provider');
+              const getApiUrl = () => {
+                const urls = {
+                  local: 'http://localhost:11434/api/generate',
+                  openai: 'https://api.openai.com/v1/chat/completions',
+                  anthropic: 'https://api.anthropic.com/v1/messages',
+                  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+                  deepseek: 'https://api.deepseek.com/v1/chat/completions',
+                  qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+                  doubao: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+                  siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
+                  zhipu: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+                  custom: 'https://api.example.com/v1/chat/completions'
+                };
+                return urls[provider] || 'https://api.example.com/v1/chat/completions';
+              };
+              
+              // 当提供商改变时，自动设置URL
+              const currentApiUrl = getFieldValue('apiUrl');
+              const defaultApiUrl = getApiUrl();
+              if (!currentApiUrl || currentApiUrl === '' || currentApiUrl.includes('example.com')) {
+                form.setFieldsValue({ apiUrl: defaultApiUrl });
+              }
               
               return (
                 <>
@@ -350,17 +372,7 @@ const UserLLMSettings = () => {
                     label="API地址"
                     rules={[{ required: true, message: '请输入API地址' }]}
                   >
-                    <Input 
-                      placeholder={
-                        provider === 'local' 
-                          ? 'http://localhost:11434/api/generate'
-                          : provider === 'openai'
-                          ? 'https://api.openai.com/v1/chat/completions'
-                          : provider === 'anthropic'
-                          ? 'https://api.anthropic.com/v1/messages'
-                          : 'https://api.siliconflow.cn/v1/chat/completions'
-                      }
-                    />
+                    <Input placeholder={defaultApiUrl} />
                   </Form.Item>
                 </>
               );
