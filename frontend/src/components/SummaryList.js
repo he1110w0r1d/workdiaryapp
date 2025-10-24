@@ -16,6 +16,8 @@ import {
 } from 'antd';
 import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import api from '../utils/api';  // 修改这里
 import moment from 'moment';
 import Logger from '../utils/logger';
@@ -299,6 +301,23 @@ const SummaryList = () => {
     }
   };
 
+  // 查看网页时先确保HTML存在
+  const handleViewWebpage = async (record) => {
+    try {
+      const resp = await api.get(`/summaries/${record._id}/ensure-html`);
+      const url = resp.data?.url || record.htmlFilePath;
+      if (!url) {
+        message.error('未找到网页地址');
+        return;
+      }
+      const full = `${process.env.REACT_APP_API_URL.replace('/api', '')}${url}`;
+      window.open(full, '_blank');
+    } catch (err) {
+      console.error('确保HTML失败:', err);
+      message.error('生成或定位网页失败: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   // 获取提示词类型的中文名称
   const getPromptTypeText = (type) => {
     switch (type) {
@@ -404,7 +423,7 @@ const SummaryList = () => {
               icon={<LinkOutlined />} 
               size="small"
               type="primary"
-              onClick={() => window.open(`${process.env.REACT_APP_API_URL.replace('/api', '')}${record.htmlFilePath}`, '_blank')}
+              onClick={() => handleViewWebpage(record)}
             >
               查看网页
             </Button>
@@ -667,7 +686,7 @@ const SummaryList = () => {
           </Button>
         ]}
         width={800}
-        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
+        styles={{ body: { maxHeight: '80vh', overflowY: 'auto' } }}
       >
         {selectedSummary && (
           <div style={{
@@ -676,6 +695,8 @@ const SummaryList = () => {
             color: '#333'
           }}>
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
               components={{
                 h1: ({children}) => <h2 style={{color: '#1890ff', borderBottom: '2px solid #1890ff', paddingBottom: '8px'}}>{children}</h2>,
                 h2: ({children}) => <h3 style={{color: '#1890ff', marginTop: '24px', marginBottom: '12px'}}>{children}</h3>,

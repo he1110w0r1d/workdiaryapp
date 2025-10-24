@@ -234,6 +234,11 @@ const AppLayout = ({ children }) => {
       icon: <CloudDownloadOutlined />,
       label: <Link to="/app/backup">数据备份</Link>,
     },
+    {
+      key: '/app/rag',
+      icon: <QuestionCircleOutlined />,
+      label: <Link to="/app/rag">RAG问答</Link>,
+    },
   ];
 
   const handleLogout = () => {

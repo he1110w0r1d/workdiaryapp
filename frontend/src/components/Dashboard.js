@@ -34,6 +34,8 @@ const Dashboard = () => {
   const [tagData, setTagData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [dailyTrendData, setDailyTrendData] = useState([]);
+  // 删除词云数据状态
+  // const [wordCloudData, setWordCloudData] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -71,12 +73,15 @@ const Dashboard = () => {
           tagCount[tag] = (tagCount[tag] || 0) + 1;
         });
       });
-
       const tagDataArray = Object.entries(tagCount)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 8);
       setTagData(tagDataArray);
+
+      // 删除生成词云数据的调用
+      // const wc = generateWordCloudFromDiaries(diaries);
+      // setWordCloudData(wc);
 
       // 设置月度工作数据
       setMonthlyData(monthlyWorkRes);
@@ -234,7 +239,7 @@ const Dashboard = () => {
           <Badge.Ribbon text="报告" color="purple">
             <Card 
               hoverable
-              onClick={() => navigate('/summaries')}
+              onClick={() => navigate('/app/summaries')}
               style={{ 
                 cursor: 'pointer',
                 background: currentTheme.colors.accent,
@@ -290,7 +295,7 @@ const Dashboard = () => {
                 <Tooltip 
                   formatter={(value, name) => {
                     if (name === 'entries') return [value, '条目数'];
-                    if (name === 'totalHours') return [value.toFixed(1), '小时'];
+                    if (name === 'totalHours') return [Number(value).toFixed(1), '小时'];
                     return [value, name];
                   }}
                 />

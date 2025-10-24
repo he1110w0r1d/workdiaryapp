@@ -5,6 +5,7 @@ const archiver = require('archiver');
 const unzipper = require('unzipper');
 const logger = require('../utils/logger');
 const axios = require('axios');
+const Embeddings = require('../utils/embeddings');
 
 // 导入模型
 const Diary = require('../models/Diary');
@@ -31,7 +32,13 @@ exports.getLLMSettings = async (req, res) => {
         externalModel: '',
         externalTimeout: 30000,
         externalTemperature: 0.7,
-        externalMaxTokens: 1000
+        externalMaxTokens: 1000,
+        // Embeddings 默认配置
+        externalEmbeddingsProvider: process.env.EXTERNAL_EMBEDDINGS_PROVIDER || 'siliconflow',
+        externalEmbeddingsApiKey: process.env.EXTERNAL_EMBEDDINGS_API_KEY || '',
+        externalEmbeddingsApiUrl: process.env.EXTERNAL_EMBEDDINGS_API_URL || '',
+        externalEmbeddingsModel: process.env.EXTERNAL_EMBEDDINGS_MODEL || '',
+        externalEmbeddingsTimeout: parseInt(process.env.EXTERNAL_EMBEDDINGS_TIMEOUT || '60000', 10)
       });
     }
     
@@ -74,6 +81,13 @@ exports.saveLLMSettings = async (req, res) => {
     if (settings.externalTimeout) process.env.EXTERNAL_LLM_TIMEOUT = String(settings.externalTimeout);
     if (settings.externalTemperature) process.env.EXTERNAL_LLM_TEMPERATURE = String(settings.externalTemperature);
     if (settings.externalMaxTokens) process.env.EXTERNAL_LLM_MAX_TOKENS = String(settings.externalMaxTokens);
+
+    // Embeddings 环境变量
+    if (settings.externalEmbeddingsProvider) process.env.EXTERNAL_EMBEDDINGS_PROVIDER = settings.externalEmbeddingsProvider;
+    if (settings.externalEmbeddingsApiKey) process.env.EXTERNAL_EMBEDDINGS_API_KEY = settings.externalEmbeddingsApiKey;
+    if (settings.externalEmbeddingsApiUrl) process.env.EXTERNAL_EMBEDDINGS_API_URL = settings.externalEmbeddingsApiUrl;
+    if (settings.externalEmbeddingsModel) process.env.EXTERNAL_EMBEDDINGS_MODEL = settings.externalEmbeddingsModel;
+    if (settings.externalEmbeddingsTimeout) process.env.EXTERNAL_EMBEDDINGS_TIMEOUT = String(settings.externalEmbeddingsTimeout);
     
     logger.info('LLM设置已保存并更新环境变量');
     return res.json({ message: 'LLM设置保存成功' });
@@ -119,7 +133,7 @@ exports.testLLMConnection = async (req, res) => {
         if (response.data && response.data.choices && response.data.choices[0]) {
           return res.json({ 
             success: true, 
-            message: '连接成功，模型响应: ' + response.data.choices[0].message.content.substring(0, 50) + '...' 
+            message: '连接成功，模型响应: ' + response.data.choices[0].message.content.substring(0, 200) + '...' 
           });
         } else {
           return res.json({ 
@@ -181,7 +195,7 @@ exports.saveUserLLMConfig = async (req, res) => {
       apiUrl: configData.apiUrl,
       timeout: configData.timeout || 30000,
       temperature: configData.temperature || 0.7,
-      maxTokens: configData.maxTokens || 1000,
+      maxTokens: configData.maxTokens || 32000,
       isDefault: configData.isDefault || false,
       createdAt: new Date()
     };
@@ -297,15 +311,60 @@ const testExternalLLM = async (settings, res) => {
     return res.status(400).json({ success: false, message: '模型名称不能为空' });
   }
   
-  const provider = settings.externalProvider;
+  // 统一规范提供商值，避免大小写或前后空格造成不匹配
+  const provider = String(settings.externalProvider || '')
+    .toLowerCase()
+    .trim();
+  // 同步清理关键字段，避免携带不可见字符导致 400
+  const externalModel = String(settings.externalModel || '').trim();
+  const externalApiUrl = String(settings.externalApiUrl || '').trim();
+  const externalApiKeyRaw = String(settings.externalApiKey || '').trim();
   const testMessage = '你好，这是一个测试消息。请回复"连接测试成功"。';
   const timeout = settings.externalTimeout || 30000;
+  // const requestedMaxTokens = parseInt(settings.externalMaxTokens || 32000, 10);
+  // 针对 externalMaxTokens 做健壮处理，避免空字符串/非法值变 NaN 导致 400
+  const rawMaxTokens = settings.externalMaxTokens;
+  let requestedMaxTokens = Number.parseInt(String(rawMaxTokens || '').trim(), 10);
+  if (!Number.isFinite(requestedMaxTokens) || requestedMaxTokens <= 0) {
+    requestedMaxTokens = provider === 'deepseek' ? 1024 : 2048;
+  }
+  // 针对DeepSeek等提供商进行安全限制，避免因超大max_tokens导致400
+  const safeMaxTokens = provider === 'deepseek' ? Math.min(requestedMaxTokens, 4096) : requestedMaxTokens;
+  const temperature = settings.externalTemperature || 0.7;
+
+  // 兼容常见别名与错误URL，降低配置错误导致的400/500
+  let normalizedModel = externalModel;
+  let normalizedApiUrl = externalApiUrl;
+
+  // 针对 DeepSeek：将常见OpenRouter别名映射为官方模型名
+  if (provider === 'deepseek') {
+    const m = normalizedModel.toLowerCase();
+    if (m.includes('deepseek-ai/deepseek-v3') || m.includes('deepseek-v3') || m.includes('deepseek/v3')) {
+      normalizedModel = 'deepseek-chat';
+    }
+    if (m.includes('deepseek-ai/deepseek-reasoner') || m === 'deepseek-reasoner') {
+      normalizedModel = 'deepseek-reasoner';
+    }
+    // 如果误填了 OpenRouter 的地址，强制回退到 DeepSeek 官方地址
+    if (!normalizedApiUrl || /openrouter\.ai/i.test(normalizedApiUrl)) {
+      normalizedApiUrl = 'https://api.deepseek.com/v1/chat/completions';
+    }
+  }
+
+  // 针对 OpenRouter：如误填 DeepSeek 官方地址，回退到 OpenRouter
+  if (provider === 'openrouter') {
+    if (!normalizedApiUrl || /deepseek\.com/i.test(normalizedApiUrl)) {
+      normalizedApiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    }
+  }
   
   let requestConfig = {
     timeout: timeout,
     headers: {
       'Content-Type': 'application/json'
-    }
+    },
+    // 禁用环境代理，避免企业/系统代理导致的TLS/连接问题
+    proxy: false
   };
   
   let requestData = {};
@@ -314,61 +373,61 @@ const testExternalLLM = async (settings, res) => {
   // 根据不同提供商构建请求
   switch (provider) {
     case 'openai':
-      apiUrl = settings.externalApiUrl || 'https://api.openai.com/v1/chat/completions';
+      apiUrl = externalApiUrl || 'https://api.openai.com/v1/chat/completions';
       // 确保API密钥是有效的字符串且不包含无效字符
-      const openaiApiKey = String(settings.externalApiKey).trim();
+      const openaiApiKey = externalApiKeyRaw;
       if (!openaiApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${openaiApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
     case 'claude':
-      apiUrl = settings.externalApiUrl || 'https://api.anthropic.com/v1/messages';
+      apiUrl = externalApiUrl || 'https://api.anthropic.com/v1/messages';
       // 确保API密钥是有效的字符串且不包含无效字符
-      const claudeApiKey = String(settings.externalApiKey).trim();
+      const claudeApiKey = externalApiKeyRaw;
       if (!claudeApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['x-api-key'] = claudeApiKey;
       requestConfig.headers['anthropic-version'] = '2023-06-01';
       requestData = {
-        model: settings.externalModel,
-        max_tokens: settings.externalMaxTokens || 100,
+        model: externalModel,
+        max_tokens: safeMaxTokens,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7
+        temperature
       };
       break;
       
     case 'qianwen':
-      apiUrl = settings.externalApiUrl || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+      apiUrl = externalApiUrl || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
       // 确保API密钥是有效的字符串且不包含无效字符
-      const qianwenApiKey = String(settings.externalApiKey).trim();
+      const qianwenApiKey = externalApiKeyRaw;
       if (!qianwenApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${qianwenApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         input: {
           messages: [{ role: 'user', content: testMessage }]
         },
         parameters: {
-          temperature: settings.externalTemperature || 0.7,
-          max_tokens: settings.externalMaxTokens || 100
+          temperature,
+          max_tokens: safeMaxTokens
         }
       };
       break;
       
     case 'openrouter':
-      apiUrl = settings.externalApiUrl || 'https://openrouter.ai/api/v1/chat/completions';
-      const openrouterApiKey = String(settings.externalApiKey).trim();
+      apiUrl = normalizedApiUrl || 'https://openrouter.ai/api/v1/chat/completions';
+      const openrouterApiKey = externalApiKeyRaw;
       if (!openrouterApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
@@ -376,104 +435,116 @@ const testExternalLLM = async (settings, res) => {
       requestConfig.headers['HTTP-Referer'] = 'https://workdiaryapp.com';
       requestConfig.headers['X-Title'] = 'Work Diary App';
       requestData = {
-        model: settings.externalModel,
+        model: normalizedModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
     case 'deepseek':
-      apiUrl = settings.externalApiUrl || 'https://api.deepseek.com/v1/chat/completions';
-      const deepseekApiKey = String(settings.externalApiKey).trim();
+      apiUrl = normalizedApiUrl || 'https://api.deepseek.com/v1/chat/completions';
+      const deepseekApiKey = externalApiKeyRaw;
       if (!deepseekApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${deepseekApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: normalizedModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
+      
+      // 添加 DeepSeek 专用调试日志
+      logger.info('DeepSeek 请求参数详情', {
+        apiUrl,
+        model: normalizedModel,
+        originalModel: settings.externalModel,
+        temperature,
+        max_tokens: safeMaxTokens,
+        originalMaxTokens: settings.externalMaxTokens,
+        apiKeyPrefix: deepseekApiKey.substring(0, 8) + '...',
+        requestDataPreview: JSON.stringify(requestData)
+      });
       break;
       
     case 'qwen':
-      apiUrl = settings.externalApiUrl || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
-      const qwenApiKey = String(settings.externalApiKey).trim();
+      apiUrl = externalApiUrl || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+      const qwenApiKey = externalApiKeyRaw;
       if (!qwenApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${qwenApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         input: {
           messages: [{ role: 'user', content: testMessage }]
         },
         parameters: {
-          temperature: settings.externalTemperature || 0.7,
-          max_tokens: settings.externalMaxTokens || 100
+          temperature,
+          max_tokens: safeMaxTokens
         }
       };
       break;
       
     case 'doubao':
-      apiUrl = settings.externalApiUrl || 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
-      const doubaoApiKey = String(settings.externalApiKey).trim();
+      apiUrl = externalApiUrl || 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+      const doubaoApiKey = externalApiKeyRaw;
       if (!doubaoApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${doubaoApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
     case 'siliconflow':
-      apiUrl = settings.externalApiUrl || 'https://api.siliconflow.cn/v1/chat/completions';
-      const siliconflowApiKey = String(settings.externalApiKey).trim();
+      apiUrl = externalApiUrl || 'https://api.siliconflow.cn/v1/chat/completions';
+      const siliconflowApiKey = externalApiKeyRaw;
       if (!siliconflowApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${siliconflowApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
     case 'zhipu':
-      apiUrl = settings.externalApiUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-      const zhipuApiKey = String(settings.externalApiKey).trim();
+      apiUrl = externalApiUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+      const zhipuApiKey = externalApiKeyRaw;
       if (!zhipuApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       requestConfig.headers['Authorization'] = `Bearer ${zhipuApiKey}`;
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
     case 'custom':
       // 处理自定义提供商
-      if (!settings.externalApiUrl) {
+      if (!externalApiUrl) {
         return res.status(400).json({ success: false, message: '自定义API地址不能为空' });
       }
       
-      const customApiKey = String(settings.externalApiKey).trim();
+      const customApiKey = externalApiKeyRaw;
       if (!customApiKey) {
         return res.status(400).json({ success: false, message: 'API密钥不能为空' });
       }
       
-      apiUrl = settings.externalApiUrl;
+      apiUrl = externalApiUrl;
       
       // 添加额外的安全检查，确保API密钥不包含无效字符
       try {
@@ -488,10 +559,10 @@ const testExternalLLM = async (settings, res) => {
       }
       
       requestData = {
-        model: settings.externalModel,
+        model: externalModel,
         messages: [{ role: 'user', content: testMessage }],
-        temperature: settings.externalTemperature || 0.7,
-        max_tokens: settings.externalMaxTokens || 100
+        temperature,
+        max_tokens: safeMaxTokens
       };
       break;
       
@@ -503,6 +574,9 @@ const testExternalLLM = async (settings, res) => {
     logger.info('发送测试请求到LLM API', { 
       provider, 
       apiUrl, 
+      model: settings.externalModel,
+      temperature,
+      maxTokens: safeMaxTokens,
       hasApiKey: !!settings.externalApiKey,
       apiKeyLength: settings.externalApiKey ? settings.externalApiKey.length : 0
     });
@@ -544,7 +618,7 @@ const testExternalLLM = async (settings, res) => {
     if (responseText) {
       return res.json({ 
         success: true, 
-        message: '连接成功，模型响应: ' + responseText.substring(0, 50) + '...' 
+        message: '连接成功，模型响应: ' + responseText.substring(0, 200) + '...' 
       });
     } else {
       return res.json({ 
@@ -553,10 +627,93 @@ const testExternalLLM = async (settings, res) => {
       });
     }
   } catch (error) {
-    logger.error('测试用户LLM配置失败:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: '测试LLM配置失败: ' + (error.response?.data?.message || error.message) 
+    // 如果是TLS证书校验问题且无HTTP响应，尝试一次“宽松TLS”重试，仅用于定位问题
+    if (!error.response && (error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || error.code === 'SELF_SIGNED_CERT_IN_CHAIN' || error.code === 'CERT_HAS_EXPIRED')) {
+      try {
+        const https = require('https');
+        const insecureConfig = { ...requestConfig, httpsAgent: new https.Agent({ rejectUnauthorized: false }) };
+        const responseRetry = await axios.post(apiUrl, requestData, insecureConfig);
+
+        let responseText = '';
+        switch (provider) {
+          case 'openai':
+          case 'openrouter':
+          case 'deepseek':
+          case 'doubao':
+          case 'siliconflow':
+          case 'zhipu':
+          case 'custom':
+            if (responseRetry.data && responseRetry.data.choices && responseRetry.data.choices[0] && responseRetry.data.choices[0].message) {
+              responseText = responseRetry.data.choices[0].message.content;
+            }
+            break;
+          case 'anthropic':
+          case 'claude':
+            if (responseRetry.data && responseRetry.data.content && responseRetry.data.content[0] && responseRetry.data.content[0].text) {
+              responseText = responseRetry.data.content[0].text;
+            }
+            break;
+          case 'qianwen':
+          case 'qwen':
+            if (responseRetry.data && responseRetry.data.output && responseRetry.data.output.text) {
+              responseText = responseRetry.data.output.text;
+            }
+            break;
+        }
+
+        if (responseText) {
+          return res.json({ success: true, message: '连接成功（宽松TLS），模型响应: ' + responseText.substring(0, 200) + '...' });
+        }
+        return res.json({ success: true, message: '连接成功（宽松TLS）但响应格式不标准' });
+      } catch (retryErr) {
+        // 将重试错误与原始错误一起记录
+        try {
+          logger.error('TLS校验失败，宽松TLS重试仍失败', {
+            provider,
+            apiUrl,
+            model: settings.externalModel,
+            originalCode: error.code,
+            retryMessage: retryErr.message,
+            retryStatus: retryErr.response?.status,
+          });
+        } catch (_) {}
+        // 继续走下方标准错误响应逻辑
+      }
+    }
+
+    const statusCode = error.response?.status || 500;
+    const rawData = error.response?.data;
+    // 记录更详细的错误，便于排查（包含提供商、地址、模型与返回体摘要）
+    try {
+      logger.error('测试用户LLM配置失败:', {
+        provider,
+        apiUrl,
+        model: settings.externalModel,
+        status: statusCode,
+        message: error.message,
+        responsePreview: rawData ? JSON.stringify(rawData).substring(0, 500) + '...' : null
+      });
+    } catch (_) {
+      logger.error('测试用户LLM配置失败:', error);
+    }
+
+    // 将关键错误信息直接放入 message，便于前端提示
+    const briefErrorMsg =
+      (rawData && (rawData.error?.message || rawData.message)) ||
+      (error.code ? `${error.code}: ${error.message}` : error.message);
+
+    const friendlyMessage =
+      statusCode === 500
+        ? `测试LLM配置失败（网络/连接错误）: ${briefErrorMsg}`
+        : `测试LLM配置失败（${statusCode}）: ${briefErrorMsg}`;
+
+    return res.status(statusCode).json({
+      success: false,
+      message: friendlyMessage,
+      provider,
+      apiUrl,
+      model: settings.externalModel,
+      error: rawData || { message: error.message }
     });
   }
 };
@@ -678,5 +835,45 @@ exports.testUserLLMConfig = async (req, res) => {
       success: false, 
       message: '测试用户LLM配置失败: ' + error.message 
     });
+  }
+};
+
+// 测试嵌入模型连接
+exports.testEmbeddingsConnection = async (req, res) => {
+  try {
+    const {
+      externalEmbeddingsProvider,
+      externalEmbeddingsApiKey,
+      externalEmbeddingsApiUrl,
+      externalEmbeddingsModel,
+      externalEmbeddingsTimeout
+    } = req.body || {};
+
+    if (!externalEmbeddingsProvider) {
+      return res.status(400).json({ success: false, message: '请选择嵌入提供商' });
+    }
+    if (!externalEmbeddingsApiKey) {
+      return res.status(400).json({ success: false, message: 'API密钥不能为空' });
+    }
+    if (!externalEmbeddingsModel) {
+      return res.status(400).json({ success: false, message: '模型名称不能为空' });
+    }
+
+    const embedder = new Embeddings({
+      provider: String(externalEmbeddingsProvider).toLowerCase().trim(),
+      apiKey: String(externalEmbeddingsApiKey).trim(),
+      apiUrl: String(externalEmbeddingsApiUrl || '').trim(),
+      model: String(externalEmbeddingsModel).trim(),
+      timeout: parseInt(externalEmbeddingsTimeout || '60000', 10)
+    });
+
+    const vec = await embedder.embed('连接测试 - workdiaryapp');
+    if (Array.isArray(vec) && vec.length > 0) {
+      return res.json({ success: true, message: '嵌入成功', vectorDimensions: vec.length });
+    }
+    return res.status(500).json({ success: false, message: '嵌入失败或返回空向量' });
+  } catch (error) {
+    logger.error('测试嵌入模型连接失败:', error);
+    return res.status(500).json({ success: false, message: '测试嵌入模型连接失败: ' + (error.response?.data?.message || error.message) });
   }
 };

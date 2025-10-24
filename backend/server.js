@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
 const multer = require('multer');
+const cookieParser = require('cookie-parser');
 
 const logger = require('./utils/logger');
 // 加载环境变量
@@ -13,6 +14,7 @@ dotenv.config();
 const fs = require('fs');
 const path = require('path');
 const settingsFilePath = path.join(__dirname, 'config/llm-settings.json');
+const ragRoutes = require('./routes/rag');
 
 // 配置multer文件上传
 const storage = multer.diskStorage({
@@ -90,7 +92,7 @@ const { generateDailySummary, generateMonthlySummary, generateYearlySummary, bat
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || '0.0.0.0'; 
+const HOST = '0.0.0.0';
 // 启用trust proxy以正确获取客户端IP
 app.set('trust proxy', true);
 
@@ -138,6 +140,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -160,6 +163,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
 // 对于备份路由，使用带有文件上传中间件的路由
 app.use('/api/backup', upload.single('backupFile'), backupRoutes);
+app.use('/api', ragRoutes);
 
 // 定时任务
 const cronTimeZone = 'Asia/Shanghai';
@@ -214,13 +218,13 @@ logger.info(`每周总结定时任务已设置，将在每周一凌晨1点30分�
 cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary, {
   timezone: cronTimeZone
 });
-logger.info(`每月总结定时任务已设置，将在每月1日凌晨2点（${cronTimeZone}）运行`);
+logger.info(`每月总结定时任务已设置，将在每月1凌晨2点（${cronTimeZone}）运行`);
 
-// 每年1月1日凌晨3点生成上年总结
+// 每年1月1凌晨3点生成上年总结
 cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary, {
   timezone: cronTimeZone
 });
-logger.info(`每年总结定时任务已设置，将在每年1月1日凌晨3点（${cronTimeZone}）运行`);
+logger.info(`每年总结定时任务已设置，将在每年1月1凌晨3点（${cronTimeZone}）运行`);
 
 // 启动定时清理任务
 const { scheduleCleanup } = require('./utils/cleanup');

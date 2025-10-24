@@ -12,7 +12,8 @@ import {
   Popconfirm,
   Typography,
   Tag,
-  Tooltip
+  Tooltip,
+  InputNumber
 } from 'antd';
 import {
   PlusOutlined,
@@ -22,7 +23,9 @@ import {
   LinkOutlined,
   RobotOutlined,
   EyeInvisibleOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  SaveOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import api from '../utils/api';
 
@@ -36,10 +39,47 @@ const ModelSettings = () => {
   const [editingModel, setEditingModel] = useState(null);
   const [testLoading, setTestLoading] = useState(null);
   const [form] = Form.useForm();
+  const [embForm] = Form.useForm();
+  const [embSettings, setEmbSettings] = useState(null);
+  const [embLoading, setEmbLoading] = useState(false);
+  const [embTestLoading, setEmbTestLoading] = useState(false);
 
   useEffect(() => {
     fetchModels();
-  }, []);
+    // 获取嵌入模型设置
+    const fetchEmbeddingsSettings = async () => {
+      try {
+        setEmbLoading(true);
+        const response = await api.get('/settings/llm');
+        // 仅提取嵌入相关字段
+        const s = response.data || {};
+        const emb = {
+          externalEmbeddingsProvider: s.externalEmbeddingsProvider || 'siliconflow',
+          externalEmbeddingsApiKey: s.externalEmbeddingsApiKey || '',
+          externalEmbeddingsApiUrl: s.externalEmbeddingsApiUrl || '',
+          externalEmbeddingsModel: s.externalEmbeddingsModel || 'bge-m3',
+          externalEmbeddingsTimeout: s.externalEmbeddingsTimeout || 60000,
+        };
+        setEmbSettings(emb);
+        embForm.setFieldsValue(emb);
+      } catch (error) {
+        console.error('获取嵌入模型设置失败:', error);
+        message.error('获取嵌入模型设置失败');
+        const emb = {
+          externalEmbeddingsProvider: 'siliconflow',
+          externalEmbeddingsApiKey: '',
+          externalEmbeddingsApiUrl: '',
+          externalEmbeddingsModel: 'bge-m3',
+          externalEmbeddingsTimeout: 60000,
+        };
+        setEmbSettings(emb);
+        embForm.setFieldsValue(emb);
+      } finally {
+        setEmbLoading(false);
+      }
+    };
+    fetchEmbeddingsSettings();
+  }, [embForm]);
 
   const fetchModels = async () => {
     setLoading(true);
@@ -260,8 +300,102 @@ const ModelSettings = () => {
     }
   ];
 
+  const handleSaveEmbeddings = async () => {
+    try {
+      setEmbLoading(true);
+      const values = await embForm.validateFields();
+      const payload = {
+        externalEmbeddingsProvider: values.externalEmbeddingsProvider,
+        externalEmbeddingsApiKey: values.externalEmbeddingsApiKey,
+        externalEmbeddingsApiUrl: values.externalEmbeddingsApiUrl || '',
+        externalEmbeddingsModel: values.externalEmbeddingsModel,
+        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 60000,
+      };
+      await api.post('/settings/llm', payload);
+      message.success('嵌入设置已保存');
+      setEmbSettings(payload);
+    } catch (error) {
+      console.error('保存嵌入设置失败:', error);
+      message.error('保存嵌入设置失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setEmbLoading(false);
+    }
+  };
+
+  const handleTestEmbeddings = async () => {
+    try {
+      setEmbTestLoading(true);
+      const values = await embForm.validateFields();
+      const payload = {
+        externalEmbeddingsProvider: values.externalEmbeddingsProvider,
+        externalEmbeddingsApiKey: values.externalEmbeddingsApiKey,
+        externalEmbeddingsApiUrl: values.externalEmbeddingsApiUrl || '',
+        externalEmbeddingsModel: values.externalEmbeddingsModel,
+        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 60000,
+      };
+      const response = await api.post('/settings/embeddings/test', payload);
+      if (response.data?.success) {
+        message.success(`嵌入连接测试成功，向量维度: ${response.data.vectorDimensions ?? '未知'}`);
+      } else {
+        message.error('嵌入连接测试失败: ' + (response.data?.message || '未知错误'));
+      }
+    } catch (error) {
+      console.error('测试嵌入配置失败:', error);
+      message.error('嵌入连接测试失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setEmbTestLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: '24px' }}>
+      <Card style={{ marginBottom: '16px' }} loading={embLoading && !embSettings}>
+        <div style={{ marginBottom: '12px' }}>
+          <Title level={4} style={{ margin: 0 }}>词嵌入模型设置</Title>
+          <Text type="secondary">配置用于RAG索引/查询的词向量嵌入服务（推荐：硅基流动）</Text>
+        </div>
+        <Form form={embForm} layout="vertical" initialValues={embSettings || {}}>
+          <Form.Item name="externalEmbeddingsProvider" label="嵌入提供商" rules={[{ required: true, message: '请选择嵌入提供商' }]}>
+            <Select placeholder="选择嵌入提供商">
+              <Option value="siliconflow">硅基流动</Option>
+              <Option value="openai">OpenAI</Option>
+              <Option value="openrouter">OpenRouter</Option>
+              <Option value="custom">自定义API</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="externalEmbeddingsApiKey" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
+            <Input.Password placeholder="输入嵌入服务API密钥" />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.externalEmbeddingsProvider !== cur.externalEmbeddingsProvider}>
+            {({ getFieldValue }) => (
+              getFieldValue('externalEmbeddingsProvider') === 'custom' ? (
+                <Form.Item name="externalEmbeddingsApiUrl" label="自定义API地址" rules={[{ required: true, message: '请输入API地址' }]}>
+                  <Input placeholder="例如: https://api.example.com/v1/embeddings" />
+                </Form.Item>
+              ) : null
+            )}
+          </Form.Item>
+
+          <Form.Item name="externalEmbeddingsModel" label="嵌入模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
+            <Input placeholder="例如: text-embedding-3-large, bge-m3" />
+          </Form.Item>
+
+          <Form.Item name="externalEmbeddingsTimeout" label="请求超时时间(毫秒)" rules={[{ required: true, message: '请输入超时时间' }]}>
+            <InputNumber min={1000} max={600000} step={1000} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveEmbeddings} loading={embLoading}>保存嵌入设置</Button>
+              <Button icon={<SyncOutlined />} onClick={handleTestEmbeddings} loading={embTestLoading}>测试嵌入</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      {/* 原有用户级别LLM配置列表 */}
       <Card>
         <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>

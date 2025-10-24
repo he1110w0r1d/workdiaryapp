@@ -5,36 +5,72 @@ const path = require('path');
 const fs = require('fs');
 const LocalLLM = require('../utils/localLLM');
 const ExternalLLM = require('../utils/externalLLM');
+const { getUserDefaultLLMConfig } = require('./settingsController');
 
 const logger = require('../utils/logger');
 // 动态创建LLM实例以获取最新配置
 const createLLMInstances = async (userId = null) => {
+  // 优先使用用户级默认配置（支持 isActive 与 isDefault）
   if (userId) {
-    // 获取用户的LLM配置
-    const user = await User.findById(userId);
-    if (user && user.llmConfigs && user.llmConfigs.length > 0) {
-      // 查找默认配置
-      const defaultConfig = user.llmConfigs.find(config => config.isDefault);
-      if (defaultConfig) {
-        if (defaultConfig.provider === 'local') {
+    try {
+      const userConfig = await getUserDefaultLLMConfig(userId);
+      if (userConfig) {
+        try {
+          logger.llm('使用用户默认LLM配置', {
+            userId,
+            provider: userConfig.provider,
+            apiUrl: userConfig.apiUrl,
+            model: userConfig.model,
+            isExternal: userConfig.provider !== 'local'
+          });
+        } catch (_) {}
+        if (userConfig.provider === 'local') {
           return {
-            localLLM: new LocalLLM(defaultConfig),
-            externalLLM: new ExternalLLM()
+            localLLM: new LocalLLM({
+              apiUrl: userConfig.apiUrl,
+              model: userConfig.model,
+              timeout: userConfig.timeout,
+              temperature: userConfig.temperature
+            }),
+            externalLLM: null
           };
         } else {
           return {
-            localLLM: new LocalLLM(),
-            externalLLM: new ExternalLLM(defaultConfig)
+            localLLM: null,
+            externalLLM: new ExternalLLM({
+              apiKey: userConfig.apiKey,
+              apiUrl: userConfig.apiUrl,
+              model: userConfig.model,
+              timeout: userConfig.timeout,
+              temperature: userConfig.temperature,
+              maxTokens: userConfig.maxTokens,
+              enabled: true,
+              provider: userConfig.provider
+            })
           };
         }
+      } else {
+        try { logger.llm('未找到用户默认LLM配置，回退到全局', { userId }); } catch (_) {}
       }
+    } catch (e) {
+      try { logger.error('读取用户默认LLM配置失败', { message: e.message }); } catch (_) {}
     }
   }
-  
-  // 回退到全局配置
+
+  // 回退到全局配置（从 llm-settings.json 注入的环境变量）
+  const useExternal = process.env.LLM_TYPE === 'external';
+  try {
+    logger.llm('使用全局LLM配置', {
+      useExternal,
+      externalProvider: process.env.EXTERNAL_LLM_PROVIDER,
+      externalModel: process.env.EXTERNAL_LLM_MODEL,
+      localEnabled: process.env.USE_LOCAL_LLM === 'true',
+      localModel: process.env.LOCAL_LLM_MODEL
+    });
+  } catch (_) {}
   return {
     localLLM: new LocalLLM(),
-    externalLLM: new ExternalLLM()
+    externalLLM: new ExternalLLM({ enabled: useExternal })
   };
 };
 
@@ -572,6 +608,7 @@ const updateCustomTags = async (req, res) => {
 };
 
 module.exports = {
+  createLLMInstances,
   getUserProfile,
   updateUserProfile,
   uploadAvatar,

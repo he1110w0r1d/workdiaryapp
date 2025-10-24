@@ -16,7 +16,8 @@ const {
   updatePromptTemplate,
   markSummaryAsRead,
   getUnreadSummariesCount,
-  markAllSummariesAsRead
+  markAllSummariesAsRead,
+  ensureSummaryHTML
 } = require('../controllers/summaryController');
 
 router.route('/')
@@ -25,6 +26,10 @@ router.route('/')
 router.route('/:id')
   .get(protect, getSummaryById)
   .delete(protect, deleteSummary);
+
+// 确保并生成总结HTML文件，返回可访问URL
+router.route('/:id/ensure-html')
+  .get(protect, ensureSummaryHTML);
 
 router.route('/regenerate/daily')
   .post(protect, regenerateDailySummary);

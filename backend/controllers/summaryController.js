@@ -8,6 +8,7 @@ const { getUserDefaultLLMConfig } = require('./settingsController');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const ragController = require('./ragController');
 
 // 动态创建LLM实例以获取最新配置
 const createLLMInstances = async (userId = null) => {
@@ -15,6 +16,16 @@ const createLLMInstances = async (userId = null) => {
   if (userId) {
     const userConfig = await getUserDefaultLLMConfig(userId);
     if (userConfig) {
+      // 记录使用的用户默认LLM配置
+      try {
+        logger.llm('使用用户默认LLM配置', {
+          userId,
+          provider: userConfig.provider,
+          apiUrl: userConfig.apiUrl,
+          model: userConfig.model,
+          isExternal: userConfig.provider !== 'local'
+        });
+      } catch (_) {}
       // 根据用户配置创建LLM实例
       if (userConfig.provider === 'local') {
         return {
@@ -41,14 +52,28 @@ const createLLMInstances = async (userId = null) => {
           })
         };
       }
+    } else {
+      try {
+        logger.llm('未找到用户默认LLM配置，回退到全局', { userId });
+      } catch (_) {}
     }
   }
   
   // 回退到全局配置
+  const useExternal = process.env.LLM_TYPE === 'external';
+  try {
+    logger.llm('使用全局LLM配置', {
+      useExternal,
+      externalProvider: process.env.EXTERNAL_LLM_PROVIDER,
+      externalModel: process.env.EXTERNAL_LLM_MODEL,
+      localEnabled: process.env.USE_LOCAL_LLM === 'true',
+      localModel: process.env.LOCAL_LLM_MODEL
+    });
+  } catch (_) {}
   return {
     localLLM: new LocalLLM(),
     externalLLM: new ExternalLLM({
-      enabled: process.env.LLM_TYPE === 'external'  // 根据环境变量设置启用状态
+      enabled: useExternal  // 根据环境变量设置启用状态
     })
   };
 };
@@ -69,6 +94,143 @@ const generateTagDistribution = (diaries) => {
   });
   
   return Object.fromEntries(tagDistribution);
+};
+
+// ===== LLM 待办建议辅助函数 =====
+// 构建每日待办建议提示词（严格JSON输出）
+const buildDailyTodoSuggestionPrompt = (user, diaries, date) => {
+  const dateStr = date.toLocaleDateString('zh-CN');
+  const diaryItems = diaries.map(d => ({
+    id: String(d._id),
+    startTime: new Date(d.startTime).toISOString(),
+    endTime: new Date(d.endTime).toISOString(),
+    durationMin: Math.floor((new Date(d.endTime) - new Date(d.startTime)) / (1000 * 60)),
+    content: d.content,
+    tags: d.tags || [],
+    priority: d.workPriority || '中'
+  }));
+
+  return [
+    '你是一位严谨的工作助理。根据当天工作日记，判断是否需要新增待办。',
+    `日期: ${dateStr}`,
+    `用户级别: ${(user.level || '中级')}`,
+    '工作日记(JSON):',
+    JSON.stringify(diaryItems, null, 2),
+    '',
+    '请仅输出合法JSON（不要任何解释文字），遵循此数据结构：',
+    '{',
+    '  "shouldCreateTodo": true|false,',
+    '  "todos": [',
+    '    {',
+    '      "content": "字符串，清晰可执行的待办项",',
+    '      "dueDate": "YYYY-MM-DD",',
+    '      "priority": "高|中|低",',
+    '      "relatedDiaryIds": ["日记ID", "可选更多"]',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    '规则：',
+    '1) 若不需要待办，shouldCreateTodo=false，todos=[]。',
+    '2) 最多给出3条，必须具体可执行；不写泛泛而谈。',
+    '3) 默认截止日期为次日；如确有紧急度可适当安排更早日期。',
+    '4) priority 合理分配：紧急且重要为高，常规为中，非紧急为低。',
+    '5) relatedDiaryIds 参考涉及的日记。',
+  ].join('\n');
+};
+
+// 安全解析LLM返回的JSON
+const safeParseTodoJSON = (text) => {
+  if (!text || typeof text !== 'string') return null;
+  // 尝试直接解析
+  try {
+    return JSON.parse(text);
+  } catch (_) {}
+  // 回退：提取第一个JSON对象
+  try {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const jsonStr = text.slice(start, end + 1);
+      return JSON.parse(jsonStr);
+    }
+  } catch (_) {}
+  return null;
+};
+
+// 创建待办（去重与校验）
+const createTodosFromSuggestions = async (userId, suggestions, diaries) => {
+  if (!Array.isArray(suggestions) || suggestions.length === 0) return { created: 0 };
+
+  const MAX_PER_DAY = 3;
+  const created = [];
+
+  // 今天的时间范围用于去重
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  for (const s of suggestions.slice(0, MAX_PER_DAY)) {
+    const content = (s && s.content || '').trim();
+    if (!content) continue;
+
+    // 重复检测：同一用户、同一内容、当天已存在
+    const dup = await Todo.findOne({
+      user: userId,
+      content,
+      createdAt: { $gte: todayStart, $lte: todayEnd },
+      isDeleted: false
+    });
+    if (dup) continue;
+
+    // 解析截止日期
+    let dueDate = null;
+    if (s && s.dueDate) {
+      const parsed = new Date(s.dueDate);
+      if (!isNaN(parsed.getTime())) dueDate = parsed;
+    }
+    if (!dueDate) {
+      dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 1);
+      dueDate.setHours(18, 0, 0, 0);
+    }
+
+    // 优先级
+    const priority = ['高', '中', '低'].includes(s.priority) ? s.priority : '中';
+
+    // 关联日记（取第一个合法ID）
+    let relatedDiary = null;
+    if (Array.isArray(s.relatedDiaryIds) && s.relatedDiaryIds.length > 0) {
+      const idSet = new Set(diaries.map(d => String(d._id)));
+      const chosen = s.relatedDiaryIds.find(id => idSet.has(String(id)));
+      if (chosen) relatedDiary = chosen;
+    }
+
+    const todo = new Todo({
+      user: userId,
+      content,
+      priority,
+      dueDate,
+      relatedDiary: relatedDiary || null
+    });
+    await todo.save();
+
+    // 若有关联日记，同步标记
+    if (relatedDiary) {
+      try {
+        await Diary.findByIdAndUpdate(relatedDiary, {
+          isTodo: true,
+          relatedTodo: todo._id,
+          todoStatus: '待办'
+        });
+      } catch (_) {}
+    }
+
+    created.push(todo);
+  }
+
+  return { created: created.length };
 };
 
 // 清理LLM返回的HTML内容，提取纯HTML代码
@@ -144,6 +306,12 @@ ${JSON.stringify(summaryData, null, 2)}
     
     // 清理HTML内容，去除markdown格式和说明文字
     const cleanedHtmlContent = cleanHTMLContent(rawHtmlContent);
+    
+    // 如果生成内容为空或过短，或缺少关键闭合标签，则回退默认模板，避免保存空白文件
+    if (!cleanedHtmlContent || cleanedHtmlContent.length < 500 || !/<\/html>/i.test(cleanedHtmlContent)) {
+      logger.warn('HTML生成结果不完整，回退默认模板');
+      return generateDefaultHTML(summaryData, type);
+    }
     
     return cleanedHtmlContent;
   } catch (error) {
@@ -311,21 +479,22 @@ exports.generateDailySummary = async () => {
           totalWorkTime += calculateWorkTime(diary.startTime, diary.endTime);
         });
         
-        // 准备基础总结内容
+        // 准备基础总结内容（无LLM回退为占位符模板，后续进行替换）
         const baseContent = `
-# ${yesterday.toLocaleDateString('zh-CN')} 工作总结
+# {{date}} 工作总结
 
 ## 工作概览
-- 工作条目数量: ${diaries.length}
-- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 工作条目数量: {{totalEntries}}
+- 总工作时长: {{totalTime}}
 
-## 详细内容
-${diaries.map((diary, index) => `
-${index + 1}. ${diary.content}
-   时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}
-   ${diary.location ? `地点: ${diary.location}` : ''}
-   ${diary.tags.length > 0 ? `标签: ${diary.tags.join(', ')}` : ''}
-`).join('\n')}
+## 工作详情
+{{workDetails}}
+
+## 待办统计
+- 昨日新增: {{todayTodosCreated}}
+- 昨日完成: {{todayTodosCompleted}}
+- 昨日未完成: {{todayTodosPending}}
+- 当前总未完成: {{totalPendingTodos}}
         `.trim();
         
         // 准备LLM所需数据
@@ -420,8 +589,10 @@ ${index + 1}. ${diary.content}
           status: { $in: ['待办'] }
         });
 
-        // 对LLM生成的内容进行占位符替换处理
+        // 如果使用LLM生成内容，直接使用LLM内容
         if (llmSummary) {
+          summaryContent = llmSummary;
+        } else {
           const workDetails = diaries.map(diary => {
             const workTime = calculateWorkTime(diary.startTime, diary.endTime);
             return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
@@ -451,6 +622,48 @@ ${index + 1}. ${diary.content}
         });
         
         await summary.save();
+
+        // 在每日总结完成后，自动重建该用户的RAG索引
+        try {
+          const stats = await ragController.reindexForUser(user._id);
+          logger.system(`已为用户 ${user.username} 自动重建RAG索引：日记${stats.indexedDiaries}，片段${stats.indexedChunks}`);
+        } catch (error) {
+          logger.warn('每日总结后自动重建索引失败', { error: error.message });
+        }
+
+        // 生成LLM待办建议并创建待办
+        try {
+          const { localLLM, externalLLM } = await createLLMInstances(user._id);
+          const prompt = buildDailyTodoSuggestionPrompt(user, diaries, yesterday);
+          let suggestionText = null;
+
+          // 优先尝试外部LLM
+          if (externalLLM) {
+            try {
+              suggestionText = await externalLLM.generateText(prompt, { temperature: 0.2, maxTokens: 800 }, user._id);
+            } catch (err) {
+              logger.warn('外部LLM待办建议失败，尝试本地LLM', { error: err.message });
+            }
+          }
+          // 回退到本地LLM
+          if (!suggestionText && localLLM) {
+            try {
+              suggestionText = await localLLM.generateText(prompt, { temperature: 0.2, maxTokens: 800 }, user._id);
+            } catch (err) {
+              logger.warn('本地LLM待办建议失败', { error: err.message });
+            }
+          }
+
+          const parsed = safeParseTodoJSON(suggestionText);
+          if (parsed && parsed.shouldCreateTodo && Array.isArray(parsed.todos) && parsed.todos.length > 0) {
+            const result = await createTodosFromSuggestions(user._id, parsed.todos, diaries);
+            logger.info(`为用户 ${user.username} 自动创建待办 ${result.created} 条`);
+          } else {
+            logger.info(`用户 ${user.username} 今日无需自动待办或建议为空`);
+          }
+        } catch (error) {
+          logger.warn('自动待办生成流程异常', { error: error.message });
+        }
       }
     }
     
@@ -558,6 +771,33 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           return `${dateHeader}\n\n${entries}`;
         }).join('\n\n');
 
+      // 在调用LLM之前统计周度待办事项，确保模板占位符可用
+      const weekStart = new Date(thisWeekStart);
+      const weekEnd = new Date(thisWeekEnd);
+      const weekTodosCreated = await Todo.countDocuments({
+        user: user._id,
+        createdAt: { $gte: weekStart, $lt: weekEnd }
+      });
+      const weekTodosCompleted = await Todo.countDocuments({
+        user: user._id,
+        status: '已完成',
+        'statusHistory': {
+          $elemMatch: {
+            status: '已完成',
+            changedAt: { $gte: weekStart, $lt: weekEnd }
+          }
+        }
+      });
+      const weekTodosPending = await Todo.countDocuments({
+        user: user._id,
+        createdAt: { $gte: weekStart, $lt: weekEnd },
+        status: { $ne: '已完成' }
+      });
+      const totalPendingTodos = await Todo.countDocuments({
+        user: user._id,
+        status: { $in: ['待办'] }
+      });
+
       // 准备LLM所需数据
       const tagDistribution = generateTagDistribution(diaries);
       const llmData = {
@@ -568,7 +808,11 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         workDetails: workDetails,
         dailyWork: dailyWork,
         tagDistribution: tagDistribution,
-        user: user
+        user: user,
+        weekTodosCreated,
+        weekTodosCompleted,
+        weekTodosPending,
+        totalPendingTodos
       };
       
       // 尝试使用LLM生成总结
@@ -609,49 +853,7 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         logger.info('使用默认模板生成的每周总结内容');
       }
       
-      // 统计周度待办事项数据
-      const weekStart = new Date(thisWeekStart);
-        const weekEnd = new Date(thisWeekEnd);
-      
-      // 本周新增的待办事项
-      const weekTodosCreated = await Todo.countDocuments({
-        user: user._id,
-        createdAt: {
-          $gte: weekStart,
-          $lt: weekEnd
-        }
-      });
-      
-      // 本周完成的待办事项
-      const weekTodosCompleted = await Todo.countDocuments({
-        user: user._id,
-        status: '已完成',
-        'statusHistory': {
-          $elemMatch: {
-            status: '已完成',
-            changedAt: {
-              $gte: weekStart,
-              $lt: weekEnd
-            }
-          }
-        }
-      });
-      
-      // 本周待完成的待办事项（本周新增但未完成的）
-      const weekTodosPending = await Todo.countDocuments({
-        user: user._id,
-        createdAt: {
-          $gte: weekStart,
-          $lt: weekEnd
-        },
-        status: { $ne: '已完成' }
-      });
-      
-      // 数据库中所有未完成的待办事项
-      const totalPendingTodos = await Todo.countDocuments({
-        user: user._id,
-        status: { $in: ['待办'] }
-      });
+      // 周度待办统计已在LLM调用前计算并加入llmData
 
       // 构建summaryData对象用于嵌套占位符替换
       const workDetailsByDateArray = Object.values(workDetailsByDate).sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -695,8 +897,8 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
         };
       });
 
-      // 对LLM生成的内容进行占位符替换处理
-      if (llmSummary) {
+      // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
+      if (!llmSummary) {
         summaryContent = summaryContent
           .replace(/\{\{date\}\}/g, `${thisWeekStart.toLocaleDateString('zh-CN')} 到 ${thisWeekEnd.toLocaleDateString('zh-CN')}`)
           .replace(/\{\{totalEntries\}\}/g, diaries.length)
@@ -839,6 +1041,33 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
         }).join('\n\n');
 
+        // 在调用LLM之前统计月度待办事项，以支持模板占位符
+        const monthStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+        const monthEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        const monthTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd }
+        });
+        const monthTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: { $gte: monthStart, $lt: monthEnd }
+            }
+          }
+        });
+        const monthTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd },
+          status: { $ne: '已完成' }
+        });
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
         const llmData = {
@@ -849,7 +1078,11 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           workDetails: workDetails,
           dailyWork: dailyWork,
           tagDistribution: tagDistribution,
-          user: user
+          user: user,
+          monthTodosCreated,
+          monthTodosCompleted,
+          monthTodosPending,
+          totalPendingTodos
         };
         
         // 尝试使用LLM生成总结
@@ -890,52 +1123,10 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           logger.info('使用默认模板生成的月度总结内容');
         }
         
-        // 统计月度待办事项数据
-        const monthStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
-        const monthEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-        
-        // 本月新增的待办事项
-        const monthTodosCreated = await Todo.countDocuments({
-          user: user._id,
-          createdAt: {
-            $gte: monthStart,
-            $lt: monthEnd
-          }
-        });
-        
-        // 本月完成的待办事项
-        const monthTodosCompleted = await Todo.countDocuments({
-          user: user._id,
-          status: '已完成',
-          'statusHistory': {
-            $elemMatch: {
-              status: '已完成',
-              changedAt: {
-                $gte: monthStart,
-                $lt: monthEnd
-              }
-            }
-          }
-        });
-        
-        // 本月待完成的待办事项（本月新增但未完成的）
-        const monthTodosPending = await Todo.countDocuments({
-          user: user._id,
-          createdAt: {
-            $gte: monthStart,
-            $lt: monthEnd
-          },
-          status: { $ne: '已完成' }
-        });
-        
-        // 数据库中所有未完成的待办事项
-        const totalPendingTodos = await Todo.countDocuments({
-          user: user._id,
-          status: { $in: ['待办'] }
-        });
+        // 月度待办统计已在LLM调用前计算并加入llmData
 
-        // 对LLM生成的内容进行占位符替换处理
-        if (llmSummary) {
+        // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
+        if (!llmSummary) {
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, `${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月`)
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
@@ -1064,6 +1255,33 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
         }).join('\n\n');
 
+        // 在调用LLM之前统计当月待办事项，以支持模板占位符
+        const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+        const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        const monthTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd }
+        });
+        const monthTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: { $gte: monthStart, $lt: monthEnd }
+            }
+          }
+        });
+        const monthTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd },
+          status: { $ne: '已完成' }
+        });
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
         const llmData = {
@@ -1074,7 +1292,11 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           workDetails: workDetails,
           dailyWork: dailyWork,
           tagDistribution: tagDistribution,
-          user: user
+          user: user,
+          monthTodosCreated,
+          monthTodosCompleted,
+          monthTodosPending,
+          totalPendingTodos
         };
         
         // 尝试使用LLM生成总结
@@ -1321,8 +1543,8 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           status: { $in: ['待办'] }
         });
 
-        // 对LLM生成的内容进行占位符替换处理
-        if (llmSummary) {
+        // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
+        if (!llmSummary) {
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, `${targetYear}年`)
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
@@ -1594,19 +1816,16 @@ exports.regenerateDailySummary = async (req, res) => {
       return total + calculateWorkTime(diary.startTime, diary.endTime);
     }, 0);
     
-    // 生成基础总结内容
+    // 生成基础总结内容（无LLM回退为占位符模板，后续进行替换）
     const baseContent = `
-# ${yesterday.toLocaleDateString('zh-CN')} 工作总结
+# {{date}} 工作总结
 
 ## 工作概览
-- 工作条目数量: ${diaries.length}
-- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 工作条目数量: {{totalEntries}}
+- 总工作时长: {{totalTime}}
 
 ## 工作详情
-${diaries.map(diary => `### 工作内容\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
-
-## 工作分布
-${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
+{{workDetails}}
     `.trim();
     
     // 获取用户信息
@@ -1665,8 +1884,8 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
       logger.info('使用默认模板重新生成的总结内容');
     }
     
-    // 对LLM生成的内容进行占位符替换处理
-    if (llmSummary) {
+    // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
+    if (!llmSummary) {
       const workDetails = diaries.map(diary => {
           const workTime = calculateWorkTime(diary.startTime, diary.endTime);
           return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
@@ -1693,7 +1912,97 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     });
     
     await summary.save();
-    
+
+    // 生成LLM待办建议并创建待办（昨日）
+    try {
+      const user = await User.findById(req.user.id);
+      const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
+      const prompt = buildDailyTodoSuggestionPrompt(user || {}, diaries, yesterday);
+      const strictPrompt = `${prompt}\n\n注意：只输出纯JSON，不要使用任何代码块标记，不要任何解释文本。`;
+      let suggestionText = null;
+
+      // 1) 优先尝试外部LLM，提升maxTokens避免截断
+      if (externalLLM) {
+        try {
+          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, req.user.id);
+        } catch (err) {
+          logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
+        }
+      }
+
+      // 2) 如果首次结果为空，尝试本地LLM
+      if (!suggestionText && localLLM) {
+        try {
+          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, req.user.id);
+        } catch (err) {
+          logger.warn('本地LLM待办建议失败', { error: err.message });
+        }
+      }
+
+      // 3) 解析与救援：先用安全解析，失败则尝试提取首尾大括号内的JSON
+      let parsed = safeParseTodoJSON(suggestionText);
+      if (!parsed && typeof suggestionText === 'string') {
+        try {
+          const start = suggestionText.indexOf('{');
+          const end = suggestionText.lastIndexOf('}');
+          if (start !== -1 && end !== -1 && end > start) {
+            const jsonStr = suggestionText.slice(start, end + 1);
+            parsed = JSON.parse(jsonStr);
+          }
+        } catch (e) {
+          logger.warn('待办建议JSON救援解析失败', { error: e.message });
+        }
+      }
+
+      // 4) 若仍解析失败，使用更严格提示重试（优先外部，回退本地）
+      if ((!parsed || !parsed.shouldCreateTodo || !Array.isArray(parsed.todos) || parsed.todos.length === 0)) {
+        let retryText = null;
+        // 外部严格重试
+        if (externalLLM) {
+          try {
+            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, req.user.id);
+          } catch (err) {
+            logger.warn('外部LLM严格重试失败', { error: err.message });
+          }
+        }
+        // 本地严格重试
+        if (!retryText && localLLM) {
+          try {
+            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, req.user.id);
+          } catch (err) {
+            logger.warn('本地LLM严格重试失败', { error: err.message });
+          }
+        }
+        // 重试解析
+        if (retryText) {
+          parsed = safeParseTodoJSON(retryText);
+          if (!parsed && typeof retryText === 'string') {
+            try {
+              const s = retryText.indexOf('{');
+              const e = retryText.lastIndexOf('}');
+              if (s !== -1 && e !== -1 && e > s) {
+                const jsonStr2 = retryText.slice(s, e + 1);
+                parsed = JSON.parse(jsonStr2);
+              }
+            } catch (e2) {
+              logger.warn('待办建议JSON严格重试救援解析失败', { error: e2.message });
+            }
+          }
+        }
+      }
+
+      // 5) 创建待办或记录无需创建
+      logger.llm(`待办解析结果: shouldCreateTodo=${parsed ? parsed.shouldCreateTodo : undefined}, todos_len=${parsed && Array.isArray(parsed.todos) ? parsed.todos.length : 0}`);
+      if (parsed && parsed.shouldCreateTodo && Array.isArray(parsed.todos) && parsed.todos.length > 0) {
+        const result = await createTodosFromSuggestions(req.user.id, parsed.todos, diaries);
+        logger.info(`为用户 ${req.user.username || req.user.id} 自动创建待办 ${result.created} 条`);
+      } else {
+        logger.info(`用户 ${req.user.username || req.user.id} 昨日无需自动待办或建议为空`);
+      }
+    } catch (error) {
+      logger.warn('自动待办生成流程异常', { error: error.message });
+    }
+
     res.json({
       message: '昨日工作总结重新生成成功',
       summary: summary
@@ -1740,19 +2049,22 @@ exports.generateTodaySummary = async (req, res) => {
       return total + calculateWorkTime(diary.startTime, diary.endTime);
     }, 0);
     
-    // 生成基础总结内容
+    // 生成基础总结内容（无LLM回退为占位符模板，后续进行替换）
     const baseContent = `
-# ${today.toLocaleDateString('zh-CN')} 工作总结
+# {{date}} 工作总结
 
 ## 工作概览
-- 工作条目数量: ${diaries.length}
-- 总工作时长: ${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟
+- 工作条目数量: {{totalEntries}}
+- 总工作时长: {{totalTime}}
 
 ## 工作详情
-${diaries.map(diary => `### 工作内容\n- 开始时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')}\n- 结束时间: ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}\n- 工作时长: ${calculateWorkTime(diary.startTime, diary.endTime)}分钟\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`).join('\n\n')}
+{{workDetails}}
 
-## 工作分布
-${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${tag}: ${count}次`).join('\n')}
+## 待办统计
+- 今日新增: {{todayTodosCreated}}
+- 今日完成: {{todayTodosCompleted}}
+- 今日未完成: {{todayTodosPending}}
+- 当前总未完成: {{totalPendingTodos}}
     `.trim();
     
     // 获取用户信息
@@ -1774,12 +2086,60 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
       user: user
     };
     
+    // 统计待办事项数据（在调用LLM之前计算并传入提示词占位符）
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todayTodosCreated = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: todayStart,
+        $lt: todayEnd
+      }
+    });
+
+    const todayTodosCompleted = await Todo.countDocuments({
+      user: req.user.id,
+      status: '已完成',
+      'statusHistory': {
+        $elemMatch: {
+          status: '已完成',
+          changedAt: {
+            $gte: todayStart,
+            $lt: todayEnd
+          }
+        }
+      }
+    });
+
+    const todayTodosPending = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: todayStart,
+        $lt: todayEnd
+      },
+      status: { $ne: '已完成' }
+    });
+
+    const totalPendingTodos = await Todo.countDocuments({
+      user: req.user.id,
+      status: { $in: ['待办'] }
+    });
+
+    // 将待办统计加入LLM数据，使模板占位符可被替换
+    llmData.todayTodosCreated = todayTodosCreated;
+    llmData.todayTodosCompleted = todayTodosCompleted;
+    llmData.todayTodosPending = todayTodosPending;
+    llmData.totalPendingTodos = totalPendingTodos;
+
     // 尝试使用LLM生成总结
     let summaryContent = baseContent;
     let llmSummary = null;
-    
+
     const { externalLLM, localLLM } = await createLLMInstances(req.user.id);
-    
+
     // 首先尝试外部LLM（如果可用）
     if (!llmSummary && externalLLM) {
       try {
@@ -1809,60 +2169,14 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
         logger.error('本地LLM错误详情:', error);
       }
     }
-    
+
     // 如果所有LLM都失败，使用默认模板
     if (!llmSummary) {
       logger.info('使用默认模板生成的今日总结内容');
     }
-    
-    // 统计待办事项数据
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
-    
-    // 今日新增的待办事项
-    const todayTodosCreated = await Todo.countDocuments({
-      user: req.user.id,
-      createdAt: {
-        $gte: todayStart,
-        $lt: todayEnd
-      }
-    });
-    
-    // 今日完成的待办事项
-    const todayTodosCompleted = await Todo.countDocuments({
-      user: req.user.id,
-      status: '已完成',
-      'statusHistory': {
-        $elemMatch: {
-          status: '已完成',
-          changedAt: {
-            $gte: todayStart,
-            $lt: todayEnd
-          }
-        }
-      }
-    });
-    
-    // 今日待完成的待办事项（今日新增但未完成的）
-    const todayTodosPending = await Todo.countDocuments({
-      user: req.user.id,
-      createdAt: {
-        $gte: todayStart,
-        $lt: todayEnd
-      },
-      status: { $ne: '已完成' }
-    });
-    
-    // 数据库中所有未完成的待办事项
-    const totalPendingTodos = await Todo.countDocuments({
-      user: req.user.id,
-      status: { $in: ['待办'] }
-    });
 
-    // 对LLM生成的内容进行占位符替换处理
-    if (llmSummary) {
+    // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
+    if (!llmSummary) {
       const workDetails = diaries.map(diary => {
           const workTime = calculateWorkTime(diary.startTime, diary.endTime);
           return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
@@ -1893,6 +2207,95 @@ ${Object.entries(generateTagDistribution(diaries)).map(([tag, count]) => `- ${ta
     });
     
     await summary.save();
+
+    // 生成LLM待办建议并创建待办（今日）
+    try {
+      const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
+      const prompt = buildDailyTodoSuggestionPrompt(user, diaries, today);
+      const strictPrompt = `${prompt}\n\n注意：只输出纯JSON，不要使用任何代码块标记，不要任何解释文本。`;
+      let suggestionText = null;
+
+      // 1) 优先尝试外部LLM，提升maxTokens避免截断
+      if (externalLLM) {
+        try {
+          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 });
+        } catch (err) {
+          logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
+        }
+      }
+
+      // 2) 如果首次结果为空，尝试本地LLM
+      if (!suggestionText && localLLM) {
+        try {
+          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 });
+        } catch (err) {
+          logger.warn('本地LLM待办建议失败', { error: err.message });
+        }
+      }
+
+      // 3) 解析与救援：先用安全解析，失败则尝试提取首尾大括号内的JSON
+      let parsed = safeParseTodoJSON(suggestionText);
+      if (!parsed && typeof suggestionText === 'string') {
+        try {
+          const start = suggestionText.indexOf('{');
+          const end = suggestionText.lastIndexOf('}');
+          if (start !== -1 && end !== -1 && end > start) {
+            const jsonStr = suggestionText.slice(start, end + 1);
+            parsed = JSON.parse(jsonStr);
+          }
+        } catch (e) {
+          logger.warn('待办建议JSON救援解析失败', { error: e.message });
+        }
+      }
+
+      // 4) 若仍解析失败，使用更严格提示重试（优先外部，回退本地）
+      if ((!parsed || !parsed.shouldCreateTodo || !Array.isArray(parsed.todos) || parsed.todos.length === 0)) {
+        let retryText = null;
+        // 外部严格重试
+        if (externalLLM) {
+          try {
+            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 });
+          } catch (err) {
+            logger.warn('外部LLM严格重试失败', { error: err.message });
+          }
+        }
+        // 本地严格重试
+        if (!retryText && localLLM) {
+          try {
+            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 });
+          } catch (err) {
+            logger.warn('本地LLM严格重试失败', { error: err.message });
+          }
+        }
+        // 重试解析
+        if (retryText) {
+          parsed = safeParseTodoJSON(retryText);
+          if (!parsed && typeof retryText === 'string') {
+            try {
+              const s = retryText.indexOf('{');
+              const e = retryText.lastIndexOf('}');
+              if (s !== -1 && e !== -1 && e > s) {
+                const jsonStr2 = retryText.slice(s, e + 1);
+                parsed = JSON.parse(jsonStr2);
+              }
+            } catch (e2) {
+              logger.warn('待办建议JSON严格重试救援解析失败', { error: e2.message });
+            }
+          }
+        }
+      }
+
+      // 5) 创建待办或记录无需创建
+      logger.llm(`待办解析结果: shouldCreateTodo=${parsed ? parsed.shouldCreateTodo : undefined}, todos_len=${parsed && Array.isArray(parsed.todos) ? parsed.todos.length : 0}`);
+      if (parsed && parsed.shouldCreateTodo && Array.isArray(parsed.todos) && parsed.todos.length > 0) {
+        const result = await createTodosFromSuggestions(req.user.id, parsed.todos, diaries);
+        logger.info(`为用户 ${user.username} 自动创建待办 ${result.created} 条`);
+      } else {
+        logger.info(`用户 ${user.username} 今日无需自动待办或建议为空`);
+      }
+    } catch (error) {
+      logger.warn('自动待办生成流程异常', { error: error.message });
+    }
     
     res.json({ message: '今日总结生成成功', summary });
   } catch (error) {
@@ -1961,6 +2364,33 @@ ${diaries.map(diary => {
         
         let summaryContent = baseContent;
         
+        // 在调用LLM前统计周度待办事项
+        const weekStart = new Date(lastWeekStart);
+        const weekEnd = new Date(lastWeekEnd);
+        const weekTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: weekStart, $lt: weekEnd }
+        });
+        const weekTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: { $gte: weekStart, $lt: weekEnd }
+            }
+          }
+        });
+        const weekTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: weekStart, $lt: weekEnd },
+          status: { $ne: '已完成' }
+        });
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
         const llmData = {
@@ -1982,7 +2412,11 @@ ${diaries.map(diary => {
           }),
           dailyWork: dailyWork,
           tagDistribution: tagDistribution,
-          user: user
+          user: user,
+          weekTodosCreated,
+          weekTodosCompleted,
+          weekTodosPending,
+          totalPendingTodos
         };
         
         let llmSummary = null;
@@ -2021,49 +2455,7 @@ ${diaries.map(diary => {
           logger.info('使用默认模板生成的周报总结内容');
         }
         
-        // 统计周度待办事项数据
-        const weekStart = new Date(lastWeekStart);
-        const weekEnd = new Date(lastWeekEnd);
-        
-        // 本周新增的待办事项
-        const weekTodosCreated = await Todo.countDocuments({
-          user: user._id,
-          createdAt: {
-            $gte: weekStart,
-            $lt: weekEnd
-          }
-        });
-        
-        // 本周完成的待办事项
-        const weekTodosCompleted = await Todo.countDocuments({
-          user: user._id,
-          status: '已完成',
-          'statusHistory': {
-            $elemMatch: {
-              status: '已完成',
-              changedAt: {
-                $gte: weekStart,
-                $lt: weekEnd
-              }
-            }
-          }
-        });
-        
-        // 本周待处理的待办事项
-        const weekTodosPending = await Todo.countDocuments({
-          user: user._id,
-          status: { $in: ['待处理', '进行中'] },
-          createdAt: {
-            $gte: weekStart,
-            $lt: weekEnd
-          }
-        });
-        
-        // 总待处理待办事项
-        const totalPendingTodos = await Todo.countDocuments({
-          user: user._id,
-          status: { $in: ['待处理', '进行中'] }
-        });
+        // 周度待办统计已在LLM调用前计算并加入llmData
         
         // 构建summaryData和workDetails对象用于占位符替换
         const summaryData = {
@@ -2088,33 +2480,12 @@ ${diaries.map(diary => {
           };
         }
         
-        // 替换占位符
-        if (llmSummary) {
+        // 如果未生成LLM内容，才进行默认模板的占位符替换（当前默认模板不含周待办占位符）
+        if (!llmSummary) {
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, `${lastWeekStart.toLocaleDateString('zh-CN')} 到 ${lastWeekEnd.toLocaleDateString('zh-CN')}`)
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
-            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
-            .replace(/\{\{weekTodosCreated\}\}/g, weekTodosCreated)
-            .replace(/\{\{weekTodosCompleted\}\}/g, weekTodosCompleted)
-            .replace(/\{\{weekTodosPending\}\}/g, weekTodosPending)
-            .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
-            .replace(/\{\{userName\}\}/g, user.username || '')
-            .replace(/\{\{userPosition\}\}/g, user.position || '')
-            .replace(/\{\{userDepartment\}\}/g, user.department || '');
-          
-          // 替换summaryData嵌套占位符
-          Object.keys(summaryData).forEach(key => {
-            const regex = new RegExp(`\\{\\{summaryData\\.${key}\\}\\}`, 'g');
-            summaryContent = summaryContent.replace(regex, summaryData[key]);
-          });
-          
-          // 替换workDetails嵌套占位符
-          Object.keys(workDetailsObj).forEach(day => {
-            Object.keys(workDetailsObj[day]).forEach(prop => {
-              const regex = new RegExp(`\\{\\{workDetails\\.${day}\\.${prop}\\}\\}`, 'g');
-              summaryContent = summaryContent.replace(regex, workDetailsObj[day][prop]);
-            });
-          });
+            .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`);
         }
         
         // 生成HTML网页
@@ -2218,13 +2589,45 @@ ${diaries.map(diary => {
         
         let summaryContent = baseContent;
         
-        // 准备LLM所需数据
+        // 在调用LLM之前准备数据（包含标签分布与待办统计）
+        const tagDistribution = generateTagDistribution(diaries);
+        const monthStart = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+        const monthEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        const monthTodosCreated = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd }
+        });
+        const monthTodosCompleted = await Todo.countDocuments({
+          user: user._id,
+          status: '已完成',
+          'statusHistory': {
+            $elemMatch: {
+              status: '已完成',
+              changedAt: { $gte: monthStart, $lt: monthEnd }
+            }
+          }
+        });
+        const monthTodosPending = await Todo.countDocuments({
+          user: user._id,
+          createdAt: { $gte: monthStart, $lt: monthEnd },
+          status: { $ne: '已完成' }
+        });
+        const totalPendingTodos = await Todo.countDocuments({
+          user: user._id,
+          status: { $in: ['待办'] }
+        });
+
         const llmData = {
           date: lastMonth,
           diaries: diaries,
           totalWorkTime: totalWorkTime,
           dailyWork: dailyWork,
-          user: user
+          tagDistribution: tagDistribution,
+          user: user,
+          monthTodosCreated,
+          monthTodosCompleted,
+          monthTodosPending,
+          totalPendingTodos
         };
         
         let llmSummary = null;
@@ -2267,7 +2670,6 @@ ${diaries.map(diary => {
         let htmlFilePath = null;
         try {
           logger.system('开始生成月度总结HTML网页...');
-          const tagDistribution = generateTagDistribution(diaries);
           const htmlData = {
             date: lastMonth,
             diaries: diaries,
@@ -2276,7 +2678,7 @@ ${diaries.map(diary => {
             tagDistribution: tagDistribution
           };
           
-          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent);
+          const htmlContent = await generateHTMLPage(htmlData, 'monthly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'monthly', lastMonth);
           logger.info('月度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
@@ -2545,5 +2947,98 @@ exports.markAllSummariesAsRead = async (req, res) => {
   } catch (error) {
     logger.error('批量标记总结已读失败:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// 确保并生成总结的HTML文件，返回可访问URL
+exports.ensureSummaryHTML = async (req, res) => {
+  try {
+    const summaryId = req.params.id;
+    const summary = await Summary.findById(summaryId);
+    if (!summary) {
+      return res.status(404).json({ success: false, message: '未找到总结记录' });
+    }
+    if (String(summary.user) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, message: '无权访问该总结' });
+    }
+
+    const type = summary.type;
+    const date = new Date(summary.date);
+    const userId = summary.user;
+
+    const path = require('path');
+    const fs = require('fs');
+
+    // 计算期望文件名
+    const year = date.getFullYear();
+    const monthPart = type === 'monthly' ? String(date.getMonth() + 1).padStart(2, '0') : '';
+    const expectedFilename = `${userId}_${type}_${year}${monthPart ? '_' + monthPart : ''}.html`;
+    const uploadsDir = path.join(__dirname, '../uploads/summaries');
+    const expectedFilePath = path.join(uploadsDir, expectedFilename);
+
+    // 如果已有路径且文件存在，直接返回
+    if (summary.htmlFilePath) {
+      const relative = summary.htmlFilePath.replace('/uploads/summaries/', '');
+      const actualPath = path.join(uploadsDir, relative);
+      if (fs.existsSync(actualPath)) {
+        return res.json({ success: true, url: summary.htmlFilePath });
+      }
+    }
+
+    // 构建数据（根据类型获取对应时间范围内的diaries）
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    let end = new Date(start);
+    if (type === 'weekly') {
+      end.setDate(start.getDate() + 7);
+    } else if (type === 'monthly') {
+      start.setDate(1);
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    } else if (type === 'yearly') {
+      start.setMonth(0, 1);
+      end = new Date(start.getFullYear() + 1, 0, 1);
+    } else { // daily
+      end.setDate(start.getDate() + 1);
+    }
+
+    const diaries = await Diary.find({
+      user: userId,
+      startTime: { $gte: start, $lt: end }
+    }).exec();
+
+    // 计算统计数据
+    let totalWorkTime = 0;
+    const dailyWork = {};
+    diaries.forEach(diary => {
+      totalWorkTime += Math.floor((new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60));
+      const dateKey = new Date(diary.startTime).toDateString();
+      dailyWork[dateKey] = (dailyWork[dateKey] || 0) + Math.floor((new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60));
+    });
+    const tagDistribution = (function (ds) {
+      const map = new Map();
+      ds.forEach(d => (d.tags || []).forEach(t => map.set(t, (map.get(t) || 0) + 1)));
+      return Object.fromEntries(map);
+    })(diaries);
+
+    const htmlData = {
+      date: start,
+      diaries,
+      totalWorkTime,
+      dailyWork,
+      tagDistribution
+    };
+
+    // 生成并保存HTML
+    try {
+      const htmlContent = await generateHTMLPage(htmlData, type, summary.content, userId);
+      const htmlFilePath = await saveHTMLFile(htmlContent, userId, type, start);
+      summary.htmlFilePath = htmlFilePath;
+      await summary.save();
+      return res.json({ success: true, url: htmlFilePath });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: '生成HTML失败', error: err.message });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, message: '处理请求失败', error: error.message });
   }
 };

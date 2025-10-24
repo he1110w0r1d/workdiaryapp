@@ -241,6 +241,10 @@ class LocalLLM {
           .replace('{{date}}', data.date.toLocaleDateString('zh-CN'))
           .replace('{{totalEntries}}', data.diaries.length)
           .replace('{{totalTime}}', data.totalWorkTime)
+          .replace('{{todayTodosCreated}}', (data.todayTodosCreated ?? 0).toString())
+          .replace('{{todayTodosCompleted}}', (data.todayTodosCompleted ?? 0).toString())
+          .replace('{{todayTodosPending}}', (data.todayTodosPending ?? 0).toString())
+          .replace('{{totalPendingTodos}}', (data.totalPendingTodos ?? 0).toString())
           .replace('{{workDetails}}', this._formatDailyWorkDetails(data.diaries));
         break;
         
@@ -255,6 +259,10 @@ class LocalLLM {
           .replace('{{totalEntries}}', data.diaries.length)
           .replace('{{totalTime}}', `${Math.floor(data.totalWorkTime / 60)}小时${data.totalWorkTime % 60}分钟`)
           .replace('{{workDetails}}', data.workDetails || '')
+          .replace('{{weekTodosCreated}}', (data.weekTodosCreated ?? 0).toString())
+          .replace('{{weekTodosCompleted}}', (data.weekTodosCompleted ?? 0).toString())
+          .replace('{{weekTodosPending}}', (data.weekTodosPending ?? 0).toString())
+          .replace('{{totalPendingTodos}}', (data.totalPendingTodos ?? 0).toString())
           .replace('{{summaryData}}', JSON.stringify({
             totalEntries: data.totalEntries,
             totalTime: data.totalWorkTime,
@@ -271,7 +279,11 @@ class LocalLLM {
           .replace('{{totalTime}}', data.totalWorkTime)
           .replace('{{averageTime}}', Math.floor(data.totalWorkTime / Object.keys(data.dailyWork).length))
           .replace('{{tagDistribution}}', this._formatTagDistribution(data.tagDistribution))
-          .replace('{{dailyWorkStats}}', this._formatDailyWorkStats(data.dailyWork));
+          .replace('{{dailyWorkStats}}', this._formatDailyWorkStats(data.dailyWork))
+          .replace('{{monthTodosCreated}}', (data.monthTodosCreated ?? 0).toString())
+          .replace('{{monthTodosCompleted}}', (data.monthTodosCompleted ?? 0).toString())
+          .replace('{{monthTodosPending}}', (data.monthTodosPending ?? 0).toString())
+          .replace('{{totalPendingTodos}}', (data.totalPendingTodos ?? 0).toString());
         break;
         
       case 'yearly':

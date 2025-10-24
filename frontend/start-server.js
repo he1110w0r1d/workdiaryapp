@@ -3,11 +3,13 @@ const path = require('path');
 
 console.log('启动React前端服务器...');
 
-// 使用react-scripts启动开发服务器
-const reactScripts = spawn('npx', ['react-scripts', 'start'], {
+// 使用本地 react-scripts 启动开发服务器，避免依赖 npx 在不同环境的 PATH
+const startScript = path.join(__dirname, 'node_modules', 'react-scripts', 'scripts', 'start.js');
+const reactScripts = spawn(process.execPath, [startScript], {
   cwd: __dirname,
   stdio: 'inherit',
-  shell: true
+  shell: false,
+  windowsHide: true
 });
 
 reactScripts.on('error', (error) => {

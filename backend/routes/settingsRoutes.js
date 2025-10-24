@@ -13,6 +13,9 @@ router.post('/llm', protect, settingsController.saveLLMSettings);
 // 测试LLM连接
 router.post('/llm/test', protect, settingsController.testLLMConnection);
 
+// 测试嵌入模型连接
+router.post('/embeddings/test', protect, settingsController.testEmbeddingsConnection);
+
 // 用户级别LLM配置路由
 // 获取用户LLM配置列表
 router.get('/user-llm', protect, settingsController.getUserLLMConfigs);

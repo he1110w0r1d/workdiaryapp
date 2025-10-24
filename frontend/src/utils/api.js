@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 // 创建axios实例
+const defaultApiUrl = `${window.location.protocol}//${window.location.hostname}:5000/api`;
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://192.168.1.168:5000/api',
+  baseURL: process.env.REACT_APP_API_URL || defaultApiUrl,
+  withCredentials: true, // 携带跨域Cookie以支持SSO免登录
   timeout: 600000 // 增加到600秒（10分钟），适应月度/年度总结生成时间
 });
 
