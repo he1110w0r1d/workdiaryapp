@@ -183,6 +183,23 @@ const SummaryList = () => {
     }
   };
 
+  // 重新生成上周总结
+  const [regenerateLastWeeklyLoading, setRegenerateLastWeeklyLoading] = useState(false);
+  const handleRegenerateLastWeeklySummary = async () => {
+    setRegenerateLastWeeklyLoading(true);
+    try {
+      const response = await api.post('/summaries/regenerate/weekly/last');
+      message.success(response.data.message);
+      // 重新获取每周总结列表
+      fetchSummaries('weekly');
+    } catch (error) {
+      console.error('重新生成上周总结失败:', error);
+      message.error('重新生成失败: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setRegenerateLastWeeklyLoading(false);
+    }
+  };
+
   // 生成月度总结
   const handleGenerateMonthlySummary = async () => {
     setGenerateMonthlyLoading(true);
@@ -264,6 +281,28 @@ const SummaryList = () => {
       case 'yearly': return 'purple';
       default: return 'default';
     }
+  };
+
+  // 计算每周范围（用于无 meta 回退）
+  const getWeeklyRangeLabel = (date) => {
+    const startDate = moment(date);
+    const endDate = moment(date).add(6, 'days');
+    return `${startDate.format('YYYY/MM/DD')} - ${endDate.format('YYYY/MM/DD')}`;
+  };
+
+  // 弹窗标题中的日期/范围文案
+  const getTitleDateText = (summary) => {
+    if (!summary) return '';
+    if (summary.type === 'weekly') {
+      return summary.meta?.rangeLabel || getWeeklyRangeLabel(summary.date);
+    }
+    if (summary.type === 'monthly') {
+      return moment(summary.date).format('YYYY年M月');
+    }
+    if (summary.type === 'yearly') {
+      return moment(summary.date).format('YYYY年');
+    }
+    return moment(summary.date).format('YYYY-MM-DD');
   };
 
   // 查看提示词
@@ -363,9 +402,8 @@ const SummaryList = () => {
           return moment(text).format('YYYY年M月');
         }
         if (record.type === 'weekly') {
-          const startDate = moment(text);
-          const endDate = moment(text).add(6, 'days');
-          return `${startDate.format('M月D日')}-${endDate.format('M月D日')}`;
+          // 优先使用后端提供的范围标签
+          return record.meta?.rangeLabel || getWeeklyRangeLabel(text);
         }
         if (record.type === 'yearly') {
           return moment(text).format('YYYY年');
@@ -374,6 +412,7 @@ const SummaryList = () => {
       },
       sorter: (a, b) => new Date(a.date) - new Date(b.date)
     },
+    
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -447,7 +486,23 @@ const SummaryList = () => {
           </Popconfirm>
         </Space>
       )
-    }
+    },
+    // 每周总结专属：范围与生成方式说明（移到操作列之后）
+    ...(type === 'weekly' ? [{
+      title: '说明',
+      key: 'metaInfo',
+      render: (_, record) => {
+        if (record.type !== 'weekly') return '';
+        const rangeLabel = record.meta?.rangeLabel || getWeeklyRangeLabel(record.date);
+        const gen = record.meta?.generatedBy === 'auto' ? '自动（上一周）' : record.meta?.generatedBy === 'manual' ? '手动（本周）' : '未知';
+        const llmText = record.meta?.llmUsed === 'none' ? '未使用LLM' : (record.meta?.llmName || '未知LLM');
+        return (
+          <span>
+            范围：{rangeLabel}；生成方式：{gen}；LLM：{llmText}
+          </span>
+        );
+      }
+    }] : [])
   ];
 
   const renderSummaryTable = (summaries, type) => {
@@ -573,6 +628,15 @@ const SummaryList = () => {
                       >
                         立即生成每周总结
                       </Button>
+                      <Button
+                        type="default"
+                        icon={<ReloadOutlined />}
+                        loading={regenerateLastWeeklyLoading}
+                        onClick={handleRegenerateLastWeeklySummary}
+                        size="small"
+                      >
+                        重新生成上周总结
+                      </Button>
                     </Space>
                   </div>
                 }
@@ -677,7 +741,7 @@ const SummaryList = () => {
       />
 
       <Modal
-        title={`${selectedSummary ? getTypeText(selectedSummary.type) : ''} - ${selectedSummary ? moment(selectedSummary.date).format('YYYY-MM-DD') : ''}`}
+        title={`${selectedSummary ? getTypeText(selectedSummary.type) : ''} - ${selectedSummary ? getTitleDateText(selectedSummary) : ''}`}
         open={!!selectedSummary}
         onCancel={() => setSelectedSummary(null)}
         footer={[
@@ -694,6 +758,25 @@ const SummaryList = () => {
             lineHeight: '1.6',
             color: '#333'
           }}>
+            {selectedSummary.type === 'weekly' && (
+              <div style={{
+                marginBottom: '12px',
+                padding: '8px 12px',
+                background: '#f6f8ff',
+                border: '1px solid #e6f7ff',
+                borderRadius: '6px',
+                color: '#595959'
+              }}>
+                <strong style={{ color: '#1890ff' }}>范围：</strong>
+                {selectedSummary.meta?.rangeLabel || getWeeklyRangeLabel(selectedSummary.date)}
+                <span style={{ margin: '0 8px' }}>|</span>
+                <strong style={{ color: '#1890ff' }}>生成方式：</strong>
+                {selectedSummary.meta?.generatedBy === 'auto' ? '自动（上一周）' : selectedSummary.meta?.generatedBy === 'manual' ? '手动（本周）' : '未知'}
+                <span style={{ margin: '0 8px' }}>|</span>
+                <strong style={{ color: '#1890ff' }}>LLM：</strong>
+                {selectedSummary.meta?.llmUsed === 'external' ? '外部LLM' : selectedSummary.meta?.llmUsed === 'local' ? '本地LLM' : '未使用LLM'}
+              </div>
+            )}
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}

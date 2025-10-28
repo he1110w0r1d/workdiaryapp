@@ -7,6 +7,7 @@ const {
   getSummaryById,
   deleteSummary,
   regenerateDailySummary,
+  regenerateLastWeeklySummary,
   generateTodaySummary,
   generateWeeklySummary,
   generateMonthlySummary,
@@ -33,6 +34,10 @@ router.route('/:id/ensure-html')
 
 router.route('/regenerate/daily')
   .post(protect, regenerateDailySummary);
+
+// 重新生成上周每周总结
+router.route('/regenerate/weekly/last')
+  .post(protect, regenerateLastWeeklySummary);
 
 router.route('/generate/today')
   .post(protect, generateTodaySummary);

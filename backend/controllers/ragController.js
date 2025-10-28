@@ -38,6 +38,14 @@ const cosine = (a, b) => {
   return dot / denom;
 };
 
+// 构建单条日记的索引文本：标题 + 正文 + 地点 + 标签
+const buildIndexText = (d) => [
+  d.title || '',
+  d.content || d.text || '',
+  d.location ? `地点:${d.location}` : '',
+  Array.isArray(d.tags) && d.tags.length ? `标签:${d.tags.join(' ')}` : ''
+].filter(Boolean).join('\n');
+
 // 重新索引当前用户的所有日记
 exports.reindex = async (req, res) => {
   try {
@@ -46,10 +54,14 @@ exports.reindex = async (req, res) => {
     const embedder = new Embeddings();
     let totalChunks = 0;
 
-    try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length }); } catch (_) {}
+    // 支持策略：paragraph | perDiary（整篇）
+    const strategy = String((req.query.strategy || req.body?.strategy || 'paragraph')).toLowerCase();
+
+    try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length, strategy }); } catch (_) {}
 
     for (const d of diaries) {
-      const chunks = chunkDiary(d.content || d.text || d.title || '');
+      const baseText = buildIndexText(d);
+      const chunks = strategy === 'perdiary' ? [baseText] : chunkDiary(baseText);
       let idx = 0;
       for (const c of chunks) {
         const vec = await embedder.embed(c);
@@ -63,9 +75,9 @@ exports.reindex = async (req, res) => {
       }
     }
 
-    try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks }); } catch (_) {}
+    try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy }); } catch (_) {}
 
-    return res.json({ success: true, indexedDiaries: diaries.length, indexedChunks: totalChunks });
+    return res.json({ success: true, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy });
   } catch (error) {
     try { logger.error('RAG索引失败', { message: error.message }); } catch (_) {}
     return res.status(500).json({ success: false, message: 'RAG索引失败', error: error.message });
@@ -73,15 +85,17 @@ exports.reindex = async (req, res) => {
 };
 
 // 新增：为指定用户重建索引（供内部调用，无HTTP响应）
-exports.reindexForUser = async (userId) => {
+exports.reindexForUser = async (userId, options = {}) => {
   const diaries = await Diary.find({ user: userId }).sort({ date: -1 }).lean();
   const embedder = new Embeddings();
   let totalChunks = 0;
+  const strategy = String((options.strategy || 'paragraph')).toLowerCase();
 
-  try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length }); } catch (_) {}
+  try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length, strategy }); } catch (_) {}
 
   for (const d of diaries) {
-    const chunks = chunkDiary(d.content || d.text || d.title || '');
+    const baseText = buildIndexText(d);
+    const chunks = strategy === 'perdiary' ? [baseText] : chunkDiary(baseText);
     let idx = 0;
     for (const c of chunks) {
       const vec = await embedder.embed(c);
@@ -95,9 +109,9 @@ exports.reindexForUser = async (userId) => {
     }
   }
 
-  try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks }); } catch (_) {}
+  try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy }); } catch (_) {}
 
-  return { indexedDiaries: diaries.length, indexedChunks: totalChunks };
+  return { indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy };
 };
 
 // 查询RAG：返回LLM答案与命中片段
@@ -105,7 +119,7 @@ exports.query = async (req, res) => {
   try {
     const userId = req.user.id;
     const question = String(req.body.question || '').trim();
-    const topK = Math.max(1, Math.min(8, Number(req.body.topK) || 5));
+    const topK = Math.max(1, Math.min(10, Number(req.body.topK) || 5));
     if (!question) return res.status(400).json({ success: false, message: '缺少question' });
 
     try { logger.llm('RAG查询开始', { userId, questionPreview: question.substring(0, 100), topK }); } catch (_) {}
@@ -135,35 +149,24 @@ exports.query = async (req, res) => {
       const end = meta?.endTime ? new Date(meta.endTime) : null;
       const dateStr = start ? `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}` : '未知日期';
       const timeRange = start && end ? `${start.toLocaleString()} - ${end.toLocaleString()}` : '';
-      return `# 片段${i+1} (score=${s.score.toFixed(3)})\n日期: ${dateStr}${timeRange ? `\n时间: ${timeRange}` : ''}\n${s.text}`;
+      return `【片段${i+1} | ${dateStr} ${timeRange}】\n${s.text}`;
     }).join('\n\n');
 
-    // 用LLM生成答案
-    const { externalLLM, localLLM } = await createLLMInstances(userId);
-
-    const llmPrompt = `你是我的专业工作助理。请基于“我的工作日记”片段回答，不要称其为“知识库”。\n\n【工作日记片段】\n${context}\n\n【问题】\n${question}\n\n输出要求（使用Markdown）：\n1. **时间线**：按日期先后组织（YYYY-MM-DD），逐条说明当天发生的关键事项；如同一天有多条，合并归纳并标注要点。\n2. **结论/回答**：围绕问题给出直接回答，必要时引用对应日期或片段编号作为依据。\n3. **专业助理总结与分析**：严格包含以下四小节，采用要点式：\n   - 关键结论\n   - 风险\n   - 阻碍\n   - 建议\n\n约束：\n- 仅依据提供的日记片段，不要编造信息；\n- 用中文、结构清晰；\n- 如片段不足以完整回答，请明确指出不足并给出补充建议。`;
-
-    try {
-      logger.llm('LLM实例就绪', {
-        externalProvider: externalLLM?.config?.provider,
-        externalApiUrl: externalLLM?.config?.apiUrl,
-        externalModel: externalLLM?.config?.model,
-        localEnabled: localLLM?.config?.enabled,
-        localModel: localLLM?.config?.model,
-        promptLength: llmPrompt.length
-      });
-    } catch (_) {}
+    const llmPrompt = `你是一位熟悉我工作内容的助手。\n请基于以下参考片段回答问题：\n\n${context}\n\n问题：${question}\n\n回答要求：\n- 给出结论和依据；\n- 以中文输出；\n- 简洁分点表达。`;
 
     let answer = null;
+
+    const { externalLLM, localLLM } = await createLLMInstances(userId);
+
     if (externalLLM) {
       try {
-        const maxOut = externalLLM?.config?.maxTokens || 4096;
-        answer = await externalLLM._callExternalLLM(llmPrompt, { maxTokens: maxOut, temperature: 0.2 });
-        try { logger.llm('外部LLM生成成功', { length: (answer || '').length, preview: (answer || '').substring(0, 200), maxTokensUsed: maxOut }); } catch (_) {}
+        answer = await externalLLM.generateText(llmPrompt, { temperature: 0.2 });
+        try { logger.llm('外部LLM生成成功', { length: (answer || '').length, preview: (answer || '').substring(0, 200) }); } catch (_) {}
       } catch (e) {
         try { logger.error('外部LLM生成失败', { message: e.message }); } catch (_) {}
       }
     }
+
     if (!answer && localLLM) {
       try {
         answer = await localLLM.generateText(llmPrompt, { temperature: 0.2 });
@@ -200,6 +203,5 @@ exports.query = async (req, res) => {
     return res.json({ success: true, answer, snippets: snippetsOut });
   } catch (error) {
     try { logger.error('RAG查询失败', { message: error.message }); } catch (_) {}
-    return res.status(500).json({ success: false, message: 'RAG查询失败', error: error.message });
-  }
+    return res.status(500).json({ success: false, message: 'RAG查询失败', error: error.message }); }
 };

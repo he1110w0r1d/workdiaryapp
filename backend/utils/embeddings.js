@@ -75,14 +75,46 @@ class Embeddings {
    * 简易本地哈希嵌入：对词进行哈希并归一化，保证可用
    */
   _hashEmbed(text) {
-    const words = text.toLowerCase().split(/\W+/).filter(Boolean);
     const dim = 256;
     const vec = new Array(dim).fill(0);
-    for (const w of words) {
-      const h = crypto.createHash('md5').update(w).digest();
-      const idx = h[0];
+
+    const lower = String(text || '').toLowerCase();
+    // 提取拉丁/数字token
+    const latinTokens = lower.match(/[a-z0-9]+/g) || [];
+    for (const tok of latinTokens) {
+      const h = crypto.createHash('md5').update(tok).digest();
+      for (let i = 0; i < 4; i++) {
+        const idx = h[i] % dim;
+        vec[idx] += 1;
+      }
+      const lenIdx = (tok.length * 17) % dim;
+      vec[lenIdx] += 0.5;
+    }
+
+    // 中文及其他Unicode字符，使用字符n-gram（2-gram/3-gram）
+    const chars = Array.from(lower);
+    const grams = [];
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i];
+      // 跳过空白
+      if (/[\s]/.test(ch)) continue;
+      grams.push(ch);
+      if (i + 1 < chars.length) grams.push(ch + chars[i + 1]);
+      if (i + 2 < chars.length) grams.push(ch + chars[i + 1] + chars[i + 2]);
+    }
+    for (const g of grams) {
+      const h = crypto.createHash('md5').update(g).digest();
+      const idx = h[0] % dim;
       vec[idx] += 1;
     }
+
+    // 文本长度的全局特征
+    const textLenIdx = (chars.length * 23) % dim;
+    vec[textLenIdx] += 0.3;
+
+    // 防止全零
+    if (vec.every(v => v === 0)) vec[0] = 1;
+
     const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0)) || 1;
     return vec.map(v => v / norm);
   }

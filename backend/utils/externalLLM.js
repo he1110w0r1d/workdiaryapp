@@ -10,7 +10,8 @@ const logger = require('../utils/logger');
 class ExternalLLM {
   constructor(config = {}) {
     // 默认配置
-    this.config = {
+    // 先合并基础配置
+    const baseConfig = {
       // 外部LLM提供商
       provider: process.env.EXTERNAL_LLM_PROVIDER || 'openai',
       // API密钥
@@ -19,7 +20,7 @@ class ExternalLLM {
       apiUrl: process.env.EXTERNAL_LLM_API_URL || '',
       // 模型名称
       model: process.env.EXTERNAL_LLM_MODEL || 'deepseek-ai/DeepSeek-V3',
-      // 请求超时时间（毫秒）
+      // 请求超时时间（毫秒），允许用户配置覆盖，但至少5分钟（300000ms）
       timeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '600000'),
       // 温度参数，控制输出的随机性
       temperature: parseFloat(process.env.EXTERNAL_LLM_TEMPERATURE || '0.7'),
@@ -28,6 +29,15 @@ class ExternalLLM {
       // 是否启用外部LLM
       enabled: process.env.LLM_TYPE === 'external',
       ...config
+    };
+
+    // 规范化与下限保护：将超时至少提升到5分钟，避免30秒配置导致频繁超时
+    const inputTimeout = Number(baseConfig.timeout);
+    const resolvedTimeout = Number.isFinite(inputTimeout) ? Math.max(inputTimeout, 300000) : 300000;
+
+    this.config = {
+      ...baseConfig,
+      timeout: resolvedTimeout
     };
 
     // 创建axios实例（禁用环境代理，避免企业/系统代理导致TLS/连接问题或30秒内断开）
@@ -331,7 +341,8 @@ class ExternalLLM {
       if (isTransient) {
         try {
           logger.llm('出现瞬时错误，尝试以较小max_tokens重试一次');
-          const reducedTokens = Math.max(512, Math.floor(maxTokens / 2));
+          const half = Math.max(512, Math.floor(maxTokens / 2));
+          const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
           requestData.max_tokens = reducedTokens;
           if (typeof promptToSend === 'string' && promptToSend.length > 12000) {
             promptToSend = promptToSend.slice(0, 12000);
@@ -349,12 +360,19 @@ class ExternalLLM {
       } else {
         // 针对非瞬时错误的 max_tokens 限制，进行一次降级重试
         const status = error.response?.status;
-        const bodyMsg = (error.response?.data?.error?.message || error.message || '').toString();
-        const tokenError = status === 400 && /max[_ ]?tokens|too many tokens|invalid/i.test(bodyMsg);
+        const bodyRaw = error.response?.data || {};
+        const bodyMsg = (
+          bodyRaw?.error?.message ||
+          bodyRaw?.message ||
+          error.message ||
+          ''
+        ).toString();
+        const tokenError = status === 400 && /max[_ ]?tokens|too many tokens|invalid|length/i.test(bodyMsg);
         if (tokenError) {
           try {
             logger.llm('检测到max_tokens限制，降级max_tokens并重试一次');
-            const reducedTokens = Math.max(8192, Math.floor(maxTokens / 2));
+            const half = Math.max(512, Math.floor(maxTokens / 2));
+            const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
             requestData.max_tokens = reducedTokens;
             response = await this.client.post(apiUrl, requestData, requestConfig);
           } catch (retryErr) {
@@ -385,10 +403,12 @@ class ExternalLLM {
     const n = Number(asked) || 1024;
     switch (provider) {
       case 'deepseek':
-        return Math.min(n, 32000);
+        return Math.min(n, 4096);
+      case 'zhipu':
+        return Math.min(n, 8192);
       case 'openai':
       case 'openrouter':
-        return Math.min(n, 32000);
+        return Math.min(n, 8192);
       case 'anthropic':
       case 'claude':
         return Math.min(n, 8192);

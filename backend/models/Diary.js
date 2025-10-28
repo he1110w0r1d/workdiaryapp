@@ -52,6 +52,11 @@ const diarySchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // Dify文档映射（可选）
+  difyDocId: {
+    type: String,
+    default: null
+  },
   // 软删除相关字段
   isDeleted: {
     type: Boolean,

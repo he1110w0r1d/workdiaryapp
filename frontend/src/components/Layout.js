@@ -220,6 +220,11 @@ const AppLayout = ({ children }) => {
       label: <Link to="/app/model-settings">模型设置</Link>,
     },
     {
+      key: '/app/ai-assistant',
+      icon: <RobotOutlined />,
+      label: <Link to="/app/ai-assistant">AI 助手</Link>,
+    },
+    {
       key: '/app/user-settings',
       icon: <UserOutlined />,
       label: <Link to="/app/user-settings">用户设置</Link>,

@@ -8,13 +8,14 @@ const cookieParser = require('cookie-parser');
 
 const logger = require('./utils/logger');
 // 加载环境变量
-dotenv.config();
+dotenv.config({ path: require('path').join(__dirname, '.env') });
 
 // 加载LLM配置
 const fs = require('fs');
 const path = require('path');
 const settingsFilePath = path.join(__dirname, 'config/llm-settings.json');
 const ragRoutes = require('./routes/rag');
+const difyRoutes = require('./routes/dify');
 
 // 配置multer文件上传
 const storage = multer.diskStorage({
@@ -164,6 +165,7 @@ app.use('/api/todos', todoRoutes);
 // 对于备份路由，使用带有文件上传中间件的路由
 app.use('/api/backup', upload.single('backupFile'), backupRoutes);
 app.use('/api', ragRoutes);
+app.use('/api', difyRoutes);
 
 // 定时任务
 const cronTimeZone = 'Asia/Shanghai';

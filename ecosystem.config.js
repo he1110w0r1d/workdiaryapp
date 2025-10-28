@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'workdiary-backend',
       script: 'server.js',
-      cwd: './workdiaryapp/backend',
+      cwd: './backend',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -11,14 +11,24 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 5000,
+        MONGODB_URI: 'mongodb://localhost:27017/workdiary',
+        JWT_SECRET: 'your-secret-key-here',
+        ENCRYPTION_KEY: 'your-encryption-key-32-chars!!',
+        SESSION_SECRET: 'your-session-secret-key-here',
+        CORS_ORIGIN: 'http://localhost:3000',
+        LLM_TYPE: 'external',
         PORTAL_VERIFY_URL: 'http://127.0.0.1:3001/api/sso/verify',
-        PORTAL_JWT_SECRET: 'portal_sso_dev_secret'
+        PORTAL_JWT_SECRET: 'portal_sso_dev_secret',
+        DIFY_BASE_URL: 'http://192.168.1.168:11333',
+        DIFY_DATASET_API_KEY: 'dataset-CJzaP12gjgddQ0Fzh2KIz3cm',
+        DIFY_DATASET_ID: 'your-dataset-id',
+        DIFY_DATASET_NAME: 'workdiary'
       }
     },
     {
       name: 'workdiary-frontend',
-      script: './frontend/start-server.js',
-      cwd: './workdiaryapp',
+      script: 'start-server.js',
+      cwd: './frontend',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,

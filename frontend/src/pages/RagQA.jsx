@@ -35,9 +35,10 @@ export default function RagQA() {
   const handleReindex = async () => {
     setLoadingIndex(true);
     try {
-      const resp = await api.post('/rag/reindex');
+      // 将重建索引改为“整篇日记作为一个切片”模式
+      const resp = await api.post('/rag/reindex?strategy=perDiary');
       if (resp.data?.success) {
-        message.success(`已重建索引：日记${resp.data.indexedDiaries}，片段${resp.data.indexedChunks}`);
+        message.success(`已重建索引：日记${resp.data.indexedDiaries}，片段${resp.data.indexedChunks}（策略：${resp.data.strategy}）`);
       } else {
         message.error(resp.data?.message || '重建索引失败');
       }
@@ -55,7 +56,7 @@ export default function RagQA() {
     setAnswer('');
     setSnippets([]);
     try {
-      const resp = await api.post('/rag/query', { question: q, topK: 5 });
+      const resp = await api.post('/rag/query', { question: q, topK: 10 });
       if (resp.data?.success) {
         setAnswer(resp.data.answer || '');
         setSnippets(resp.data.snippets || []);
@@ -102,8 +103,7 @@ export default function RagQA() {
           <Input.TextArea rows={4} value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的问题，例如：今年我在哪些项目上投入最多？" />
           <Space>
             <Button type="primary" onClick={handleQuery} loading={loadingQuery}>查询</Button>
-            {/* 如需保留按钮，可隐藏不显示 */}
-            {/* <Button onClick={handleReindex} loading={loadingIndex}>重建索引</Button> */}
+            <Button onClick={handleReindex} loading={loadingIndex}>重建索引</Button>
           </Space>
         </Space>
       </Card>

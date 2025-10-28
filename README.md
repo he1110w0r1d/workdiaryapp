@@ -114,7 +114,16 @@ ENCRYPTION_KEY=your-encryption-key-32-chars!!
 USE_LOCAL_LLM=false
 LOCAL_LLM_API_URL=http://localhost:11434/api/generate
 LOCAL_LLM_MODEL=llama3
+
+# Dify 知识库集成（可选，但用于 RAG 同步）
+DIFY_BASE_URL=http://192.168.1.168:11333
+DIFY_DATASET_API_KEY=dataset-xxxxxxxxxxxxxxxxxxxxxxxx
+# 如果不知道 ID，可以设置名称让系统自动解析
+DIFY_DATASET_ID=
+DIFY_DATASET_NAME=工作日记记录
 ```
+
+> 说明：若 `DIFY_DATASET_ID` 为空，后端会使用 `DIFY_DATASET_NAME` 调用 Dify 的知识库列表接口进行精确名称匹配解析。
 
 ### 前端配置 (frontend/.env)
 

@@ -22,6 +22,7 @@ import BackupRestore from './components/BackupRestore';
 import Layout from './components/Layout';
 import RootRedirect from './components/RootRedirect';
 import RagQA from './pages/RagQA';
+import AIAssistant from './pages/AIAssistant';
 
 import './App.css';
 
@@ -67,6 +68,7 @@ function AppContent() {
                 <Route path="todos" element={<TodoList />} />
                 <Route path="summaries" element={<SummaryList />} />
                 <Route path="rag" element={<RagQA />} />
+                <Route path="ai-assistant" element={<AIAssistant />} />
                 <Route path="model-settings" element={<ModelSettings />} />
                 <Route path="user-settings" element={<UserSettingsPage />} />
                 <Route path="backup" element={<BackupRestore />} />

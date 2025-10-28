@@ -25,6 +25,11 @@ const summarySchema = new mongoose.Schema({
     totalTime: { type: Number, default: 0 }, // 分钟
     tagDistribution: { type: Map, of: Number }
   },
+  // 额外元信息，用于明确时间范围与生成方式
+  meta: {
+    type: Object,
+    default: null
+  },
   htmlFilePath: {
     type: String,
     default: null // 存储生成的HTML文件路径

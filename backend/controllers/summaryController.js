@@ -508,6 +508,8 @@ exports.generateDailySummary = async () => {
         // 尝试使用LLM生成总结
         let summaryContent = baseContent;
         let llmSummary = null;
+        let llmName = null;
+        let llmUsed = 'none';
         
         // 动态创建LLM实例以获取最新配置
         const { localLLM, externalLLM } = await createLLMInstances(user._id);
@@ -678,9 +680,11 @@ exports.generateWeeklySummary = async (req, res) => {
     logger.system('开始生成每周总结...');
     
     const now = new Date();
-    // 计算本周的时间范围（周一到周日）
-    const thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 1);
-    const thisWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 7);
+    // 计算本周的时间范围（周一到周日，周一为起点；周日为0需特殊处理）
+    const day = now.getDay(); // 0=周日,1=周一,...6=周六
+    const mondayOffset = -((day + 6) % 7); // 距离本周周一的偏移量
+    const thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+    const thisWeekEnd = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() + 6);
     thisWeekStart.setHours(0, 0, 0, 0);
     thisWeekEnd.setHours(23, 59, 59, 999);
     
@@ -818,6 +822,9 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
       // 尝试使用LLM生成总结
       let summaryContent = baseContent;
       let llmSummary = null;
+      // 记录LLM使用来源：external/local/none，并记录具体模型名称
+      let llmUsed = 'none';
+      let llmName = null;
       
       // 动态创建LLM实例以获取最新配置
       const { localLLM, externalLLM } = await createLLMInstances(user._id);
@@ -829,6 +836,8 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           if (llmSummary) {
             logger.llm('使用外部LLM生成的每周总结内容');
             summaryContent = llmSummary;
+            llmUsed = 'external';
+            try { llmName = externalLLM.config?.model || null; } catch (_) {}
           }
         } catch (error) {
           logger.info('外部LLM生成每周总结失败，尝试本地LLM:', error.message);
@@ -842,6 +851,8 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           if (llmSummary) {
             logger.llm('使用本地LLM生成的每周总结内容');
             summaryContent = llmSummary;
+            llmUsed = 'local';
+            try { llmName = localLLM.config?.model || null; } catch (_) {}
           }
         } catch (error) {
           logger.info('本地LLM生成每周总结失败:', error.message);
@@ -851,6 +862,8 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
       // 如果所有LLM都失败，使用默认模板
       if (!llmSummary) {
         logger.info('使用默认模板生成的每周总结内容');
+        llmUsed = 'none';
+        llmName = null;
       }
       
       // 周度待办统计已在LLM调用前计算并加入llmData
@@ -960,6 +973,15 @@ ${Object.entries(dailyWork).map(([date, minutes]) => `- ${new Date(date).toLocal
           totalEntries: diaries.length,
           totalTime: totalWorkTime,
           tagDistribution: tagDistribution
+        },
+        meta: {
+          rangeType: 'this_week',
+          rangeLabel: '本周',
+          rangeStart: thisWeekStart,
+          rangeEnd: thisWeekEnd,
+          generatedBy: 'manual',
+          llmUsed: llmUsed,
+          llmName: llmName
         }
       });
       
@@ -1629,11 +1651,39 @@ exports.getSummaries = async (req, res) => {
       };
     }
 
-    const summaries = await Summary.find(query)
+    const summariesDocs = await Summary.find(query)
       .sort({ date: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
+
+    // 兼容旧数据：为weekly类型补充meta信息
+    const summaries = summariesDocs.map(doc => {
+      const s = doc.toObject();
+      if (s.type === 'weekly') {
+        if (!s.meta) {
+          const start = new Date(s.date);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 6);
+          // 根据创建时间判断是本周还是上周（手动生成通常为本周）
+          const created = new Date(s.createdAt);
+          const createdWeekMonday = new Date(created);
+          const d = createdWeekMonday.getDay();
+          const offset = d === 0 ? -6 : (1 - d);
+          createdWeekMonday.setDate(created.getDate() + offset);
+          createdWeekMonday.setHours(0, 0, 0, 0);
+          const rangeType = start.getTime() === createdWeekMonday.getTime() ? 'this_week' : 'last_week';
+          s.meta = {
+            rangeType,
+            rangeLabel: rangeType === 'this_week' ? '本周' : '上一周',
+            rangeStart: start,
+            rangeEnd: end,
+            generatedBy: rangeType === 'this_week' ? 'manual' : 'auto'
+          };
+        }
+      }
+      return s;
+    });
 
     const total = await Summary.countDocuments(query);
 
@@ -1659,7 +1709,29 @@ exports.getSummaryById = async (req, res) => {
       return res.status(404).json({ message: '总结未找到' });
     }
 
-    res.json(summary);
+    // 兼容旧数据：为weekly类型补充meta信息
+    let s = summary.toObject();
+    if (s.type === 'weekly' && !s.meta) {
+      const start = new Date(s.date);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const created = new Date(s.createdAt);
+      const createdWeekMonday = new Date(created);
+      const d = createdWeekMonday.getDay();
+      const offset = d === 0 ? -6 : (1 - d);
+      createdWeekMonday.setDate(created.getDate() + offset);
+      createdWeekMonday.setHours(0, 0, 0, 0);
+      const rangeType = start.getTime() === createdWeekMonday.getTime() ? 'this_week' : 'last_week';
+      s.meta = {
+        rangeType,
+        rangeLabel: rangeType === 'this_week' ? '本周' : '上一周',
+        rangeStart: start,
+        rangeEnd: end,
+        generatedBy: rangeType === 'this_week' ? 'manual' : 'auto'
+      };
+    }
+
+    res.json(s);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -2304,6 +2376,225 @@ exports.generateTodaySummary = async (req, res) => {
   }
 };
 
+// 重新生成上周每周总结（当前登录用户）
+exports.regenerateLastWeeklySummary = async (req, res) => {
+  try {
+    logger.system('开始重新生成上周每周总结...');
+
+    const now = new Date();
+    // 计算上周的时间范围（周一到周日）
+    const lastWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() - 6);
+    const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    lastWeekStart.setHours(0, 0, 0, 0);
+    lastWeekEnd.setHours(23, 59, 59, 999);
+
+    // 查找上周的工作日记（当前登录用户）
+    const diaries = await Diary.find({
+      user: req.user.id,
+      startTime: {
+        $gte: lastWeekStart,
+        $lt: lastWeekEnd
+      }
+    });
+
+    if (diaries.length === 0) {
+      return res.status(404).json({ message: '上周没有工作日记记录' });
+    }
+
+    // 删除已存在的上周每周总结（以开始日期作为唯一键）
+    await Summary.deleteOne({
+      user: req.user.id,
+      type: 'weekly',
+      date: lastWeekStart
+    });
+
+    // 计算总工作时长与每日统计
+    let totalWorkTime = 0;
+    const dailyWork = {};
+    diaries.forEach(diary => {
+      const minutes = calculateWorkTime(diary.startTime, diary.endTime);
+      totalWorkTime += minutes;
+      const dateKey = new Date(diary.startTime).toDateString();
+      dailyWork[dateKey] = (dailyWork[dateKey] || 0) + minutes;
+    });
+
+    // 准备基础总结内容
+    const baseContent = `
+# {{date}} 工作总结（上周）
+
+## 周度概览
+- 工作天数: {{workDays}}
+- 工作条目数量: {{totalEntries}}
+- 总工作时长: {{totalTime}}
+- 平均每日工作时长: {{avgDailyTime}}
+
+## 工作内容分析
+{{workDetails}}
+    `.trim();
+
+    // 构建工作详情
+    const workDetails = diaries.map(diary => {
+      const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+      return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleDateString('zh-CN')} ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
+    }).join('\n\n');
+
+    // 在调用LLM前统计周度待办事项
+    const weekStart = new Date(lastWeekStart);
+    const weekEnd = new Date(lastWeekEnd);
+    const weekTodosCreated = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: { $gte: weekStart, $lt: weekEnd }
+    });
+    const weekTodosCompleted = await Todo.countDocuments({
+      user: req.user.id,
+      status: '已完成',
+      'statusHistory': {
+        $elemMatch: {
+          status: '已完成',
+          changedAt: { $gte: weekStart, $lt: weekEnd }
+        }
+      }
+    });
+    const weekTodosPending = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: { $gte: weekStart, $lt: weekEnd },
+      status: { $ne: '已完成' }
+    });
+    const totalPendingTodos = await Todo.countDocuments({
+      user: req.user.id,
+      status: { $in: ['待办'] }
+    });
+
+    // 获取用户信息
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: '用户不存在' });
+    }
+
+    // 准备LLM所需数据
+    const tagDistribution = generateTagDistribution(diaries);
+    const llmData = {
+      date: lastWeekStart,
+      diaries,
+      totalWorkTime,
+      totalEntries: diaries.length,
+      workDetails,
+      dailyWork,
+      tagDistribution,
+      user,
+      weekTodosCreated,
+      weekTodosCompleted,
+      weekTodosPending,
+      totalPendingTodos
+    };
+
+    // 尝试使用LLM生成总结
+    let summaryContent = baseContent;
+    let llmSummary = null;
+    let llmUsed = 'none';
+    let llmName = null;
+
+    // 动态创建LLM实例以获取最新配置
+    const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
+
+    // 优先外部LLM
+    if (externalLLM) {
+      try {
+        llmSummary = await externalLLM.generateSummary(llmData, 'weekly', {}, req.user.id);
+        if (llmSummary) {
+          summaryContent = llmSummary;
+          llmUsed = 'external';
+          try { llmName = externalLLM.config?.model || null; } catch (_) {}
+        }
+      } catch (error) {
+        logger.info('外部LLM生成上周每周总结失败，尝试本地LLM:', error.message);
+      }
+    }
+
+    // 回退本地LLM
+    if (!llmSummary && localLLM) {
+      try {
+        llmSummary = await localLLM.generateSummary(llmData, 'weekly', {}, req.user.id);
+        if (llmSummary) {
+          summaryContent = llmSummary;
+          llmUsed = 'local';
+          try { llmName = localLLM.config?.model || null; } catch (_) {}
+        }
+      } catch (error) {
+        logger.info('本地LLM生成上周每周总结失败:', error.message);
+      }
+    }
+
+    // 如果所有LLM都失败，使用默认模板并进行占位符替换
+    if (!llmSummary) {
+      const workDays = Object.keys(dailyWork).length;
+      const avgMinutes = workDays > 0 ? Math.floor(totalWorkTime / workDays) : 0;
+      const avgDailyTime = `${Math.floor(avgMinutes / 60)}小时${avgMinutes % 60}分钟`;
+      summaryContent = summaryContent
+        .replace(/\{\{date\}\}/g, `${lastWeekStart.toLocaleDateString('zh-CN')} 到 ${lastWeekEnd.toLocaleDateString('zh-CN')}`)
+        .replace(/\{\{workDays\}\}/g, workDays)
+        .replace(/\{\{totalEntries\}\}/g, diaries.length)
+        .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+        .replace(/\{\{avgDailyTime\}\}/g, avgDailyTime)
+        .replace(/\{\{workDetails\}\}/g, workDetails)
+        .concat(`\n\n## 待办统计\n- 新建待办: ${weekTodosCreated}\n- 完成待办: ${weekTodosCompleted}\n- 未完成待办: ${weekTodosPending}\n- 当前待办总数: ${totalPendingTodos}`);
+      llmUsed = 'none';
+      llmName = null;
+    }
+
+    // 生成HTML网页
+    let htmlFilePath = null;
+    try {
+      logger.system('开始生成上周每周总结HTML网页...');
+      const htmlData = {
+        date: lastWeekStart,
+        diaries,
+        totalWorkTime,
+        dailyWork,
+        tagDistribution
+      };
+      const htmlContent = await generateHTMLPage(htmlData, 'weekly', summaryContent, req.user.id);
+      htmlFilePath = await saveHTMLFile(htmlContent, req.user.id, 'weekly', lastWeekStart);
+      logger.info('上周每周总结HTML网页生成成功:', htmlFilePath);
+    } catch (error) {
+      logger.error('生成上周每周总结HTML网页失败:', error);
+    }
+
+    // 保存总结
+    const summary = new Summary({
+      user: req.user.id,
+      type: 'weekly',
+      date: lastWeekStart,
+      content: summaryContent,
+      htmlFilePath,
+      statistics: {
+        totalEntries: diaries.length,
+        totalTime: totalWorkTime,
+        tagDistribution
+      },
+      meta: {
+        rangeType: 'last_week',
+        rangeLabel: '上周',
+        rangeStart: lastWeekStart,
+        rangeEnd: lastWeekEnd,
+        generatedBy: 'regenerate',
+        llmUsed,
+        llmName
+      }
+    });
+
+    await summary.save();
+
+    res.json({
+      message: '上周工作总结重新生成成功',
+      summary
+    });
+  } catch (error) {
+    logger.error('重新生成上周每周总结失败:', error);
+    res.status(500).json({ message: '重新生成上周每周总结失败: ' + error.message });
+  }
+};
+
 // ==================== 定时任务专用批量处理函数 ====================
 
 // 批量生成所有用户的周报总结（定时任务专用）
@@ -2431,6 +2722,8 @@ ${diaries.map(diary => {
             if (llmSummary) {
               logger.llm('使用外部LLM生成的周报总结内容');
               summaryContent = llmSummary;
+              llmUsed = 'external';
+              llmName = externalLLM.config?.model || null;
             }
           } catch (error) {
             logger.info('外部LLM生成周报总结失败，尝试本地LLM:', error.message);
@@ -2444,6 +2737,8 @@ ${diaries.map(diary => {
             if (llmSummary) {
               logger.llm('使用本地LLM生成的周报总结内容');
               summaryContent = llmSummary;
+              llmUsed = 'local';
+              llmName = localLLM.config?.model || null;
             }
           } catch (error) {
             logger.info('本地LLM生成周报总结失败:', error.message);
@@ -2453,6 +2748,8 @@ ${diaries.map(diary => {
         // 如果所有LLM都失败，使用默认模板
         if (!llmSummary) {
           logger.info('使用默认模板生成的周报总结内容');
+          llmUsed = 'none';
+          llmName = null;
         }
         
         // 周度待办统计已在LLM调用前计算并加入llmData
@@ -2517,6 +2814,15 @@ ${diaries.map(diary => {
             totalEntries: diaries.length,
             totalTime: totalWorkTime,
             tagDistribution: tagDistribution
+          },
+          meta: {
+            rangeType: 'last_week',
+            rangeLabel: '上一周',
+            rangeStart: lastWeekStart,
+            rangeEnd: lastWeekEnd,
+            generatedBy: 'auto',
+            llmUsed: llmUsed,
+            llmName: llmName
           }
         });
         
