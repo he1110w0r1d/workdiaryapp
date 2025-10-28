@@ -123,13 +123,66 @@ exports.query = async (req, res) => {
     if (!question) return res.status(400).json({ success: false, message: '缺少question' });
 
     try { logger.llm('RAG查询开始', { userId, questionPreview: question.substring(0, 100), topK }); } catch (_) {}
+    // 解析相对日期词，必要时限定检索范围（今天/昨天/前天/上周/上个月）
+    const parseRelativeDateRange = (q) => {
+      const now = new Date();
+      const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+      const endOfDay = (d) => { const x = new Date(d); x.setHours(23,59,59,999); return x; };
+      const has = (kw) => q.includes(kw);
+      // 昨天/今天/前天
+      if (has('昨天')) {
+        const y = new Date(now); y.setDate(y.getDate()-1);
+        return { label: '昨天', start: startOfDay(y), end: endOfDay(y) };
+      }
+      if (has('今天')) {
+        return { label: '今天', start: startOfDay(now), end: endOfDay(now) };
+      }
+      if (has('前天')) {
+        const y2 = new Date(now); y2.setDate(y2.getDate()-2);
+        return { label: '前天', start: startOfDay(y2), end: endOfDay(y2) };
+      }
+      // 上周：以周一为起点
+      if (has('上周')) {
+        const d = now.getDay(); // 0:周日
+        const thisMonday = new Date(now);
+        thisMonday.setDate(now.getDate() - ((d+6)%7));
+        const lastMonday = new Date(thisMonday); lastMonday.setDate(thisMonday.getDate()-7);
+        const lastSunday = new Date(thisMonday); lastSunday.setDate(thisMonday.getDate()-1);
+        return { label: '上周', start: startOfDay(lastMonday), end: endOfDay(lastSunday) };
+      }
+      // 上个月
+      if (has('上个月') || has('上月')) {
+        const firstPrev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+        const lastPrev = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { label: '上个月', start: startOfDay(firstPrev), end: endOfDay(lastPrev) };
+      }
+      return null;
+    };
+
+    const dateRange = parseRelativeDateRange(question);
 
     const embedder = new Embeddings();
     const qvec = await embedder.embed(question);
     try { logger.llm('查询向量生成', { dim: qvec.length }); } catch (_) {}
-
-    const docs = await DiaryEmbedding.find({ user: userId }).select('text vector diary').lean();
-    try { logger.llm('候选片段加载完成', { count: docs.length }); } catch (_) {}
+    let docs = [];
+    if (dateRange) {
+      // 若问题包含相对日期词，仅检索该日期范围内的片段
+      const diariesInRange = await Diary.find({
+        user: userId,
+        startTime: { $gte: dateRange.start, $lt: dateRange.end }
+      }).select('_id').lean();
+      const diaryIds = diariesInRange.map(d => d._id);
+      docs = await DiaryEmbedding.find({ user: userId, diary: { $in: diaryIds } }).select('text vector diary').lean();
+      try { logger.llm('候选片段加载完成(按日期过滤)', { count: docs.length, label: dateRange.label }); } catch (_) {}
+      // 若过滤后为空，回退到全量
+      if (!docs.length) {
+        docs = await DiaryEmbedding.find({ user: userId }).select('text vector diary').lean();
+        try { logger.llm('日期过滤无结果，回退全量', { count: docs.length }); } catch (_) {}
+      }
+    } else {
+      docs = await DiaryEmbedding.find({ user: userId }).select('text vector diary').lean();
+      try { logger.llm('候选片段加载完成', { count: docs.length }); } catch (_) {}
+    }
 
     const scored = docs.map(doc => ({ ...doc, score: cosine(qvec, doc.vector || []) }))
       .sort((a, b) => b.score - a.score)
@@ -152,7 +205,10 @@ exports.query = async (req, res) => {
       return `【片段${i+1} | ${dateStr} ${timeRange}】\n${s.text}`;
     }).join('\n\n');
 
-    const llmPrompt = `你是一位熟悉我工作内容的助手。\n请基于以下参考片段回答问题：\n\n${context}\n\n问题：${question}\n\n回答要求：\n- 给出结论和依据；\n- 以中文输出；\n- 简洁分点表达。`;
+    const now = new Date();
+    const nowStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const rangeNote = dateRange ? `\n已按“${dateRange.label}”筛选片段（${dateRange.start.toLocaleDateString('zh-CN')} - ${dateRange.end.toLocaleDateString('zh-CN')}）` : '';
+    const llmPrompt = `你是一位熟悉我工作内容的助手。\n当前日期：${nowStr}（时区：Asia/Shanghai）。若问题包含相对日期词（如“昨天”“今天”“前天”“上周”“上个月”），请以当前日期解析这些词并严格依据参考片段作答。${rangeNote}\n\n请基于以下参考片段回答问题：\n\n${context}\n\n问题：${question}\n\n回答要求：\n- 给出结论和依据；\n- 以中文输出；\n- 简洁分点表达。`;
 
     let answer = null;
 
@@ -200,7 +256,15 @@ exports.query = async (req, res) => {
       };
     });
 
-    return res.json({ success: true, answer, snippets: snippetsOut });
+    const out = { success: true, answer, snippets: snippetsOut };
+    if (dateRange) {
+      out.dateFilter = {
+        label: dateRange.label,
+        start: dateRange.start,
+        end: dateRange.end
+      };
+    }
+    return res.json(out);
   } catch (error) {
     try { logger.error('RAG查询失败', { message: error.message }); } catch (_) {}
     return res.status(500).json({ success: false, message: 'RAG查询失败', error: error.message }); }

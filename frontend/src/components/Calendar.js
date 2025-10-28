@@ -183,7 +183,12 @@ const Calendar = () => {
           {/* 添加图片链接 - 位于导航按钮右侧 */}
           <div 
             className="brain-storm-image"
-            onClick={() => window.open('http://localhost:11188', '_blank')}
+            onClick={() => {
+              const protocol = window.location.protocol || 'http:';
+              const host = window.location.hostname || 'localhost';
+              const url = `${protocol}//${host}:11188`;
+              window.open(url, '_blank');
+            }}
             style={{
               cursor: 'pointer',
               padding: '8px',
