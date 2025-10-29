@@ -19,10 +19,7 @@ module.exports = {
         LLM_TYPE: 'external',
         PORTAL_VERIFY_URL: 'http://127.0.0.1:3001/api/sso/verify',
         PORTAL_JWT_SECRET: 'portal_sso_dev_secret',
-        DIFY_BASE_URL: 'http://192.168.1.168:11333',
-        DIFY_DATASET_API_KEY: 'dataset-CJzaP12gjgddQ0Fzh2KIz3cm',
-        DIFY_DATASET_ID: 'your-dataset-id',
-        DIFY_DATASET_NAME: 'workdiary'
+        // DIFY_* 环境改由 backend/.env 管理，避免与 PM2 环境冲突
       }
     },
     {

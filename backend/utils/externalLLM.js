@@ -475,10 +475,45 @@ class ExternalLLM {
       case 'deepseek':
       case 'doubao':
       case 'siliconflow':
-      case 'zhipu':
       case 'custom':
         if (responseData.choices && responseData.choices[0] && responseData.choices[0].message) {
           content = responseData.choices[0].message.content;
+        }
+        break;
+
+      case 'zhipu':
+        {
+          const choice0 = responseData?.choices?.[0];
+          const message = choice0?.message || {};
+          // 记录截断原因（如有），便于排查 max_tokens 问题
+          try {
+            if (choice0?.finish_reason || choice0?.native_finish_reason) {
+              logger.llm(`Zhipu finish_reason=${choice0?.finish_reason}, native=${choice0?.native_finish_reason}`);
+            }
+          } catch (_) {}
+
+          // 优先使用标准 content
+          const mc = message?.content;
+          if (typeof mc === 'string' && mc.trim().length > 0) {
+            content = mc;
+          }
+
+          // 若 content 为空，尝试 reasoning_content（部分模型会把输出放这里）
+          if (!content && typeof message?.reasoning_content === 'string' && message.reasoning_content.trim().length > 0) {
+            content = message.reasoning_content;
+          }
+
+          // 仍为空则进行聚合提取（包含 message 内可读文本，避免遗漏）
+          if (!content) {
+            const msgParts = collectText(message);
+            if (msgParts.length > 0) content = msgParts.join('\n');
+          }
+
+          // 顶层兜底
+          if (!content) {
+            const topParts = collectText(responseData);
+            if (topParts.length > 0) content = topParts.join('\n');
+          }
         }
         break;
         

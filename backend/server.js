@@ -7,8 +7,8 @@ const multer = require('multer');
 const cookieParser = require('cookie-parser');
 
 const logger = require('./utils/logger');
-// 加载环境变量
-dotenv.config({ path: require('path').join(__dirname, '.env') });
+// 加载环境变量（覆盖 PM2 环境变量）
+dotenv.config({ path: require('path').join(__dirname, '.env'), override: true });
 
 // 加载LLM配置
 const fs = require('fs');

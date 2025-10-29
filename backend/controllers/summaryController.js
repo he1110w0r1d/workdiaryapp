@@ -139,22 +139,173 @@ const buildDailyTodoSuggestionPrompt = (user, diaries, date) => {
   ].join('\n');
 };
 
+// 从总结文本构建严格JSON提取提示词（两步法第二步）
+// 作用：给LLM一段已生成的“工作总结”，要求仅提取其中“待办判断与建议”部分为严格JSON
+// 输出结构：
+// {
+//   "shouldCreateTodo": true|false,
+//   "todos": [
+//     { "content": "...", "dueDate": "YYYY-MM-DD", "priority": "高|中|低", "relatedDiaryIds": ["..."] }
+//   ]
+// }
+function buildTodoJSONFromSummaryPrompt(summaryText, user, date) {
+  const dateStr = new Date(date).toLocaleDateString('zh-CN');
+  const tomorrow = new Date(date);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+  return [
+    '你是一位严谨的工作助理。下面是一段“工作总结”文本，请专注从其中的“待办判断与建议”部分提取结构化JSON。',
+    `日期: ${dateStr}`,
+    `用户级别: ${(user && user.level) ? user.level : '中级'}`,
+    '',
+    '仅输出合法JSON（不要任何代码块标记、不要额外解释文字），数据结构严格如下：',
+    '{',
+    '  "shouldCreateTodo": true|false,',
+    '  "todos": [',
+    '    {',
+    '      "content": "字符串，清晰可执行的待办项",',
+    '      "dueDate": "YYYY-MM-DD",',
+    '      "priority": "高|中|低",',
+    '      "relatedDiaryIds": ["可选的相关日记ID"]',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    '规则：',
+    '1) 若不需要待办，shouldCreateTodo=false，todos=[]。',
+    '2) 最多给出3条，必须具体可执行，不要泛泛而谈。',
+    `3) 若总结未明确截止日期，默认使用翌日：${tomorrowStr}。`,
+    '4) 优先级：紧急且重要为高，常规为中，非紧急为低。',
+    '5) relatedDiaryIds 可为空；如总结中提到具体日记ID，则保留。',
+    '',
+    '待解析的工作总结文本：',
+    summaryText || '',
+  ].join('\n');
+}
+
 // 安全解析LLM返回的JSON
 const safeParseTodoJSON = (text) => {
   if (!text || typeof text !== 'string') return null;
-  // 尝试直接解析
-  try {
-    return JSON.parse(text);
-  } catch (_) {}
-  // 回退：提取第一个JSON对象
-  try {
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      const jsonStr = text.slice(start, end + 1);
-      return JSON.parse(jsonStr);
+
+  const tryParse = (s) => {
+    try {
+      return JSON.parse(s);
+    } catch (e) {
+      return null;
     }
+  };
+
+  let candidate = text.trim();
+  // 1) 直接解析
+  let parsed = tryParse(candidate);
+  if (parsed) return parsed;
+
+  // 2) 提取首尾大括号包裹的对象
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    candidate = candidate.slice(start, end + 1);
+    parsed = tryParse(candidate);
+    if (parsed) return parsed;
+  }
+
+  // 3) 清理常见噪音：代码块标记、列表短横线、尾随逗号、全角引号
+  let cleaned = candidate
+    // 去掉所有围栏代码块标记（不局限开头/结尾）
+    .replace(/```[a-zA-Z]*\s*|```/g, '')
+    // 移除数组/对象项前的短横线（LLM常将列表项用“- ”表示）
+    .replace(/\n\s*-\s*([\[{])/g, '\n$1')
+    // 去掉紧跟闭括的尾随逗号（半角）
+    .replace(/,\s*([}\]])/g, '$1')
+    // 去掉紧跟闭括的尾随逗号（全角）
+    .replace(/，\s*([}\]])/g, '$1')
+    // 统一全角引号为半角双引号
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, '"')
+    // 统一全角冒号为半角冒号
+    .replace(/：/g, ':')
+    // 去除省略号（ASCII ... 与全角 …）
+    .replace(/\u2026/g, '')
+    .replace(/\.{3}/g, '')
+    // 去除只包含省略号的整行（可能带逗号）
+    .replace(/^\s*\.{3}\s*,?\s*$/gm, '')
+    // 清理布尔取值模板管道（true|false -> 取第一个布尔值）
+    .replace(/\b(true|false)\s*\|\s*(true|false)\b/g, '$1')
+    // 去除行首注释
+    .replace(/^\s*#.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+
+  parsed = tryParse(cleaned);
+  if (parsed) return parsed;
+
+  // 4) 兜底：再次尝试在清理后的文本中提取最外层对象
+  const s2 = cleaned.indexOf('{');
+  const e2 = cleaned.lastIndexOf('}');
+  if (s2 >= 0 && e2 > s2) {
+    const jsonStr2 = cleaned.slice(s2, e2 + 1);
+    parsed = tryParse(jsonStr2);
+    if (parsed) return parsed;
+  }
+
+  // 5) 半结构化兜底解析：容忍轻微格式错误，提取关键字段并构造对象
+  try {
+    const textAll = cleaned;
+    // 提取 shouldCreateTodo（默认 false）
+    let shouldCreate = false;
+    const mBool = textAll.match(/"shouldCreateTodo"\s*:\s*(true|false)/i);
+    if (mBool) {
+      shouldCreate = mBool[1].toLowerCase() === 'true';
+    }
+
+    // 提取 todos 数组片段
+    const mTodos = textAll.match(/"todos"\s*:\s*\[([\s\S]*?)\]/i);
+    const todosRaw = mTodos ? mTodos[1] : '';
+
+    const objMatches = todosRaw.match(/\{[\s\S]*?\}/g) || [];
+    const todos = [];
+    for (const om of objMatches) {
+      // 针对每个对象片段做小清理后尝试解析
+      const oClean = om
+        .replace(/```[a-zA-Z]*\s*|```/g, '')
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/，\s*([}\]])/g, '$1')
+        .replace(/[“”‘’]/g, '"')
+        .replace(/：/g, ':')
+        .replace(/\u2026/g, '')
+        .replace(/\.{3}/g, '')
+        .replace(/^\s*#.*$/gm, '')
+        .replace(/\/\/.*$/gm, '');
+
+      let oParsed = tryParse(oClean);
+      if (!oParsed) {
+        // 直接用正则提取关键字段
+        const content = (oClean.match(/"content"\s*:\s*"([\s\S]*?)"/) || [])[1] || '';
+        const dueDate = (oClean.match(/"dueDate"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})"/) || [])[1] || '';
+        const priority = (oClean.match(/"priority"\s*:\s*"([^"]+)"/) || [])[1] || '';
+        const idsMatch = oClean.match(/"relatedDiaryIds"\s*:\s*\[([\s\S]*?)\]/);
+        let relatedDiaryIds = [];
+        if (idsMatch && idsMatch[1]) {
+          const idStr = idsMatch[1].replace(/\s+/g, '');
+          relatedDiaryIds = (idStr.match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, ''));
+        }
+        oParsed = { content, dueDate, priority, relatedDiaryIds };
+      }
+
+      // 基本校验，过滤空content
+      if (oParsed && (oParsed.content || '').trim()) {
+        todos.push({
+          content: oParsed.content.trim(),
+          dueDate: oParsed.dueDate || '',
+          priority: oParsed.priority || '中',
+          relatedDiaryIds: Array.isArray(oParsed.relatedDiaryIds) ? oParsed.relatedDiaryIds : []
+        });
+      }
+    }
+
+    return { shouldCreateTodo: shouldCreate, todos };
   } catch (_) {}
+
   return null;
 };
 
@@ -625,6 +776,21 @@ exports.generateDailySummary = async () => {
         
         await summary.save();
 
+        // 每日总结后，按“昨日”范围同步到 Dify（避免全量同步）
+        try {
+          const difyCtrl = require('./difyController');
+          const startDate = new Date(yesterday);
+          const endDate = new Date(tomorrow);
+          const result = await difyCtrl.syncUserDiariesForDate(user._id, startDate, endDate);
+          if (result && result.success) {
+            logger.llm('每日总结后已按日期同步到Dify', { user: user.username, created: result.created, updated: result.updated });
+          } else {
+            logger.warn('每日总结后按日期同步到Dify失败', { user: user.username, message: result && result.message });
+          }
+        } catch (err) {
+          logger.warn('每日总结后触发Dify同步异常', { user: user.username, message: err.message });
+        }
+
         // 在每日总结完成后，自动重建该用户的RAG索引
         try {
           const stats = await ragController.reindexForUser(user._id);
@@ -633,30 +799,85 @@ exports.generateDailySummary = async () => {
           logger.warn('每日总结后自动重建索引失败', { error: error.message });
         }
 
-        // 生成LLM待办建议并创建待办
+        // 生成LLM待办建议并创建待办（昨日，增强两步与救援解析）
         try {
           const { localLLM, externalLLM } = await createLLMInstances(user._id);
-          const prompt = buildDailyTodoSuggestionPrompt(user, diaries, yesterday);
+          const prompt = buildTodoJSONFromSummaryPrompt(summary.content || summaryContent, user, yesterday);
+          const strictPrompt = `${prompt}\n\n注意：只输出纯JSON，不要使用任何代码块标记，不要任何解释文本。`;
           let suggestionText = null;
 
-          // 优先尝试外部LLM
+          // 1) 优先尝试外部LLM，提升maxTokens避免截断
           if (externalLLM) {
             try {
-              suggestionText = await externalLLM.generateText(prompt, { temperature: 0.2, maxTokens: 800 }, user._id);
+              suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, user._id);
             } catch (err) {
-              logger.warn('外部LLM待办建议失败，尝试本地LLM', { error: err.message });
+              logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
             }
           }
-          // 回退到本地LLM
+
+          // 2) 如果首次结果为空，尝试本地LLM
           if (!suggestionText && localLLM) {
             try {
-              suggestionText = await localLLM.generateText(prompt, { temperature: 0.2, maxTokens: 800 }, user._id);
+              suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, user._id);
             } catch (err) {
               logger.warn('本地LLM待办建议失败', { error: err.message });
             }
           }
 
-          const parsed = safeParseTodoJSON(suggestionText);
+          // 3) 解析与救援：先用安全解析，失败则尝试提取首尾大括号内的JSON
+          let parsed = safeParseTodoJSON(suggestionText);
+          if (!parsed && typeof suggestionText === 'string') {
+            try {
+              const start = suggestionText.indexOf('{');
+              const end = suggestionText.lastIndexOf('}');
+              if (start !== -1 && end !== -1 && end > start) {
+                const jsonStr = suggestionText.slice(start, end + 1);
+                parsed = JSON.parse(jsonStr);
+              }
+            } catch (e) {
+              logger.warn('待办建议JSON救援解析失败', { error: e.message });
+            }
+          }
+
+          // 4) 若仍解析失败，使用更严格提示重试（优先外部，回退本地）
+          if ((!parsed || !parsed.shouldCreateTodo || !Array.isArray(parsed.todos) || parsed.todos.length === 0)) {
+            let retryText = null;
+            // 外部严格重试
+            if (externalLLM) {
+              try {
+                retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, user._id);
+              } catch (err) {
+                logger.warn('外部LLM严格重试失败', { error: err.message });
+              }
+            }
+            // 本地严格重试
+            if (!retryText && localLLM) {
+              try {
+                retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, user._id);
+              } catch (err) {
+                logger.warn('本地LLM严格重试失败', { error: err.message });
+              }
+            }
+            // 重试解析
+            if (retryText) {
+              parsed = safeParseTodoJSON(retryText);
+              if (!parsed && typeof retryText === 'string') {
+                try {
+                  const s = retryText.indexOf('{');
+                  const e = retryText.lastIndexOf('}');
+                  if (s !== -1 && e !== -1 && e > s) {
+                    const jsonStr2 = retryText.slice(s, e + 1);
+                    parsed = JSON.parse(jsonStr2);
+                  }
+                } catch (e2) {
+                  logger.warn('待办建议JSON严格重试救援解析失败', { error: e2.message });
+                }
+              }
+            }
+          }
+
+          // 5) 创建待办或记录无需创建
+          logger.llm(`待办解析结果: shouldCreateTodo=${parsed ? parsed.shouldCreateTodo : undefined}, todos_len=${parsed && Array.isArray(parsed.todos) ? parsed.todos.length : 0}`);
           if (parsed && parsed.shouldCreateTodo && Array.isArray(parsed.todos) && parsed.todos.length > 0) {
             const result = await createTodosFromSuggestions(user._id, parsed.todos, diaries);
             logger.info(`为用户 ${user.username} 自动创建待办 ${result.created} 条`);
@@ -1989,7 +2210,7 @@ exports.regenerateDailySummary = async (req, res) => {
     try {
       const user = await User.findById(req.user.id);
       const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
-      const prompt = buildDailyTodoSuggestionPrompt(user || {}, diaries, yesterday);
+      const prompt = buildTodoJSONFromSummaryPrompt(summary.content || summaryContent, user || {}, yesterday);
       const strictPrompt = `${prompt}\n\n注意：只输出纯JSON，不要使用任何代码块标记，不要任何解释文本。`;
       let suggestionText = null;
 
@@ -2283,7 +2504,7 @@ exports.generateTodaySummary = async (req, res) => {
     // 生成LLM待办建议并创建待办（今日）
     try {
       const { localLLM, externalLLM } = await createLLMInstances(req.user.id);
-      const prompt = buildDailyTodoSuggestionPrompt(user, diaries, today);
+      const prompt = buildTodoJSONFromSummaryPrompt(summary.content || summaryContent, user, today);
       const strictPrompt = `${prompt}\n\n注意：只输出纯JSON，不要使用任何代码块标记，不要任何解释文本。`;
       let suggestionText = null;
 

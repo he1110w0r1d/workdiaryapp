@@ -117,3 +117,63 @@ exports.syncAllDiaries = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Dify同步失败', error: error.message });
   }
 };
+
+/**
+ * 内部使用：按日期范围同步指定用户的日记到 Dify（避免全量同步压力）
+ * @param {string} userId 用户ID
+ * @param {Date} startDate 开始时间（含）
+ * @param {Date} endDate 结束时间（不含）
+ */
+exports.syncUserDiariesForDate = async (userId, startDate, endDate) => {
+  try {
+    const dify = new DifyClient();
+    // 基础鉴权与数据集检查
+    dify.ensureBaseAuth();
+    // 若未配置 datasetId，尝试按名称解析（支持 Console Key 情况）
+    if (!dify.datasetId) {
+      const datasetName = process.env.DIFY_DATASET_NAME || '工作日记记录';
+      try {
+        await dify.resolveDatasetIdByName(datasetName);
+      } catch (err) {
+        // 若使用 Dataset Key 无法列出知识库，这里会抛错，交由上层日志处理
+        throw err;
+      }
+    }
+    dify.ensureDataset();
+
+    const diaries = await Diary.find({
+      user: userId,
+      isDeleted: false,
+      startTime: { $gte: startDate, $lt: endDate }
+    }).sort({ startTime: 1 }).lean();
+
+    let created = 0, updated = 0;
+    try { logger.llm('按日期同步到Dify开始', { userId, count: diaries.length, startDate, endDate }); } catch (_) {}
+
+    for (const d of diaries) {
+      const name = buildDiaryName(d);
+      const text = buildDiaryText(d);
+      if (d.difyDocId) {
+        try {
+          await dify.updateByText(d.difyDocId, name, text, { indexing_technique: 'high_quality' });
+          updated++;
+        } catch (err) {
+          logger.warn('更新Dify文档失败，尝试重新创建', { diaryId: String(d._id), message: err.message });
+          const createdDoc = await dify.createByText(name, text, { indexing_technique: 'high_quality' });
+          await Diary.updateOne({ _id: d._id }, { $set: { difyDocId: createdDoc.id } });
+          created++;
+        }
+      } else {
+        const createdDoc = await dify.createByText(name, text, { indexing_technique: 'high_quality' });
+        await Diary.updateOne({ _id: d._id }, { $set: { difyDocId: createdDoc.id } });
+        created++;
+      }
+    }
+
+    try { logger.llm('按日期同步到Dify完成', { userId, created, updated }); } catch (_) {}
+    return { success: true, total: diaries.length, created, updated };
+  } catch (error) {
+    try { logger.warn('按日期同步到Dify失败', { userId, message: error.message }); } catch (_) {}
+    return { success: false, message: error.message };
+  }
+};
