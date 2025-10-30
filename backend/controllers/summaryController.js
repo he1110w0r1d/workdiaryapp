@@ -809,7 +809,7 @@ exports.generateDailySummary = async () => {
           // 1) 优先尝试外部LLM，提升maxTokens避免截断
           if (externalLLM) {
             try {
-              suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, user._id);
+              suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 }, user._id);
             } catch (err) {
               logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
             }
@@ -818,7 +818,7 @@ exports.generateDailySummary = async () => {
           // 2) 如果首次结果为空，尝试本地LLM
           if (!suggestionText && localLLM) {
             try {
-              suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, user._id);
+              suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 }, user._id);
             } catch (err) {
               logger.warn('本地LLM待办建议失败', { error: err.message });
             }
@@ -845,7 +845,7 @@ exports.generateDailySummary = async () => {
             // 外部严格重试
             if (externalLLM) {
               try {
-                retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, user._id);
+                retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 }, user._id);
               } catch (err) {
                 logger.warn('外部LLM严格重试失败', { error: err.message });
               }
@@ -853,7 +853,7 @@ exports.generateDailySummary = async () => {
             // 本地严格重试
             if (!retryText && localLLM) {
               try {
-                retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, user._id);
+                retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 }, user._id);
               } catch (err) {
                 logger.warn('本地LLM严格重试失败', { error: err.message });
               }
@@ -2217,7 +2217,7 @@ exports.regenerateDailySummary = async (req, res) => {
       // 1) 优先尝试外部LLM，提升maxTokens避免截断
       if (externalLLM) {
         try {
-          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, req.user.id);
+          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 }, req.user.id);
         } catch (err) {
           logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
         }
@@ -2226,7 +2226,7 @@ exports.regenerateDailySummary = async (req, res) => {
       // 2) 如果首次结果为空，尝试本地LLM
       if (!suggestionText && localLLM) {
         try {
-          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 }, req.user.id);
+          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 }, req.user.id);
         } catch (err) {
           logger.warn('本地LLM待办建议失败', { error: err.message });
         }
@@ -2253,7 +2253,7 @@ exports.regenerateDailySummary = async (req, res) => {
         // 外部严格重试
         if (externalLLM) {
           try {
-            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, req.user.id);
+            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 }, req.user.id);
           } catch (err) {
             logger.warn('外部LLM严格重试失败', { error: err.message });
           }
@@ -2261,7 +2261,7 @@ exports.regenerateDailySummary = async (req, res) => {
         // 本地严格重试
         if (!retryText && localLLM) {
           try {
-            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 }, req.user.id);
+            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 }, req.user.id);
           } catch (err) {
             logger.warn('本地LLM严格重试失败', { error: err.message });
           }
@@ -2511,7 +2511,7 @@ exports.generateTodaySummary = async (req, res) => {
       // 1) 优先尝试外部LLM，提升maxTokens避免截断
       if (externalLLM) {
         try {
-          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 });
+          suggestionText = await externalLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 });
         } catch (err) {
           logger.warn('外部LLM待办建议失败，尝试其他策略', { error: err.message });
         }
@@ -2520,7 +2520,7 @@ exports.generateTodaySummary = async (req, res) => {
       // 2) 如果首次结果为空，尝试本地LLM
       if (!suggestionText && localLLM) {
         try {
-          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 1500 });
+          suggestionText = await localLLM.generateText(prompt, { temperature: 0.1, maxTokens: 3000 });
         } catch (err) {
           logger.warn('本地LLM待办建议失败', { error: err.message });
         }
@@ -2547,7 +2547,7 @@ exports.generateTodaySummary = async (req, res) => {
         // 外部严格重试
         if (externalLLM) {
           try {
-            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 });
+            retryText = await externalLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 });
           } catch (err) {
             logger.warn('外部LLM严格重试失败', { error: err.message });
           }
@@ -2555,7 +2555,7 @@ exports.generateTodaySummary = async (req, res) => {
         // 本地严格重试
         if (!retryText && localLLM) {
           try {
-            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 1200 });
+            retryText = await localLLM.generateText(strictPrompt, { temperature: 0.1, maxTokens: 4000 });
           } catch (err) {
             logger.warn('本地LLM严格重试失败', { error: err.message });
           }

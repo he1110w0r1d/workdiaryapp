@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "pm2": "^6.0.13"
   }
 }

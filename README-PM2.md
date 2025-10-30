@@ -30,7 +30,46 @@ pm2 save
 
 # 恢复保存的状态
 pm2 resurrect
+
+# 生成并启用 Systemd 自启动（Linux 推荐）
+pm2 startup systemd -u $USER --hp $HOME
+pm2 save
+sudo env PATH=$PATH:/usr/bin systemctl enable pm2-$USER
+sudo systemctl start pm2-$USER
 ```
+
+## Linux 开机自启动（Systemd + PM2）
+
+在 Linux 上推荐使用 PM2 的 Systemd 集成：
+
+```bash
+# 生成 systemd 配置（按当前用户创建）
+pm2 startup systemd -u $USER --hp $HOME
+
+# 保存当前进程列表（resurrect 会按此恢复）
+pm2 save
+
+# 启用并启动 pm2-$USER 服务
+sudo env PATH=$PATH:/usr/bin systemctl enable pm2-$USER
+sudo systemctl start pm2-$USER
+
+# 验证是否生效
+systemctl status pm2-$USER
+pm2 resurrect   # 如系统启动后有丢失可手动恢复
+pm2 status
+```
+
+可选方案（无需 systemd 权限）：使用 `crontab` 的 `@reboot` 触发脚本：
+
+```bash
+(crontab -l 2>/dev/null; echo "@reboot /home/shenchun/文档/personal-portal/start-portal.sh >> /home/shenchun/文档/personal-portal/logs/startup.log 2>&1") | crontab -
+```
+
+该脚本会：
+- 如 MongoDB 未运行，则按 `start-portal.sh` 的配置启动本地 `mongod`
+- 使用全局或本地的 `pm2` 恢复或启动 `ecosystem.config.js`
+- 启动 `workdiaryapp/workdiaryapp/ecosystem.config.js` 中前后端服务
+- 保存进程列表，保证下次重启自动恢复
 
 ## Windows开机自启动设置
 

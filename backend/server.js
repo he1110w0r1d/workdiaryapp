@@ -65,6 +65,13 @@ if (fs.existsSync(settingsFilePath)) {
     if (settings.externalTemperature) process.env.EXTERNAL_LLM_TEMPERATURE = String(settings.externalTemperature);
     if (settings.externalMaxTokens) process.env.EXTERNAL_LLM_MAX_TOKENS = String(settings.externalMaxTokens);
     
+    // 设置 Embeddings 环境变量（用于RAG索引/查询）
+    if (settings.externalEmbeddingsProvider) process.env.EXTERNAL_EMBEDDINGS_PROVIDER = settings.externalEmbeddingsProvider;
+    if (settings.externalEmbeddingsApiKey) process.env.EXTERNAL_EMBEDDINGS_API_KEY = settings.externalEmbeddingsApiKey;
+    if (settings.externalEmbeddingsApiUrl) process.env.EXTERNAL_EMBEDDINGS_API_URL = settings.externalEmbeddingsApiUrl;
+    if (settings.externalEmbeddingsModel) process.env.EXTERNAL_EMBEDDINGS_MODEL = settings.externalEmbeddingsModel;
+    if (settings.externalEmbeddingsTimeout) process.env.EXTERNAL_EMBEDDINGS_TIMEOUT = String(settings.externalEmbeddingsTimeout);
+    
     logger.info('LLM配置已加载:', {
       type: settings.llmType,
       useLocalLLM: settings.useLocalLLM,
@@ -72,6 +79,14 @@ if (fs.existsSync(settingsFilePath)) {
       localApiUrl: settings.apiUrl ? settings.apiUrl.substring(0, 30) + '...' : 'N/A',
       externalProvider: settings.externalProvider,
       externalModel: settings.externalModel
+    });
+
+    // 记录 Embeddings 配置加载情况，便于故障排查
+    logger.info('Embeddings配置已加载:', {
+      provider: settings.externalEmbeddingsProvider,
+      model: settings.externalEmbeddingsModel,
+      apiUrl: settings.externalEmbeddingsApiUrl ? String(settings.externalEmbeddingsApiUrl).substring(0, 30) + '...' : 'N/A',
+      hasApiKey: Boolean(settings.externalEmbeddingsApiKey)
     });
   } catch (error) {
     logger.error('加载LLM配置失败:', error.message);

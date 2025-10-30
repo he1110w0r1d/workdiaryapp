@@ -195,20 +195,36 @@ exports.query = async (req, res) => {
     const diaryMetas = await Diary.find({ _id: { $in: diaryIds } }).select('startTime endTime').lean();
     const diaryMap = new Map(diaryMetas.map(d => [String(d._id), d]));
 
-    // 组装上下文（包含日期与时间范围）
-    const context = scored.map((s, i) => {
+    // 为片段附加时间元信息，并按开始时间进行线性排序
+    const scoredWithMeta = scored.map((s) => {
       const meta = diaryMap.get(String(s.diary));
       const start = meta?.startTime ? new Date(meta.startTime) : null;
       const end = meta?.endTime ? new Date(meta.endTime) : null;
-      const dateStr = start ? `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}` : '未知日期';
-      const timeRange = start && end ? `${start.toLocaleString()} - ${end.toLocaleString()}` : '';
+      return { ...s, _meta: { start, end } };
+    });
+
+    const scoredChrono = scoredWithMeta.slice().sort((a, b) => {
+      const as = a._meta.start ? a._meta.start.getTime() : 0;
+      const bs = b._meta.start ? b._meta.start.getTime() : 0;
+      return as - bs;
+    });
+
+    // 组装上下文（包含日期与具体时间点/范围），按时间线输出
+    const fmtDate = (d) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '未知日期';
+    const fmtTime = (d) => d ? d.toLocaleString('zh-CN', { hour12: false }) : '';
+
+    const context = scoredChrono.map((s, i) => {
+      const start = s._meta.start;
+      const end = s._meta.end;
+      const dateStr = fmtDate(start);
+      const timeRange = start && end ? `${fmtTime(start)} - ${fmtTime(end)}` : (start ? fmtTime(start) : '');
       return `【片段${i+1} | ${dateStr} ${timeRange}】\n${s.text}`;
     }).join('\n\n');
 
     const now = new Date();
     const nowStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const rangeNote = dateRange ? `\n已按“${dateRange.label}”筛选片段（${dateRange.start.toLocaleDateString('zh-CN')} - ${dateRange.end.toLocaleDateString('zh-CN')}）` : '';
-    const llmPrompt = `你是一位熟悉我工作内容的助手。\n当前日期：${nowStr}（时区：Asia/Shanghai）。若问题包含相对日期词（如“昨天”“今天”“前天”“上周”“上个月”），请以当前日期解析这些词并严格依据参考片段作答。${rangeNote}\n\n请基于以下参考片段回答问题：\n\n${context}\n\n问题：${question}\n\n回答要求：\n- 给出结论和依据；\n- 以中文输出；\n- 简洁分点表达。`;
+    const llmPrompt = `你是一位熟悉我工作内容的助手。\n当前日期：${nowStr}（时区：Asia/Shanghai）。若问题包含相对日期词（如“昨天”“今天”“前天”“上周”“上个月”），请以当前日期解析这些词并严格依据参考片段作答。${rangeNote}\n\n参考片段（按时间线排列）：\n\n${context}\n\n问题：${question}\n\n回答要求（必须同时满足）：\n- 以严格的时间线组织答案，从最早到最晚；\n- 每个要点标注对应片段编号，如【片段1】、【片段2】；\n- 在每个要点中明确具体时间点或时间范围；\n- 仅依据参考片段作答，不进行臆测，无法确定的请明确说明“依据不足”；\n- 最后给出简短结论，并列出“依据映射表”：结论要点 -> 片段编号；\n- 使用中文，结构化分点，便于追溯。`;
 
     let answer = null;
 
@@ -216,7 +232,7 @@ exports.query = async (req, res) => {
 
     if (externalLLM) {
       try {
-        answer = await externalLLM.generateText(llmPrompt, { temperature: 0.2 });
+        answer = await externalLLM.generateText(llmPrompt, { temperature: 0.2, maxTokens: 3000 });
         try { logger.llm('外部LLM生成成功', { length: (answer || '').length, preview: (answer || '').substring(0, 200) }); } catch (_) {}
       } catch (e) {
         try { logger.error('外部LLM生成失败', { message: e.message }); } catch (_) {}
@@ -225,7 +241,7 @@ exports.query = async (req, res) => {
 
     if (!answer && localLLM) {
       try {
-        answer = await localLLM.generateText(llmPrompt, { temperature: 0.2 });
+        answer = await localLLM.generateText(llmPrompt, { temperature: 0.2, maxTokens: 3000 });
         try { logger.llm('本地LLM生成成功', { length: (answer || '').length, preview: (answer || '').substring(0, 200) }); } catch (_) {}
       } catch (e) {
         try { logger.error('本地LLM生成失败', { message: e.message }); } catch (_) {}
@@ -245,7 +261,7 @@ exports.query = async (req, res) => {
     try { logger.llm('RAG查询结束', { answerLength: (answer || '').length, snippetCount: scored.length }); } catch (_) {}
 
     // 返回时附带日期信息，便于前端或后续处理
-    const snippetsOut = scored.map(s => {
+    const snippetsOut = scoredChrono.map(s => {
       const meta = diaryMap.get(String(s.diary));
       return {
         text: s.text,
