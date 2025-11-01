@@ -24,8 +24,8 @@ class ExternalLLM {
       timeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '600000'),
       // 温度参数，控制输出的随机性
       temperature: parseFloat(process.env.EXTERNAL_LLM_TEMPERATURE || '0.7'),
-      // 最大token数
-      maxTokens: parseInt(process.env.EXTERNAL_LLM_MAX_TOKENS || '32000'),
+      // 最大token数（理想请求上限，可被安全裁剪）
+      maxTokens: parseInt(process.env.EXTERNAL_LLM_MAX_TOKENS || '65000'),
       // 是否启用外部LLM
       enabled: process.env.LLM_TYPE === 'external',
       ...config
@@ -401,20 +401,54 @@ class ExternalLLM {
    */
   _getSafeMaxTokens(provider, asked) {
     const n = Number(asked) || 1024;
-    switch (provider) {
-      case 'deepseek':
-        return Math.min(n, 4096);
-      case 'zhipu':
-        return Math.min(n, 8192);
-      case 'openai':
+    const envCapRaw = process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP;
+    const envCap = envCapRaw ? Number(envCapRaw) : null;
+
+    // 提供商默认安全上限（根据常见路由与输出上限经验值）
+    let capByProvider;
+    switch (String(provider || '').toLowerCase()) {
       case 'openrouter':
-        return Math.min(n, 8192);
+        capByProvider = 65536;
+        break;
+      case 'qwen':
+        capByProvider = 65536;
+        break;
+      case 'zhipu':
+        capByProvider = 32768;
+        break;
+      case 'openai':
+        capByProvider = 16384;
+        break;
+      case 'deepseek':
+        capByProvider = 16384;
+        break;
       case 'anthropic':
       case 'claude':
-        return Math.min(n, 8192);
+        capByProvider = 8192;
+        break;
+      case 'custom':
+        capByProvider = 65536;
+        break;
       default:
-        return n;
+        capByProvider = 32768;
+        break;
     }
+
+    // 模型感知覆盖（进一步限制或提升）
+    const modelLower = String(this.config.model || '').toLowerCase();
+    let capByModel = capByProvider;
+    if (/qwen|qwen[-_]?long/.test(modelLower)) capByModel = Math.min(capByModel, 65536);
+    if (/gemini|google/.test(modelLower)) capByModel = Math.min(capByModel, 65536);
+    if (/claude/.test(modelLower)) capByModel = Math.min(capByModel, 8192);
+    if (/gpt/.test(modelLower)) capByModel = Math.min(capByModel, 16384);
+    if (/deepseek/.test(modelLower)) capByModel = Math.min(capByModel, 16384);
+
+    const finalCap = envCap ? Math.min(capByModel, envCap) : capByModel;
+    const safe = Math.min(n, finalCap);
+    try {
+      logger.llm(`max_tokens请求: ${n}, 安全上限: ${finalCap}, 实际发送: ${safe}`);
+    } catch (_) {}
+    return safe;
   }
 
   /**

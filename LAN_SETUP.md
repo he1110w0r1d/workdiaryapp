@@ -50,7 +50,7 @@ npm start
 
 ### 开发模式访问
 - 后端API: http://你的IP地址:5000
-- 前端界面: http://你的IP地址:3000
+- 前端界面: http://你的IP地址:13000
 
 ### 生产模式访问
 - 网站地址: http://你的IP地址:5000 (如果使用nginx代理)
@@ -88,7 +88,7 @@ netsh advfirewall firewall add rule name="Work Diary Frontend" dir=in action=all
 ## 6. 局域网用户访问
 
 局域网其他用户可以通过以下地址访问：
-- http://你的IP地址:3000 (开发模式)
+- http://你的IP地址:13000 (开发模式)
 - http://你的IP地址:5000 (生产模式)
 
 ## 7. 注意事项
@@ -119,7 +119,7 @@ server {
     server_name your-local-ip;
     
     location / {
-        proxy_pass http://localhost:3000;
+proxy_pass http://localhost:13000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

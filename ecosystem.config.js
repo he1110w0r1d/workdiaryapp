@@ -15,7 +15,7 @@ module.exports = {
         JWT_SECRET: 'your-secret-key-here',
         ENCRYPTION_KEY: 'your-encryption-key-32-chars!!',
         SESSION_SECRET: 'your-session-secret-key-here',
-        CORS_ORIGIN: 'http://localhost:3000',
+        CORS_ORIGIN: 'http://localhost: 13000',
         LLM_TYPE: 'external',
         PORTAL_VERIFY_URL: 'http://127.0.0.1:3001/api/sso/verify',
         PORTAL_JWT_SECRET: 'portal_sso_dev_secret',
@@ -35,7 +35,7 @@ module.exports = {
       max_restarts: 5,
       min_uptime: '10s',
       env: {
-        PORT: 3000,
+        PORT: 13000,
         BROWSER: 'none',
         REACT_APP_BROWSER: 'none',
         // 让前端按当前站点自动选择后端主机，避免cookie域名不一致

@@ -2,7 +2,7 @@ import React from 'react';
 
 const AIAssistant = () => {
   // 使用正确的Dify聊天机器人URL（包含端口号11333）
-  const difyUrl = 'http://192.168.1.168:11333/chatbot/qzCIz0zlJscVJk1G';
+  const difyUrl = 'http://192.168.1.168:11333/chatbot/JaWIr4cSsJ6VGrGl';
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>

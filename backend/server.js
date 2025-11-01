@@ -134,17 +134,21 @@ const corsOptions = {
   origin: function (origin, callback) {
     // 允许没有origin的请求（如移动应用或直接浏览器请求）
     if (!origin) return callback(null, true);
-    
+
     // 允许localhost来源
     if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
       return callback(null, true);
     }
-    
-    // 允许局域网IP地址来源
-    if (origin.match(/^http:\/\/192\.168\.\d+\.\d+:/) || origin.match(/^http:\/\/172\.\d+\.\d+\.\d+:/)) {
+
+    // 允许局域网IP地址来源（包含192.168.*、172.*、10.*）
+    if (
+      origin.match(/^http:\/\/192\.168\.\d+\.\d+:/) ||
+      origin.match(/^http:\/\/172\.\d+\.\d+\.\d+:/) ||
+      origin.match(/^http:\/\/10\.\d+\.\d+\.\d+:/)
+    ) {
       return callback(null, true);
     }
-    
+
     // 拒绝其他来源
     callback(new Error('Not allowed by CORS'));
   },

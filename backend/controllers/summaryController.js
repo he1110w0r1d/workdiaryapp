@@ -384,28 +384,29 @@ const createTodosFromSuggestions = async (userId, suggestions, diaries) => {
   return { created: created.length };
 };
 
-// 清理LLM返回的HTML内容，提取纯HTML代码
+// 清理LLM返回的HTML内容，提取纯HTML代码（稳健版）
 const cleanHTMLContent = (rawContent) => {
   if (!rawContent) return '';
   
-  // 去除markdown代码块标记
-  let cleaned = rawContent.replace(/```html\s*/gi, '').replace(/```\s*$/gi, '');
+  let cleaned = String(rawContent)
+    .replace(/```html\s*/gi, '')
+    .replace(/```/g, '');
   
-  // 查找HTML文档的开始和结束
-  const htmlStart = cleaned.indexOf('<!DOCTYPE html>');
-  const htmlEnd = cleaned.lastIndexOf('</html>');
-  
-  if (htmlStart !== -1 && htmlEnd !== -1) {
-    // 提取从<!DOCTYPE html>到</html>的内容
-    cleaned = cleaned.substring(htmlStart, htmlEnd + 7);
+  // 起始定位：优先<!DOCTYPE html>，其次<html>
+  const doctypeIdx = cleaned.indexOf('<!DOCTYPE html');
+  const htmlIdx = cleaned.indexOf('<html');
+  let startIdx = -1;
+  if (doctypeIdx !== -1) startIdx = doctypeIdx;
+  else if (htmlIdx !== -1) startIdx = htmlIdx;
+  if (startIdx !== -1) cleaned = cleaned.slice(startIdx);
+
+  // 结束定位：优先</html>，其次</body>
+  const htmlCloseIdx = cleaned.lastIndexOf('</html>');
+  if (htmlCloseIdx !== -1) {
+    cleaned = cleaned.slice(0, htmlCloseIdx + 7);
   } else {
-    // 如果没有找到完整的HTML结构，尝试查找<html>标签
-    const htmlTagStart = cleaned.indexOf('<html');
-    const htmlTagEnd = cleaned.lastIndexOf('</html>');
-    
-    if (htmlTagStart !== -1 && htmlTagEnd !== -1) {
-      cleaned = cleaned.substring(htmlTagStart, htmlTagEnd + 7);
-    }
+    const bodyCloseIdx = cleaned.lastIndexOf('</body>');
+    if (bodyCloseIdx !== -1) cleaned = cleaned.slice(0, bodyCloseIdx + 7);
   }
   
   // 去除开头和结尾的说明文字（通常在HTML标签之前或之后）
@@ -415,56 +416,159 @@ const cleanHTMLContent = (rawContent) => {
   return cleaned.trim();
 };
 
+// 自动修复不完整的HTML结构（补齐缺失标签）
+const repairHTMLContent = (htmlContent) => {
+  let content = String(htmlContent || '');
+  if (!content) return '';
+
+  const hasDoctype = /<!DOCTYPE\s+html>/i.test(content);
+  const hasHtmlOpen = /<html[^>]*>/i.test(content);
+  let hasHtmlClose = /<\/html>/i.test(content);
+  const hasHeadOpen = /<head[^>]*>/i.test(content);
+  let hasHeadClose = /<\/head>/i.test(content);
+  const hasBodyOpen = /<body[^>]*>/i.test(content);
+  let hasBodyClose = /<\/body>/i.test(content);
+
+  if (!hasHtmlOpen) {
+    const minimalHead = '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>工作总结</title></head>';
+    content = `<!DOCTYPE html>\n<html lang="zh-CN">\n${minimalHead}\n<body>\n${content}\n</body>\n</html>`;
+    return content;
+  }
+
+  if (!hasDoctype) content = '<!DOCTYPE html>\n' + content;
+
+  if (!hasHeadOpen) {
+    const minimalHead = '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>工作总结</title></head>';
+    content = content.replace(/<html([^>]*)>/i, (m, attrs) => `<html${attrs}>\n${minimalHead}`);
+    hasHeadClose = true;
+  } else if (!hasHeadClose) {
+    if (/<body[^>]*>/i.test(content)) {
+      content = content.replace(/<body[^>]*>/i, '</head>\n$&');
+      hasHeadClose = true;
+    } else {
+      content = content.replace(/<head[^>]*>/i, '$&</head>');
+      hasHeadClose = true;
+    }
+  }
+
+  if (!hasBodyOpen) {
+    if (hasHeadClose) {
+      content = content.replace(/<\/head>/i, '</head>\n<body>');
+    } else {
+      content = content.replace(/<html([^>]*)>/i, (m, attrs) => `<html${attrs}>\n<body>`);
+    }
+  }
+  if (!hasBodyClose) content += '\n</body>';
+  if (!hasHtmlClose) content += '\n</html>';
+
+  return content;
+};
+
+// 验证HTML结构的完整性（放宽约束）
+const validateHTMLStructure = (htmlContent) => {
+  if (!htmlContent || typeof htmlContent !== 'string') return false;
+  if (htmlContent.length < 300) return false;
+
+  const hasHtmlTag = /<html[^>]*>/i.test(htmlContent);
+  const hasClosingHtml = /<\/html>/i.test(htmlContent);
+  const hasBody = /<body[^>]*>/i.test(htmlContent);
+  const hasClosingBody = /<\/body>/i.test(htmlContent);
+  const hasHead = /<head[^>]*>/i.test(htmlContent);
+  const hasClosingHead = /<\/head>/i.test(htmlContent);
+
+  const basicStructure = hasHtmlTag && hasClosingHtml && hasBody && hasClosingBody && (!hasHead || hasClosingHead);
+  const containsCodeFence = /```/.test(htmlContent);
+  const looksLikeHTML = /<!DOCTYPE\s+html>/i.test(htmlContent) || hasHtmlTag;
+
+  return basicStructure && looksLikeHTML && !containsCodeFence;
+};
+
 // 生成HTML网页代码
 const generateHTMLPage = async (summaryData, type, summaryContent = '', userId = null) => {
   const { externalLLM } = await createLLMInstances(userId);
   
   try {
+    // 构造安全的统计数据，避免包含日记原文
+    const safeHtmlData = {
+      date: summaryData?.date || null,
+      totalWorkTime: summaryData?.totalWorkTime || 0,
+      totalEntries: Array.isArray(summaryData?.diaries)
+        ? summaryData.diaries.length
+        : (summaryData?.totalEntries || 0),
+      tagDistribution: summaryData?.tagDistribution || {},
+      dailyWork: summaryData?.dailyWork || undefined,
+      monthlyWork: summaryData?.monthlyWork || undefined
+    };
+
     // 读取HTML生成提示词模板
     const templatePath = path.join(__dirname, '../templates/html_generation_prompt.txt');
     let htmlPrompt = '';
     
     if (fs.existsSync(templatePath)) {
       htmlPrompt = fs.readFileSync(templatePath, 'utf8')
-        .replace('{{summaryData}}', JSON.stringify(summaryData, null, 2))
+        .replace('{{summaryData}}', JSON.stringify(safeHtmlData, null, 2))
         .replace('{{summaryContent}}', summaryContent || '暂无总结内容');
     } else {
-      // 如果模板文件不存在，使用原来的简单提示词
+      // 如果模板文件不存在，使用更明确的两段式提示词（以总结正文为主，数据仅用于图表）
       const typeMap = {
         'daily': '每日',
         'weekly': '每周',
         'monthly': '月度',
         'yearly': '年度'
       };
-      htmlPrompt = `请根据以下${typeMap[type] || '工作'}总结数据，生成一个美观的HTML网页来展示工作成果。要求：
-1. 使用现代化的CSS样式，包含响应式设计
-2. 使用图表库（如Chart.js）来可视化数据
-3. 包含工作时长统计、标签分布等图表
-4. 整体设计要专业美观，适合展示工作成果
-5. 请直接返回完整的HTML代码，包含所有CSS和JavaScript
+      htmlPrompt = `你是一名网页设计师。请仅根据“总结正文”来组织页面的主题内容，并用“统计数据”渲染图表与数据卡片。不要引用或展示原始日记文本。
+页面要求：
+1. 现代化CSS样式，响应式布局
+2. 使用Chart.js进行数据可视化
+3. 包含工作时长统计、标签分布以及（如有）趋势图
+4. 页面结构完整，并直接输出完整HTML（含CSS和JS）
 
-工作总结数据：
-${JSON.stringify(summaryData, null, 2)}
+总结类型：${typeMap[type] || '工作'}
 
-请生成完整的HTML代码：`;
+统计数据（仅用于图表和指标，不含日记原文）：
+${JSON.stringify(safeHtmlData, null, 2)}
+
+总结正文（作为页面主要内容来源）：
+${summaryContent || '暂无总结内容'}
+
+请直接返回完整HTML代码：`;
     }
 
     logger.llm('开始使用外部LLM生成HTML内容');
 
-    const rawHtmlContent = await externalLLM._callExternalLLM(htmlPrompt);
+    // 为HTML生成使用更高的maxTokens配置，确保能生成完整的HTML
+    const htmlGenerationOptions = {
+      maxTokens: 65000, // 提升到65K输出上限，请求端按提供商/模型安全裁剪
+      temperature: 0.3   // 降低温度，提高输出的一致性
+    };
+
+    const rawHtmlContent = await externalLLM._callExternalLLM(htmlPrompt, htmlGenerationOptions);
     
     logger.llm('外部LLM HTML生成完成');
     
     // 清理HTML内容，去除markdown格式和说明文字
     const cleanedHtmlContent = cleanHTMLContent(rawHtmlContent);
+    // 自动修复不完整结构
+    const repairedHtmlContent = repairHTMLContent(cleanedHtmlContent);
+
+    // 验证结构完整性
+    const isValidHTML = validateHTMLStructure(repairedHtmlContent);
     
-    // 如果生成内容为空或过短，或缺少关键闭合标签，则回退默认模板，避免保存空白文件
-    if (!cleanedHtmlContent || cleanedHtmlContent.length < 500 || !/<\/html>/i.test(cleanedHtmlContent)) {
-      logger.warn('HTML生成结果不完整，回退默认模板');
+    if (!isValidHTML) {
+      logger.warn('HTML生成结果不完整，回退默认模板', {
+        contentLength: repairedHtmlContent?.length || 0,
+        hasHtmlTag: /<html/i.test(repairedHtmlContent || ''),
+        hasClosingHtml: /<\/html>/i.test(repairedHtmlContent || ''),
+        hasHead: /<head/i.test(repairedHtmlContent || ''),
+        hasClosingHead: /<\/head>/i.test(repairedHtmlContent || ''),
+        hasBody: /<body/i.test(repairedHtmlContent || ''),
+        hasClosingBody: /<\/body>/i.test(repairedHtmlContent || ''),
+        preview: (repairedHtmlContent || '').substring(0, 200)
+      });
       return generateDefaultHTML(summaryData, type);
     }
     
-    return cleanedHtmlContent;
+    return repairedHtmlContent;
   } catch (error) {
     logger.warn('生成HTML失败，使用默认模板', { error: error.message });
     return generateDefaultHTML(summaryData, type);

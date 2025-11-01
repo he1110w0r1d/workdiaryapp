@@ -50,7 +50,7 @@ docker-compose up --build -d
 ```
 
 4. **访问应用**
-- 前端: http://localhost:3000
+- 前端: http://localhost:13000
 - 后端API: http://localhost:5000
 
 ### 方式二：本地开发
