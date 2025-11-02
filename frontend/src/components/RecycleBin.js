@@ -191,7 +191,13 @@ const RecycleBin = () => {
   return (
     <div>
       <div style={{ marginBottom: '16px' }}>
-        <Title level={2}>日记回收站</Title>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '8px' }}>
+          <img 
+            src={process.env.PUBLIC_URL + '/pic/logo6.png'} 
+            alt="日记回收站"
+            style={{ height: '80px', width: 'auto', objectFit: 'contain', display: 'block' }}
+          />
+        </div>
         <Text type="secondary">
           已删除的日记将在此保留30天，30天后自动永久删除。在此期间您可以恢复或手动永久删除。
         </Text>

@@ -118,7 +118,17 @@ export default function RagQA() {
         </Space>
       </Card> */}
 
-      <Card title="提问">
+      <Card 
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <img 
+              src={process.env.PUBLIC_URL + '/pic/logo8.png'} 
+              alt="提问"
+              style={{ height: 60, objectFit: 'contain' }}
+            />
+          </div>
+        }
+      >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Input.TextArea rows={4} value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的问题，例如：今年我在哪些项目上投入最多？" />
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>

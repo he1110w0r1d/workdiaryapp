@@ -536,7 +536,18 @@ const SummaryList = () => {
 
   return (
     <div>
-      <Title level={2} style={{ marginBottom: 24 }}>工作总结</Title>
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
+        <img 
+          src={process.env.PUBLIC_URL + '/pic/logo5.png'} 
+          alt="工作总结"
+          style={{ 
+            height: '80px', 
+            width: 'auto', 
+            objectFit: 'contain', 
+            display: 'block' 
+          }} 
+        />
+      </div>
       
       <Tabs 
         activeKey={activeTab} 

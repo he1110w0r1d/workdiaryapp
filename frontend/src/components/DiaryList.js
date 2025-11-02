@@ -464,7 +464,18 @@ const DiaryList = () => {
         alignItems: 'center', 
         marginBottom: 16 
       }}>
-        <Title level={2}>工作日记</Title>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img 
+            src={process.env.PUBLIC_URL + '/pic/logo3.png'} 
+            alt="logo"
+            style={{ 
+              height: '80px', 
+              width: 'auto', 
+              objectFit: 'contain', 
+              display: 'block' 
+            }} 
+          />
+        </div>
         <Space>
           <Button 
             icon={<DownloadOutlined />}

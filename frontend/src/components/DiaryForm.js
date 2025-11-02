@@ -247,11 +247,10 @@ const DiaryForm = () => {
             alignItems: 'center', 
             justifyContent: 'flex-start',
             gap: '8px',
-
             margin: '0',
             padding: '0'
           }}>
-            {id ? <EditOutlined /> : <PlusOutlined />}
+            
             <img 
               src={process.env.PUBLIC_URL + '/pic/logo2.png'} 
               alt="认真记录每一天"

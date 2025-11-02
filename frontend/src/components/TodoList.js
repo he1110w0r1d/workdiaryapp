@@ -183,9 +183,18 @@ const TodoList = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title level={2} style={{ textAlign: 'center', marginBottom: '24px' }}>
-        📋 待办管理
-      </Title>
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '24px' }}>
+        <img 
+          src={process.env.PUBLIC_URL + '/pic/todo.png'} 
+          alt="待办管理"
+          style={{ 
+            height: '80px', 
+            width: 'auto', 
+            objectFit: 'contain', 
+            display: 'block' 
+          }} 
+        />
+      </div>
       
       {/* 待处理的待办 */}
       <Card 
@@ -216,17 +225,24 @@ const TodoList = () => {
                     }}
                   >
                     <div style={{ width: '100%' }}>
-                      {/* 头部信息 */}
-                      {/* 单行布局：左侧内容，右侧标签/时间/操作按钮 */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                        {/* 左侧：内容占满剩余空间 */}
-                        <div style={{ flex: 1 }}>
-                          <Text strong style={{ fontSize: '16px', display: 'block' }}>
+                      {/* 两行布局：第一行内容；第二行标签/时间/操作按钮 */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {/* 第一行：内容 */}
+                        <div style={{ width: '100%' }}>
+                          <Text 
+                            strong 
+                            style={{ 
+                              fontSize: '16px', 
+                              display: 'block', 
+                              whiteSpace: 'pre-wrap', 
+                              wordBreak: 'break-word' 
+                            }}
+                          >
                             {todo.content}
                           </Text>
                         </div>
 
-                        {/* 右侧：状态标签、时间信息与操作按钮同一行 */}
+                        {/* 第二行：状态标签、时间信息与操作按钮 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                           <Tag color={statusDisplay.color}>
                             {statusDisplay.emoji} {statusDisplay.text}
@@ -239,30 +255,32 @@ const TodoList = () => {
                               <ClockCircleOutlined /> 截止时间: {moment(todo.dueDate).format('YYYY-MM-DD')}
                             </Text>
                           )}
-                          <Button 
-                            type="primary" 
-                            icon={<CheckOutlined />}
-                            size="small"
-                            onClick={() => openActionModal(todo, '已完成')}
-                          >
-                            已完成
-                          </Button>
-                          <Button 
-                            danger 
-                            icon={<CloseOutlined />}
-                            size="small"
-                            onClick={() => openActionModal(todo, '已放弃')}
-                          >
-                            放弃
-                          </Button>
-                          <Button 
-                            type="default" 
-                            icon={<SwapOutlined />}
-                            size="small"
-                            onClick={() => openActionModal(todo, '已转交')}
-                          >
-                            转交
-                          </Button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <Button 
+                              type="primary" 
+                              icon={<CheckOutlined />}
+                              size="small"
+                              onClick={() => openActionModal(todo, '已完成')}
+                            >
+                              已完成
+                            </Button>
+                            <Button 
+                              danger 
+                              icon={<CloseOutlined />}
+                              size="small"
+                              onClick={() => openActionModal(todo, '已放弃')}
+                            >
+                              放弃
+                            </Button>
+                            <Button 
+                              type="default" 
+                              icon={<SwapOutlined />}
+                              size="small"
+                              onClick={() => openActionModal(todo, '已转交')}
+                            >
+                              转交
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>

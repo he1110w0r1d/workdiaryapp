@@ -143,10 +143,13 @@ const BackupRestore = () => {
   return (
     <Card
       title={
-        <Space>
-          <DatabaseOutlined />
-          数据备份与恢复
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+          <img 
+            src={process.env.PUBLIC_URL + '/pic/logo7.png'} 
+            alt="数据备份与恢复"
+            style={{ height: 60, objectFit: 'contain' }}
+          />
+        </div>
       }
       style={{ marginBottom: 24 }}
     >
