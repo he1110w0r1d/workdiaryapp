@@ -877,3 +877,185 @@ exports.testEmbeddingsConnection = async (req, res) => {
     return res.status(500).json({ success: false, message: '测试嵌入模型连接失败: ' + (error.response?.data?.message || error.message) });
   }
 };
+
+// ================= 用户级别嵌入配置 =================
+
+// 获取用户嵌入配置列表
+exports.getUserEmbeddingConfigs = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select('embeddingConfigs').lean();
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+    return res.json({ configs: user.embeddingConfigs || [] });
+  } catch (error) {
+    logger.error('获取用户嵌入配置失败:', error);
+    return res.status(500).json({ message: '获取用户嵌入配置失败' });
+  }
+};
+
+// 保存用户嵌入配置
+exports.saveUserEmbeddingConfig = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const configData = req.body || {};
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const newConfig = {
+      name: configData.name || '默认嵌入配置',
+      provider: String(configData.provider || 'siliconflow'),
+      apiKey: configData.apiKey || '',
+      apiUrl: configData.apiUrl || '',
+      model: configData.model || 'bge-m3',
+      timeout: parseInt(configData.timeout || 60000, 10),
+      isDefault: Boolean(configData.isDefault),
+      isActive: configData.isActive !== undefined ? Boolean(configData.isActive) : true,
+      createdAt: new Date()
+    };
+
+    if (newConfig.isDefault) {
+      (user.embeddingConfigs || []).forEach(c => { c.isDefault = false; });
+    }
+
+    user.embeddingConfigs = user.embeddingConfigs || [];
+    user.embeddingConfigs.push(newConfig);
+    await user.save();
+
+    return res.json({ message: '嵌入配置保存成功', config: newConfig });
+  } catch (error) {
+    logger.error('保存用户嵌入配置失败:', error);
+    return res.status(500).json({ message: '保存用户嵌入配置失败' });
+  }
+};
+
+// 更新用户嵌入配置
+exports.updateUserEmbeddingConfig = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { configId } = req.params;
+    const configData = req.body || {};
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const config = user.embeddingConfigs.id(configId);
+    if (!config) return res.status(404).json({ message: '配置不存在' });
+
+    config.name = configData.name || config.name;
+    config.provider = configData.provider || config.provider;
+    config.apiKey = configData.apiKey || config.apiKey;
+    config.apiUrl = configData.apiUrl || config.apiUrl;
+    config.model = configData.model || config.model;
+    config.timeout = configData.timeout || config.timeout;
+    config.isActive = configData.isActive !== undefined ? Boolean(configData.isActive) : config.isActive;
+
+    if (configData.isDefault !== undefined) {
+      if (configData.isDefault) {
+        (user.embeddingConfigs || []).forEach(c => {
+          if (c._id.toString() !== configId) c.isDefault = false;
+        });
+      }
+      config.isDefault = Boolean(configData.isDefault);
+    }
+
+    await user.save();
+    return res.json({ message: '嵌入配置更新成功', config });
+  } catch (error) {
+    logger.error('更新用户嵌入配置失败:', error);
+    return res.status(500).json({ message: '更新用户嵌入配置失败' });
+  }
+};
+
+// 删除用户嵌入配置
+exports.deleteUserEmbeddingConfig = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { configId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const idx = (user.embeddingConfigs || []).findIndex(c => c._id.toString() === configId);
+    if (idx === -1) return res.status(404).json({ message: '配置不存在' });
+
+    user.embeddingConfigs.splice(idx, 1);
+    await user.save();
+    return res.json({ message: '嵌入配置删除成功' });
+  } catch (error) {
+    logger.error('删除用户嵌入配置失败:', error);
+    return res.status(500).json({ message: '删除用户嵌入配置失败' });
+  }
+};
+
+// 设置默认用户嵌入配置
+exports.setDefaultUserEmbeddingConfig = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { configId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const exists = (user.embeddingConfigs || []).some(c => c._id.toString() === configId);
+    if (!exists) return res.status(404).json({ message: '配置不存在' });
+
+    (user.embeddingConfigs || []).forEach(c => { c.isDefault = false; });
+    const target = user.embeddingConfigs.find(c => c._id.toString() === configId);
+    if (target) target.isDefault = true;
+    await user.save();
+    return res.json({ message: '默认嵌入配置设置成功' });
+  } catch (error) {
+    logger.error('设置默认嵌入配置失败:', error);
+    return res.status(500).json({ message: '设置默认嵌入配置失败' });
+  }
+};
+
+// 获取用户默认嵌入配置（供其他模块调用）
+exports.getUserDefaultEmbeddingConfig = async (userId) => {
+  try {
+    const user = await User.findById(userId).select('embeddingConfigs');
+    if (!user) return null;
+    const def = (user.embeddingConfigs || []).find(c => c.isDefault && c.isActive);
+    if (!def) return null;
+    return {
+      provider: def.provider,
+      apiKey: def.apiKey,
+      apiUrl: def.apiUrl,
+      model: def.model,
+      timeout: def.timeout || 60000
+    };
+  } catch (error) {
+    logger.error('获取默认嵌入配置失败:', error);
+    return null;
+  }
+};
+
+// 测试用户嵌入配置
+exports.testUserEmbeddingConfig = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { configId } = req.params;
+
+    const user = await User.findById(userId).select('embeddingConfigs');
+    if (!user) return res.status(404).json({ success: false, message: '用户不存在' });
+    const config = (user.embeddingConfigs || []).find(c => c._id.toString() === configId);
+    if (!config) return res.status(404).json({ success: false, message: '配置不存在' });
+
+    const embedder = new Embeddings({
+      provider: String(config.provider || '').toLowerCase(),
+      apiKey: String(config.apiKey || ''),
+      apiUrl: String(config.apiUrl || ''),
+      model: String(config.model || ''),
+      timeout: parseInt(config.timeout || 60000, 10)
+    });
+    const vec = await embedder.embed('用户嵌入配置连接测试 - workdiaryapp');
+    if (Array.isArray(vec) && vec.length > 0) {
+      return res.json({ success: true, message: '嵌入成功', vectorDimensions: vec.length });
+    }
+    return res.status(500).json({ success: false, message: '嵌入失败或返回空向量' });
+  } catch (error) {
+    logger.error('测试用户嵌入配置失败:', error);
+    return res.status(500).json({ success: false, message: '测试用户嵌入配置失败: ' + (error.response?.data?.message || error.message) });
+  }
+};

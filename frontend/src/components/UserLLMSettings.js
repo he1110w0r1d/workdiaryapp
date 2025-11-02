@@ -86,6 +86,33 @@ const UserLLMSettings = () => {
     form.resetFields();
   };
 
+  // 处理表单值变化
+  const handleValuesChange = (changedValues, allValues) => {
+    if (changedValues.provider) {
+      const urls = {
+        local: 'http://localhost:11434/api/generate',
+        openai: 'https://api.openai.com/v1/chat/completions',
+        anthropic: 'https://api.anthropic.com/v1/messages',
+        openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+        deepseek: 'https://api.deepseek.com/v1/chat/completions',
+        qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+        doubao: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+        siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
+        zhipu: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        custom: 'https://api.example.com/v1/chat/completions'
+      };
+      const defaultApiUrl = urls[changedValues.provider] || 'https://api.example.com/v1/chat/completions';
+      
+      // 使用setTimeout确保在下一个事件循环中更新，避免渲染时状态更新
+      setTimeout(() => {
+        const currentApiUrl = form.getFieldValue('apiUrl');
+        if (!currentApiUrl || currentApiUrl === '' || currentApiUrl.includes('example.com')) {
+          form.setFieldsValue({ apiUrl: defaultApiUrl });
+        }
+      }, 0);
+    }
+  };
+
   // 保存配置
   const handleSave = async (values) => {
     try {
@@ -170,7 +197,7 @@ const UserLLMSettings = () => {
         return (
           <div>
             <span>{text}</span>
-            {record.isDefault && <span style={{ color: 'green', fontWeight: 'bold' }}> ★默认</span>}
+            {record.isDefault && <Tag color="blue">默认</Tag>}
             {!record.isActive && <Tag color="red">已禁用</Tag>}
           </div>
         );
@@ -296,6 +323,7 @@ const UserLLMSettings = () => {
           form={form}
           layout="vertical"
           onFinish={handleSave}
+          onValuesChange={handleValuesChange}
         >
           <Form.Item
             name="name"
@@ -346,12 +374,7 @@ const UserLLMSettings = () => {
                 return urls[provider] || 'https://api.example.com/v1/chat/completions';
               };
               
-              // 当提供商改变时，自动设置URL
-              const currentApiUrl = getFieldValue('apiUrl');
               const defaultApiUrl = getApiUrl();
-              if (!currentApiUrl || currentApiUrl === '' || currentApiUrl.includes('example.com')) {
-                form.setFieldsValue({ apiUrl: defaultApiUrl });
-              }
               
               return (
                 <>

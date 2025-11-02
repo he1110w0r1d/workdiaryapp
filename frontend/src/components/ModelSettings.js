@@ -13,7 +13,8 @@ import {
   Typography,
   Tag,
   Tooltip,
-  InputNumber
+  InputNumber,
+  Tabs
 } from 'antd';
 import {
   PlusOutlined,
@@ -43,6 +44,23 @@ const ModelSettings = () => {
   const [embSettings, setEmbSettings] = useState(null);
   const [embLoading, setEmbLoading] = useState(false);
   const [embTestLoading, setEmbTestLoading] = useState(false);
+  
+  // 当模态框显示时，再同步编辑表单内容，避免未绑定警告
+  useEffect(() => {
+    if (modalVisible) {
+      if (editingModel) {
+        form.setFieldsValue({
+          name: editingModel.name,
+          provider: editingModel.provider,
+          apiKey: editingModel.apiKey,
+          apiUrl: editingModel.apiUrl,
+          model: editingModel.model
+        });
+      } else {
+        form.resetFields();
+      }
+    }
+  }, [modalVisible, editingModel, form]);
 
   useEffect(() => {
     fetchModels();
@@ -61,7 +79,6 @@ const ModelSettings = () => {
           externalEmbeddingsTimeout: s.externalEmbeddingsTimeout || 60000,
         };
         setEmbSettings(emb);
-        embForm.setFieldsValue(emb);
       } catch (error) {
         console.error('获取嵌入模型设置失败:', error);
         message.error('获取嵌入模型设置失败');
@@ -73,7 +90,6 @@ const ModelSettings = () => {
           externalEmbeddingsTimeout: 60000,
         };
         setEmbSettings(emb);
-        embForm.setFieldsValue(emb);
       } finally {
         setEmbLoading(false);
       }
@@ -96,19 +112,11 @@ const ModelSettings = () => {
 
   const handleAdd = () => {
     setEditingModel(null);
-    form.resetFields();
     setModalVisible(true);
   };
 
   const handleEdit = (record) => {
     setEditingModel(record);
-    form.setFieldsValue({
-      name: record.name,
-      provider: record.provider,
-      apiKey: record.apiKey,
-      apiUrl: record.apiUrl,
-      model: record.model
-    });
     setModalVisible(true);
   };
 
@@ -349,82 +357,103 @@ const ModelSettings = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Card style={{ marginBottom: '16px' }} loading={embLoading && !embSettings}>
-        <div style={{ marginBottom: '12px' }}>
-          <Title level={4} style={{ margin: 0 }}>词嵌入模型设置</Title>
-          <Text type="secondary">配置用于RAG索引/查询的词向量嵌入服务（推荐：硅基流动）</Text>
-        </div>
-        <Form form={embForm} layout="vertical" initialValues={embSettings || {}}>
-          <Form.Item name="externalEmbeddingsProvider" label="嵌入提供商" rules={[{ required: true, message: '请选择嵌入提供商' }]}>
-            <Select placeholder="选择嵌入提供商">
-              <Option value="siliconflow">硅基流动</Option>
-              <Option value="openai">OpenAI</Option>
-              <Option value="openrouter">OpenRouter</Option>
-              <Option value="custom">自定义API</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item name="externalEmbeddingsApiKey" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
-            <Input.Password placeholder="输入嵌入服务API密钥" />
-          </Form.Item>
-
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.externalEmbeddingsProvider !== cur.externalEmbeddingsProvider}>
-            {({ getFieldValue }) => (
-              getFieldValue('externalEmbeddingsProvider') === 'custom' ? (
-                <Form.Item name="externalEmbeddingsApiUrl" label="自定义API地址" rules={[{ required: true, message: '请输入API地址' }]}>
-                  <Input placeholder="例如: https://api.example.com/v1/embeddings" />
-                </Form.Item>
-              ) : null
-            )}
-          </Form.Item>
-
-          <Form.Item name="externalEmbeddingsModel" label="嵌入模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
-            <Input placeholder="例如: text-embedding-3-large, bge-m3" />
-          </Form.Item>
-
-          <Form.Item name="externalEmbeddingsTimeout" label="请求超时时间(毫秒)" rules={[{ required: true, message: '请输入超时时间' }]}>
-            <InputNumber min={1000} max={600000} step={1000} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item>
-            <Space>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveEmbeddings} loading={embLoading}>保存嵌入设置</Button>
-              <Button icon={<SyncOutlined />} onClick={handleTestEmbeddings} loading={embTestLoading}>测试嵌入</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Card>
-
-      {/* 原有用户级别LLM配置列表 */}
       <Card>
-        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <Title level={4} style={{ margin: 0 }}>模型设置</Title>
-            <Text type="secondary">管理您的AI模型配置，包括API密钥、连接URL和模型参数</Text>
-          </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAdd}
-          >
-            添加模型
-          </Button>
-        </div>
+        <Tabs
+          defaultActiveKey="models"
+          items={[
+            {
+              key: 'models',
+              label: '模型设置',
+              children: (
+                <div>
+                  <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0 }}>模型设置</Title>
+                      <Text type="secondary">管理您的AI模型配置，包括API密钥、连接URL和模型参数</Text>
+                    </div>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={handleAdd}
+                    >
+                      添加模型
+                    </Button>
+                  </div>
 
-        <Table
-          columns={columns}
-          dataSource={models}
-          rowKey="_id"
-          loading={loading}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 个配置`
-          }}
-          locale={{
-            emptyText: '暂无模型配置，点击"添加模型"开始配置'
-          }}
+                  <Table
+                    columns={columns}
+                    dataSource={models}
+                    rowKey="_id"
+                    loading={loading}
+                    pagination={{
+                      pageSize: 10,
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      showTotal: (total) => `共 ${total} 个配置`
+                    }}
+                    locale={{
+                      emptyText: '暂无模型配置，点击"添加模型"开始配置'
+                    }}
+                  />
+                </div>
+              )
+            },
+            {
+              key: 'embeddings',
+              label: '词嵌入模型',
+              children: (
+                <div>
+                  <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0 }}>词嵌入模型设置</Title>
+                      <Text type="secondary">配置用于RAG索引/查询的词向量嵌入服务（推荐：硅基流动）</Text>
+                    </div>
+                    <Space>
+                      <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveEmbeddings} loading={embLoading}>保存设置</Button>
+                      <Button icon={<SyncOutlined />} onClick={handleTestEmbeddings} loading={embTestLoading}>测试嵌入</Button>
+                    </Space>
+                  </div>
+                  <Form
+                    key={embSettings ? `${embSettings.externalEmbeddingsProvider}-${embSettings.externalEmbeddingsModel}` : 'emb-empty'}
+                    form={embForm}
+                    layout="vertical"
+                    initialValues={embSettings || {}}
+                  >
+                    <Form.Item name="externalEmbeddingsProvider" label="嵌入提供商" rules={[{ required: true, message: '请选择嵌入提供商' }]}>
+                      <Select placeholder="选择嵌入提供商">
+                        <Option value="siliconflow">硅基流动</Option>
+                        <Option value="openai">OpenAI</Option>
+                        <Option value="openrouter">OpenRouter</Option>
+                        <Option value="custom">自定义API</Option>
+                      </Select>
+                    </Form.Item>
+
+                    <Form.Item name="externalEmbeddingsApiKey" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
+                      <Input.Password placeholder="输入嵌入服务API密钥" />
+                    </Form.Item>
+
+                    <Form.Item noStyle shouldUpdate={(prev, cur) => prev.externalEmbeddingsProvider !== cur.externalEmbeddingsProvider}>
+                      {({ getFieldValue }) => (
+                        getFieldValue('externalEmbeddingsProvider') === 'custom' ? (
+                          <Form.Item name="externalEmbeddingsApiUrl" label="自定义API地址" rules={[{ required: true, message: '请输入API地址' }]}>
+                            <Input placeholder="例如: https://api.example.com/v1/embeddings" />
+                          </Form.Item>
+                        ) : null
+                      )}
+                    </Form.Item>
+
+                    <Form.Item name="externalEmbeddingsModel" label="嵌入模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
+                      <Input placeholder="例如: text-embedding-3-large, bge-m3" />
+                    </Form.Item>
+
+                    <Form.Item name="externalEmbeddingsTimeout" label="请求超时时间(毫秒)" rules={[{ required: true, message: '请输入超时时间' }]}>
+                      <InputNumber min={1000} max={600000} step={1000} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Form>
+                </div>
+              )
+            }
+          ]}
         />
       </Card>
 

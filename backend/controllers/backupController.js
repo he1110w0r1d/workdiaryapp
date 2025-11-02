@@ -91,11 +91,27 @@ const createBackup = async (req, res) => {
     logger.info('开始创建备份', { userId, query: req.query });
 
     // 获取用户的所有数据
-    const [diaries, todos, summaries] = await Promise.all([
+    const [diaries, todos, summaries, userDoc] = await Promise.all([
       Diary.find({ user: userId }).lean(),
       Todo.find({ user: userId }).lean(),
-      Summary.find({ user: userId }).lean()
+      Summary.find({ user: userId }).lean(),
+      User.findById(userId).lean()
     ]);
+
+    // 组装用户设置（剔除敏感字段）
+    const userProfile = userDoc ? {
+      username: userDoc.username,
+      email: userDoc.email,
+      nickname: userDoc.nickname,
+      bio: userDoc.bio,
+      avatar: userDoc.avatar,
+      workProfile: userDoc.workProfile || {},
+      customPrompts: userDoc.customPrompts || {},
+      createdAt: userDoc.createdAt,
+      updatedAt: userDoc.updatedAt
+    } : null;
+    const llmConfigs = Array.isArray(userDoc?.llmConfigs) ? userDoc.llmConfigs : [];
+    const embeddingConfigs = Array.isArray(userDoc?.embeddingConfigs) ? userDoc.embeddingConfigs : [];
 
     // 创建备份数据对象
     const backupData = {
@@ -108,7 +124,12 @@ const createBackup = async (req, res) => {
       data: {
         diaries,
         todos,
-        summaries
+        summaries,
+        user: {
+          profile: userProfile,
+          llmConfigs,
+          embeddingConfigs
+        }
       }
     };
 
@@ -134,7 +155,10 @@ const createBackup = async (req, res) => {
       stats: {
         diaries: diaries.length,
         todos: todos.length,
-        summaries: summaries.length
+        summaries: summaries.length,
+        llmConfigs: llmConfigs.length,
+        embeddingConfigs: embeddingConfigs.length,
+        hasUserProfile: !!userProfile
       }
     });
 
@@ -148,7 +172,10 @@ const createBackup = async (req, res) => {
         stats: {
           diaries: diaries.length,
           todos: todos.length,
-          summaries: summaries.length
+          summaries: summaries.length,
+          llmConfigs: llmConfigs.length,
+          embeddingConfigs: embeddingConfigs.length,
+          hasUserProfile: !!userProfile
         }
       }
     });
@@ -166,6 +193,7 @@ const createBackup = async (req, res) => {
 const restoreBackup = async (req, res) => {
   try {
     const userId = req.user.id;
+    const strategy = (req.body && req.body.strategy) ? String(req.body.strategy) : 'merge'; // merge | overwrite | skip
     
     logger.info('开始恢复备份', { 
       userId, 
@@ -207,7 +235,7 @@ const restoreBackup = async (req, res) => {
     ]);
 
     // 恢复数据
-    const { diaries, todos, summaries } = backupData.data;
+    const { diaries, todos, summaries, user } = backupData.data;
 
     // 恢复日记
     if (diaries && diaries.length > 0) {
@@ -242,7 +270,64 @@ const restoreBackup = async (req, res) => {
     // 删除临时文件
     fs.unlinkSync(backupFilePath);
 
-    logger.info('数据恢复成功', { userId });
+    // 处理用户资料与模型配置恢复
+    let profileUpdated = false;
+    let llmConfigsApplied = 0;
+    let embeddingConfigsApplied = 0;
+
+    if (user && strategy !== 'skip') {
+      const userDoc = await User.findById(userId);
+      if (userDoc) {
+        const safeProfile = user.profile || null;
+        const incomingLLM = Array.isArray(user.llmConfigs) ? user.llmConfigs : [];
+        const incomingEmb = Array.isArray(user.embeddingConfigs) ? user.embeddingConfigs : [];
+
+        // 更新用户资料（非敏感字段）
+        if (safeProfile) {
+          // 仅更新允许字段
+          userDoc.nickname = safeProfile.nickname ?? userDoc.nickname;
+          userDoc.bio = safeProfile.bio ?? userDoc.bio;
+          userDoc.avatar = safeProfile.avatar ?? userDoc.avatar;
+          userDoc.workProfile = safeProfile.workProfile ?? userDoc.workProfile;
+          userDoc.customPrompts = safeProfile.customPrompts ?? userDoc.customPrompts;
+          profileUpdated = true;
+        }
+
+        const keyOf = (x) => `${x.provider || ''}|${x.model || ''}|${(x.name || '').trim()}`;
+
+        if (strategy === 'overwrite') {
+          // 直接覆盖两个数组
+          userDoc.llmConfigs = incomingLLM.map((x) => ({ ...x }));
+          userDoc.embeddingConfigs = incomingEmb.map((x) => ({ ...x }));
+          llmConfigsApplied = incomingLLM.length;
+          embeddingConfigsApplied = incomingEmb.length;
+        } else if (strategy === 'merge') {
+          // 合并：基于 provider+model+name 去重，不覆盖已有
+          const existingLLMKeys = new Set((userDoc.llmConfigs || []).map(keyOf));
+          const existingEmbKeys = new Set((userDoc.embeddingConfigs || []).map(keyOf));
+          const toAddLLM = incomingLLM.filter((x) => !existingLLMKeys.has(keyOf(x)));
+          const toAddEmb = incomingEmb.filter((x) => !existingEmbKeys.has(keyOf(x)));
+          if (toAddLLM.length) {
+            userDoc.llmConfigs = [...(userDoc.llmConfigs || []), ...toAddLLM];
+          }
+          if (toAddEmb.length) {
+            userDoc.embeddingConfigs = [...(userDoc.embeddingConfigs || []), ...toAddEmb];
+          }
+          llmConfigsApplied = toAddLLM.length;
+          embeddingConfigsApplied = toAddEmb.length;
+        }
+
+        await userDoc.save();
+      }
+    }
+
+    logger.info('数据恢复成功', { 
+      userId,
+      strategy,
+      profileUpdated,
+      llmConfigsApplied,
+      embeddingConfigsApplied
+    });
 
     res.json({
       success: true,
@@ -250,7 +335,11 @@ const restoreBackup = async (req, res) => {
       restored: {
         diaries: diaries?.length || 0,
         todos: todos?.length || 0,
-        summaries: summaries?.length || 0
+        summaries: summaries?.length || 0,
+        profileUpdated,
+        llmConfigsApplied,
+        embeddingConfigsApplied,
+        strategy
       }
     });
 

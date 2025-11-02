@@ -16,6 +16,25 @@ router.post('/llm/test', protect, settingsController.testLLMConnection);
 // 测试嵌入模型连接
 router.post('/embeddings/test', protect, settingsController.testEmbeddingsConnection);
 
+// 用户级别嵌入配置路由
+// 获取用户嵌入配置列表
+router.get('/user-embeddings', protect, settingsController.getUserEmbeddingConfigs);
+
+// 保存用户嵌入配置
+router.post('/user-embeddings', protect, settingsController.saveUserEmbeddingConfig);
+
+// 更新用户嵌入配置
+router.put('/user-embeddings/:configId', protect, settingsController.updateUserEmbeddingConfig);
+
+// 删除用户嵌入配置
+router.delete('/user-embeddings/:configId', protect, settingsController.deleteUserEmbeddingConfig);
+
+// 测试用户嵌入配置
+router.post('/user-embeddings/:configId/test', protect, settingsController.testUserEmbeddingConfig);
+
+// 设置默认用户嵌入配置
+router.put('/user-embeddings/:configId/set-default', protect, settingsController.setDefaultUserEmbeddingConfig);
+
 // 用户级别LLM配置路由
 // 获取用户LLM配置列表
 router.get('/user-llm', protect, settingsController.getUserLLMConfigs);

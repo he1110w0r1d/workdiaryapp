@@ -8,7 +8,8 @@ import {
   Typography, 
   Alert,
   Progress,
-  Spin
+  Spin,
+  Select
 } from 'antd';
 import { 
   CloudDownloadOutlined, 
@@ -26,6 +27,7 @@ const BackupRestore = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [backupInfo, setBackupInfo] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [restoreStrategy, setRestoreStrategy] = useState('merge'); // merge | overwrite | skip
 
   // 创建备份
   const handleBackup = async () => {
@@ -77,6 +79,7 @@ const BackupRestore = () => {
         
         const formData = new FormData();
         formData.append('backupFile', file);
+        formData.append('strategy', restoreStrategy);
         
         try {
           const response = await api.post('/backup/restore', formData, {
@@ -185,6 +188,19 @@ const BackupRestore = () => {
           <br />
           <Text type="secondary">从备份文件恢复数据（会覆盖当前数据）</Text>
           <br />
+          <Space style={{ marginTop: 8, marginBottom: 8 }}>
+            <Text>恢复策略：</Text>
+            <Select
+              value={restoreStrategy}
+              onChange={setRestoreStrategy}
+              style={{ width: 180 }}
+              options={[
+                { value: 'merge', label: '合并（不覆盖现有配置）' },
+                { value: 'overwrite', label: '覆盖（用备份替换现有配置）' },
+                { value: 'skip', label: '跳过（不恢复用户资料与配置）' }
+              ]}
+            />
+          </Space>
           <Button
             type="default"
             icon={<CloudUploadOutlined />}
@@ -206,40 +222,44 @@ const BackupRestore = () => {
         </div>
       </Space>
 
-      <Modal
-        title="备份创建成功"
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setModalVisible(false)}>
-            关闭
-          </Button>,
-          <Button 
-            key="download" 
-            type="primary" 
-            icon={<FileTextOutlined />}
-            onClick={downloadBackup}
+          <Modal
+            title="备份创建成功"
+            open={modalVisible}
+            onCancel={() => setModalVisible(false)}
+            footer={[
+              <Button key="cancel" onClick={() => setModalVisible(false)}>
+                关闭
+              </Button>,
+              <Button 
+                key="download" 
+                type="primary" 
+                icon={<FileTextOutlined />}
+                onClick={downloadBackup}
+              >
+                下载备份文件
+              </Button>
+            ]}
           >
-            下载备份文件
-          </Button>
-        ]}
-      >
-        {backupInfo && (
-          <div>
-            <p>备份已成功创建！</p>
-            <p><strong>备份时间：</strong>{new Date(backupInfo.timestamp).toLocaleString()}</p>
-            <p><strong>包含数据：</strong></p>
-            <ul>
-              <li>日记：{backupInfo.stats?.diaries || 0} 条</li>
-              <li>待办事项：{backupInfo.stats?.todos || 0} 条</li>
-              <li>工作总结：{backupInfo.stats?.summaries || 0} 条</li>
-            </ul>
-            <p>请及时下载备份文件并妥善保管。</p>
-          </div>
-        )}
-      </Modal>
-    </Card>
-  );
-};
+            {backupInfo && (
+              <div>
+                <p>备份已成功创建！</p>
+                <p><strong>备份时间：</strong>{new Date(backupInfo.timestamp).toLocaleString()}</p>
+                <p><strong>包含数据：</strong></p>
+                <ul>
+                  <li>日记：{backupInfo.stats?.diaries || 0} 条</li>
+                  <li>待办事项：{backupInfo.stats?.todos || 0} 条</li>
+                  <li>工作总结：{backupInfo.stats?.summaries || 0} 条</li>
+                  <li>LLM配置：{backupInfo.stats?.llmConfigs ?? 0} 条</li>
+                  <li>嵌入配置：{backupInfo.stats?.embeddingConfigs ?? 0} 条</li>
+                  <li>个人信息：{backupInfo.stats?.hasUserProfile ? '已包含' : '无'}
+                  </li>
+                </ul>
+                <p>请及时下载备份文件并妥善保管。</p>
+              </div>
+            )}
+          </Modal>
+        </Card>
+      );
+    };
 
 export default BackupRestore;

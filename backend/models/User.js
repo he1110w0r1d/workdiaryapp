@@ -151,6 +151,50 @@ const userSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  // 嵌入模型配置（用户级别）
+  embeddingConfigs: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      default: '默认嵌入配置'
+    },
+    provider: {
+      type: String,
+      enum: ['openai', 'openrouter', 'siliconflow', 'custom'],
+      required: true,
+      default: 'siliconflow'
+    },
+    apiKey: {
+      type: String,
+      default: ''
+    },
+    apiUrl: {
+      type: String,
+      default: ''
+    },
+    model: {
+      type: String,
+      required: true,
+      default: 'bge-m3'
+    },
+    timeout: {
+      type: Number,
+      default: 60000
+    },
+    isDefault: {
+      type: Boolean,
+      default: false
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   // 定制化提示词
   customPrompts: {
     daily: {

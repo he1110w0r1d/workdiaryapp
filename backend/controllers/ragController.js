@@ -1,6 +1,7 @@
 const Diary = require('../models/Diary');
 const DiaryEmbedding = require('../models/DiaryEmbedding');
 const Embeddings = require('../utils/embeddings');
+const { getUserDefaultEmbeddingConfig } = require('./settingsController');
 const ExternalLLM = require('../utils/externalLLM');
 const { createLLMInstances } = require('./userController');
 const logger = require('../utils/logger');
@@ -51,7 +52,15 @@ exports.reindex = async (req, res) => {
   try {
     const userId = req.user.id;
     const diaries = await Diary.find({ user: userId }).sort({ date: -1 }).lean();
-    const embedder = new Embeddings();
+    // 优先使用用户默认嵌入配置
+    let embedder;
+    try {
+      const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
+      embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
+      try { logger.llm('RAG索引使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) {}
+    } catch (_) {
+      embedder = new Embeddings();
+    }
     let totalChunks = 0;
 
     // 支持策略：paragraph | perDiary（整篇）
@@ -87,7 +96,15 @@ exports.reindex = async (req, res) => {
 // 新增：为指定用户重建索引（供内部调用，无HTTP响应）
 exports.reindexForUser = async (userId, options = {}) => {
   const diaries = await Diary.find({ user: userId }).sort({ date: -1 }).lean();
-  const embedder = new Embeddings();
+  // 优先使用用户默认嵌入配置
+  let embedder;
+  try {
+    const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
+    embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
+    try { logger.llm('RAG索引使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) {}
+  } catch (_) {
+    embedder = new Embeddings();
+  }
   let totalChunks = 0;
   const strategy = String((options.strategy || 'paragraph')).toLowerCase();
 
@@ -161,7 +178,15 @@ exports.query = async (req, res) => {
 
     const dateRange = parseRelativeDateRange(question);
 
-    const embedder = new Embeddings();
+    // 优先使用用户默认嵌入配置
+    let embedder;
+    try {
+      const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
+      embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
+      try { logger.llm('RAG查询使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) {}
+    } catch (_) {
+      embedder = new Embeddings();
+    }
     const qvec = await embedder.embed(question);
     try { logger.llm('查询向量生成', { dim: qvec.length }); } catch (_) {}
     let docs = [];

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Space } from 'antd';
-import { UserOutlined, SettingOutlined, ToolOutlined } from '@ant-design/icons';
+import { UserOutlined, SettingOutlined, RobotOutlined, ExperimentOutlined } from '@ant-design/icons';
 import UserSettings from './UserSettings';
 import UserLLMSettings from './UserLLMSettings';
+import UserEmbeddingsSettings from './UserEmbeddingsSettings';
 
 const { TabPane } = Tabs;
 
@@ -24,11 +25,21 @@ const UserSettingsPage = () => {
       key: 'llm',
       label: (
         <Space>
-          <ToolOutlined />
-          LLM配置
+          <RobotOutlined />
+          个人LLM设置
         </Space>
       ),
       children: <UserLLMSettings />
+    },
+    {
+      key: 'embeddings',
+      label: (
+        <Space>
+          <ExperimentOutlined />
+          用户嵌入设置
+        </Space>
+      ),
+      children: <UserEmbeddingsSettings />
     }
   ];
 

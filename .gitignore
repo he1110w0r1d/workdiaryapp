@@ -84,6 +84,9 @@ backend/uploads/summaries/*
 tmp/
 temp/
 
+# Backups (generated artifacts)
+backend/backup/
+
 # LLM settings (may contain sensitive API keys)
 backend/config/llm-settings.json
 
