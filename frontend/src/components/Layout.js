@@ -214,11 +214,7 @@ const AppLayout = ({ children }) => {
         </Link>
       ),
     },
-    {
-      key: '/app/model-settings',
-      icon: <RobotOutlined />,
-      label: <Link to="/app/model-settings">模型设置</Link>,
-    },
+    // 隐藏模型设置，避免与用户设置功能冲突
     {
       key: '/app/ai-assistant',
       icon: <RobotOutlined />,
@@ -307,13 +303,8 @@ const AppLayout = ({ children }) => {
           height: '64px',
           borderBottom: `1px solid ${currentTheme.colors.border}`
         }}>
-          <div style={{ 
-            color: 'white', 
-            fontSize: '16px', 
-            fontWeight: '600'
-          }}>
-            工作日记系统
-          </div>
+          {/* 左侧标题移除以保持简洁 */}
+          <div style={{ width: '1px' }} />
           
           {/* 中间信息区域 - 时间、农历显示 */}
           <div style={{ 

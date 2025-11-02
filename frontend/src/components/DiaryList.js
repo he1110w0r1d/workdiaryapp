@@ -18,7 +18,6 @@ import {
   Upload
 } from 'antd';
 import { 
-  PlusOutlined, 
   EditOutlined, 
   DeleteOutlined, 
   SearchOutlined,
@@ -481,7 +480,7 @@ const DiaryList = () => {
             导入
           </Button>
           <Link to="/app/diaries/new">
-            <Button type="primary" icon={<PlusOutlined />}>
+            <Button type="primary">
               新增日记
             </Button>
           </Link>

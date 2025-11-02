@@ -176,7 +176,6 @@ const Dashboard = () => {
 
   return (
     <div>
-      <Title level={2}>日记看板</Title>
       
       {/* 日历组件 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>

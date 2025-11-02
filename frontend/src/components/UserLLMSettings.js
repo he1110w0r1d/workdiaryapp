@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import api from '../utils/api';
 import Logger from '../utils/logger';
+import './UserLLMSettings.css';
 
 const { Option } = Select;
 
@@ -166,6 +167,22 @@ const UserLLMSettings = () => {
     }
   };
 
+  // 设为默认配置（快捷开关）
+  const handleSetDefault = async (configId, configName) => {
+    try {
+      const response = await api.put(`/settings/user-llm/${configId}/set-default`);
+      if (response && response.data) {
+        message.success(`已将 "${configName}" 设为默认`);
+      } else {
+        message.success('已设为默认配置');
+      }
+      fetchConfigs();
+    } catch (error) {
+      console.error('设为默认配置失败:', error);
+      message.error('设为默认配置失败');
+    }
+  };
+
 
 
   // 根据提供商获取模型占位符
@@ -188,17 +205,34 @@ const UserLLMSettings = () => {
   // 表格列定义
   const columns = [
     {
-      title: '配置名称',
+      title: '状态',
       dataIndex: 'name',
       key: 'name',
       render: (text, record) => {
         Logger.debug('渲染配置名称列:', { text, recordId: record._id, isDefault: record.isDefault });
         
         return (
-          <div>
-            <span>{text}</span>
-            {record.isDefault && <Tag color="blue">默认</Tag>}
-            {!record.isActive && <Tag color="red">已禁用</Tag>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* 默认开关（点击后直接设为默认） */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                className="checkbox"
+                id={`default-toggle-${record._id}`}
+                checked={!!record.isDefault}
+                onChange={(e) => {
+                  // 仅在打开开关时触发设置默认，避免出现无默认的状态
+                  if (e.target.checked) {
+                    handleSetDefault(record._id, record.name);
+                  }
+                }}
+              />
+              <label
+                className="slider"
+                htmlFor={`default-toggle-${record._id}`}
+                title={record.isDefault ? '默认配置' : '设为默认'}
+              />
+            </div>
           </div>
         );
       }

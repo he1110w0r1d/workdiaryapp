@@ -160,7 +160,19 @@ const Calendar = () => {
         alignItems: 'center', 
         marginBottom: 24 
       }}>
-        <Title level={2}>工作日历</Title>
+        {/* 用 logo 图片替换“工作日历”文字 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img 
+            src={process.env.PUBLIC_URL + '/pic/logo.png'} 
+            alt="logo"
+            style={{ 
+              height: '80px', 
+              width: 'auto', 
+              objectFit: 'contain', 
+              display: 'block' 
+            }} 
+          />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div className="calendar-navigation">
             <button 

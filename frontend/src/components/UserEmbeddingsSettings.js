@@ -3,6 +3,7 @@ import { Card, Form, Input, Button, Select, InputNumber, Switch, message, Modal,
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, StarOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import Logger from '../utils/logger';
+import './UserLLMSettings.css';
 
 const { Option } = Select;
 
@@ -131,17 +132,32 @@ const UserEmbeddingsSettings = () => {
 
   const columns = [
     {
-      title: '名称',
+      title: '状态',
       dataIndex: 'name',
       key: 'name',
       render: (text, record) => {
         const displayText = text === '默认嵌入配置' ? '' : text;
         return (
-          <Space>
-            {displayText && <span>{displayText}</span>}
-            {record.isDefault && <Tag color="blue">默认</Tag>}
-            {record.isActive ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>}
-          </Space>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                className="checkbox"
+                id={`emb-default-toggle-${record._id}`}
+                checked={!!record.isDefault}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    handleSetDefault(record);
+                  }
+                }}
+              />
+              <label
+                className="slider"
+                htmlFor={`emb-default-toggle-${record._id}`}
+                title={record.isDefault ? '默认嵌入配置' : '设为默认'}
+              />
+            </div>
+          </div>
         );
       }
     },
@@ -170,7 +186,6 @@ const UserEmbeddingsSettings = () => {
       render: (_, record) => (
         <Space>
           <Button icon={<EditOutlined />} onClick={() => handleOpenModal(record)}>编辑</Button>
-          <Button icon={<StarOutlined />} onClick={() => handleSetDefault(record)} disabled={record.isDefault}>设为默认</Button>
           <Button icon={<ExperimentOutlined />} loading={testLoading === record._id} onClick={() => handleTest(record)}>测试</Button>
           <Popconfirm title="确认删除该配置？" onConfirm={() => handleDelete(record)}>
             <Button danger icon={<DeleteOutlined />}>删除</Button>

@@ -248,14 +248,20 @@ const DiaryForm = () => {
             justifyContent: 'flex-start',
             gap: '8px',
 
-            margin: '-24px -24px 24px',
-            padding: '20px 24px',
-            color: 'white'
+            margin: '0',
+            padding: '0'
           }}>
             {id ? <EditOutlined /> : <PlusOutlined />}
-            <Title level={3} style={{ margin: '40px 0 0 0', color: 'black' }}>
-              {id ? '✏️ 编辑工作日记' : '📝 新增工作日记'}
-            </Title>
+            <img 
+              src={process.env.PUBLIC_URL + '/pic/logo2.png'} 
+              alt="认真记录每一天"
+              style={{ 
+                height: '48px', 
+                width: 'auto', 
+                display: 'block', 
+                margin: '0'
+              }}
+            />
           </div>
         }
         style={{
@@ -529,13 +535,10 @@ const DiaryForm = () => {
             )}
         </div>
 
-        <Form.Item label="工作优先级">
-        </Form.Item>
-        
-        {/* 工作优先级选择区域 - 移到Form.Item外部 */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>优先级选择：</div>
-          <div>
+        {/* 工作优先级 - 精简容器，移除多余Form.Item标签包装 */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>工作优先级</div>
+          <Form.Item name="workPriority" noStyle>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               {['高', '中', '低'].map(priority => {
                 const isSelected = workPriority === priority;
@@ -585,38 +588,22 @@ const DiaryForm = () => {
                     }}
                   >
                     {emoji} {priority}
-                  </div>
+                    </div>
                 );
               })}
             </div>
-          </div>
+          </Form.Item>
         </div>
 
-        {/* 待办功能区域 */}
-        <Divider orientation="left" style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-          📋 待办设置
-        </Divider>
+        {/* 待办功能区域（隐藏） */}
+        {/* Divider 已移除以减少占用空间 */}
         
         {/* 隐藏的tags字段，用于表单提交 */}
         <Form.Item name="tags" style={{ display: 'none' }}>
           <Input />
         </Form.Item>
 
-        <Form.Item name="isTodo" valuePropName="checked">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <Switch 
-              checked={isTodo}
-              onChange={(checked) => {
-                setIsTodo(checked);
-                form.setFieldsValue({ isTodo: checked });
-              }}
-              style={{ backgroundColor: isTodo ? '#52c41a' : '#d9d9d9' }}
-            />
-            <span style={{ fontSize: '14px', fontWeight: '500' }}>
-              {isTodo ? '✅ 设为待办事项' : '⭕ 不设为待办'}
-            </span>
-          </div>
-        </Form.Item>
+        {/* isTodo 开关区域隐藏，不再展示主动设置待办 */}
         
         {isTodo && (
           <div style={{ 

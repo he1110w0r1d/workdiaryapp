@@ -6,8 +6,28 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { Link } from 'react-router-dom';
+import './RagQA.css';
 
 const { Text, Paragraph } = Typography;
+
+// 波浪加载动画组件
+const WaveLoader = ({ text = "处理中..." }) => (
+  <div className="loading-animation">
+    <ul className="wave-menu">
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+      <li></li>
+    </ul>
+    <span className="loading-text">{text}</span>
+  </div>
+);
 
 export default function RagQA() {
   const [question, setQuestion] = useState('');
@@ -101,10 +121,15 @@ export default function RagQA() {
       <Card title="提问">
         <Space direction="vertical" style={{ width: '100%' }}>
           <Input.TextArea rows={4} value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的问题，例如：今年我在哪些项目上投入最多？" />
-          <Space>
-            <Button type="primary" onClick={handleQuery} loading={loadingQuery}>查询</Button>
-            <Button onClick={handleReindex} loading={loadingIndex}>重建索引</Button>
-          </Space>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Space>
+              <Button type="primary" onClick={handleQuery} loading={loadingQuery}>查询</Button>
+              <Button onClick={handleReindex} loading={loadingIndex}>重建索引</Button>
+            </Space>
+            {/* 显示加载动画 */}
+            {loadingQuery && <WaveLoader text="正在查询..." />}
+            {loadingIndex && <WaveLoader text="正在重建索引..." />}
+          </div>
         </Space>
       </Card>
 

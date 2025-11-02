@@ -8,6 +8,19 @@
   gap: 16px;
 }
 
+/* 顶部左侧 logo 容器调整，避免遮挡 */
+.calendar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calendar-logo img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
 .nav-button {
   background: #1890ff;
   color: white;

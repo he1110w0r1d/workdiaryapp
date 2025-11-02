@@ -217,22 +217,20 @@ const TodoList = () => {
                   >
                     <div style={{ width: '100%' }}>
                       {/* 头部信息 */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                      {/* 单行布局：左侧内容，右侧标签/时间/操作按钮 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                        {/* 左侧：内容占满剩余空间 */}
                         <div style={{ flex: 1 }}>
-                          <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: '8px' }}>
+                          <Text strong style={{ fontSize: '16px', display: 'block' }}>
                             {todo.content}
                           </Text>
-                          <Space size="middle">
-                            <Tag color={statusDisplay.color}>
-                              {statusDisplay.emoji} {statusDisplay.text}
-                            </Tag>
-                          </Space>
                         </div>
-                      </div>
-                      
-                      {/* 时间信息 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <Space size="large">
+
+                        {/* 右侧：状态标签、时间信息与操作按钮同一行 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <Tag color={statusDisplay.color}>
+                            {statusDisplay.emoji} {statusDisplay.text}
+                          </Tag>
                           <Text type="secondary">
                             <CalendarOutlined /> 创建时间: {moment(todo.createdAt).format('YYYY-MM-DD HH:mm')}
                           </Text>
@@ -241,12 +239,6 @@ const TodoList = () => {
                               <ClockCircleOutlined /> 截止时间: {moment(todo.dueDate).format('YYYY-MM-DD')}
                             </Text>
                           )}
-                        </Space>
-                      </div>
-                      
-                      {/* 操作按钮 */}
-                      <div style={{ textAlign: 'right' }}>
-                        <Space>
                           <Button 
                             type="primary" 
                             icon={<CheckOutlined />}
@@ -271,7 +263,7 @@ const TodoList = () => {
                           >
                             转交
                           </Button>
-                        </Space>
+                        </div>
                       </div>
                     </div>
                   </List.Item>
