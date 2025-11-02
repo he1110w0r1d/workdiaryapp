@@ -61,24 +61,40 @@ const DiaryList = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [queryInitialized, setQueryInitialized] = useState(false);
+  const [hasUrlDate, setHasUrlDate] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
     // 检查URL参数中的日期筛选
-    const dateParam = searchParams.get('date');
+    // 兼容不同的查询参数键：优先使用 `date`，回退到 `dates`
+    const dateParam = searchParams.get('date') || searchParams.get('dates');
     if (dateParam) {
       const date = moment(dateParam);
       if (date.isValid()) {
         setDateRange([date, date]);
+        setHasUrlDate(true);
       }
+    } else {
+      // 无URL日期参数，直接允许初始化后的首次拉取
+      setQueryInitialized(true);
+      setHasUrlDate(false);
     }
   }, [searchParams]);
 
+  // 当存在URL日期参数时，等待dateRange设置完成后再允许首拉取
   useEffect(() => {
+    if (hasUrlDate && dateRange) {
+      setQueryInitialized(true);
+    }
+  }, [hasUrlDate, dateRange]);
+
+  useEffect(() => {
+    if (!queryInitialized) return;
     fetchDiaries();
-  }, [pagination.current, searchText, dateRange, selectedTags, selectedPriority, selectedTodoStatus]);
+  }, [queryInitialized, pagination.current, searchText, dateRange, selectedTags, selectedPriority, selectedTodoStatus]);
 
   // 获取可用标签
   const fetchAvailableTags = async () => {

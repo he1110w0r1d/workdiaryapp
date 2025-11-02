@@ -99,8 +99,8 @@ const Calendar = () => {
             } ${isToday ? 'today' : ''} ${
               isHolidayDay ? 'holiday' : ''
             } ${isWorkdayDay ? 'workday' : ''}`}
-            onClick={() => isCurrentMonth && handleDateClick(date)}
-            style={{ cursor: isCurrentMonth ? 'pointer' : 'default' }}
+            onClick={() => handleDateClick(date)}
+            style={{ cursor: 'pointer' }}
           >
             <div className="date-number">{date.date()}</div>
             {holidayInfo && (
