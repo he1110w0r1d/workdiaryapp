@@ -12,7 +12,7 @@ class Embeddings {
       apiKey: process.env.EXTERNAL_LLM_API_KEY || process.env.EXTERNAL_EMBEDDINGS_API_KEY || '',
       apiUrl: process.env.EXTERNAL_EMBEDDINGS_API_URL || '',
       model: process.env.EXTERNAL_EMBEDDINGS_MODEL || 'text-embedding-3-large',
-      timeout: parseInt(process.env.EXTERNAL_EMBEDDINGS_TIMEOUT || '60000', 10),
+      timeout: parseInt(process.env.EXTERNAL_EMBEDDINGS_TIMEOUT || '3600000', 10),
       ...config
     };
     this.client = axios.create({

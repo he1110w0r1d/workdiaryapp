@@ -42,7 +42,7 @@ const UserEmbeddingsSettings = () => {
           apiKey: editingConfig.apiKey || '',
           apiUrl: editingConfig.apiUrl || '',
           model: editingConfig.model || 'bge-m3',
-          timeout: editingConfig.timeout || 60000,
+          timeout: editingConfig.timeout || 3600000,
           isDefault: !!editingConfig.isDefault,
           isActive: editingConfig.isActive !== false
         });
@@ -54,7 +54,7 @@ const UserEmbeddingsSettings = () => {
           apiKey: '',
           apiUrl: 'https://api.siliconflow.cn/v1/embeddings',
           model: 'bge-m3',
-          timeout: 60000,
+          timeout: 3600000,
           isDefault: false,
           isActive: true
         });

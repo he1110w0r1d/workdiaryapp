@@ -76,7 +76,7 @@ const ModelSettings = () => {
           externalEmbeddingsApiKey: s.externalEmbeddingsApiKey || '',
           externalEmbeddingsApiUrl: s.externalEmbeddingsApiUrl || '',
           externalEmbeddingsModel: s.externalEmbeddingsModel || 'bge-m3',
-          externalEmbeddingsTimeout: s.externalEmbeddingsTimeout || 60000,
+          externalEmbeddingsTimeout: s.externalEmbeddingsTimeout || 3600000,
         };
         setEmbSettings(emb);
       } catch (error) {
@@ -87,7 +87,7 @@ const ModelSettings = () => {
           externalEmbeddingsApiKey: '',
           externalEmbeddingsApiUrl: '',
           externalEmbeddingsModel: 'bge-m3',
-          externalEmbeddingsTimeout: 60000,
+          externalEmbeddingsTimeout: 3600000,
         };
         setEmbSettings(emb);
       } finally {
@@ -317,7 +317,7 @@ const ModelSettings = () => {
         externalEmbeddingsApiKey: values.externalEmbeddingsApiKey,
         externalEmbeddingsApiUrl: values.externalEmbeddingsApiUrl || '',
         externalEmbeddingsModel: values.externalEmbeddingsModel,
-        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 60000,
+        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 3600000,
       };
       await api.post('/settings/llm', payload);
       message.success('嵌入设置已保存');
@@ -339,7 +339,7 @@ const ModelSettings = () => {
         externalEmbeddingsApiKey: values.externalEmbeddingsApiKey,
         externalEmbeddingsApiUrl: values.externalEmbeddingsApiUrl || '',
         externalEmbeddingsModel: values.externalEmbeddingsModel,
-        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 60000,
+        externalEmbeddingsTimeout: values.externalEmbeddingsTimeout || 3600000,
       };
       const response = await api.post('/settings/embeddings/test', payload);
       if (response.data?.success) {

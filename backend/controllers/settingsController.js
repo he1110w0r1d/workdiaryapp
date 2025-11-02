@@ -38,7 +38,7 @@ exports.getLLMSettings = async (req, res) => {
         externalEmbeddingsApiKey: process.env.EXTERNAL_EMBEDDINGS_API_KEY || '',
         externalEmbeddingsApiUrl: process.env.EXTERNAL_EMBEDDINGS_API_URL || '',
         externalEmbeddingsModel: process.env.EXTERNAL_EMBEDDINGS_MODEL || '',
-        externalEmbeddingsTimeout: parseInt(process.env.EXTERNAL_EMBEDDINGS_TIMEOUT || '60000', 10)
+        externalEmbeddingsTimeout: parseInt(process.env.EXTERNAL_EMBEDDINGS_TIMEOUT || '3600000', 10)
       });
     }
     
@@ -864,7 +864,7 @@ exports.testEmbeddingsConnection = async (req, res) => {
       apiKey: String(externalEmbeddingsApiKey).trim(),
       apiUrl: String(externalEmbeddingsApiUrl || '').trim(),
       model: String(externalEmbeddingsModel).trim(),
-      timeout: parseInt(externalEmbeddingsTimeout || '60000', 10)
+      timeout: parseInt(externalEmbeddingsTimeout || '3600000', 10)
     });
 
     const vec = await embedder.embed('连接测试 - workdiaryapp');
