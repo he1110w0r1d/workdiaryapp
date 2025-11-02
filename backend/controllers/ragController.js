@@ -39,12 +39,25 @@ const cosine = (a, b) => {
   return dot / denom;
 };
 
-// 构建单条日记的索引文本：标题 + 正文 + 地点 + 标签
+// 格式化日期时间：加入 YYYY-MM-DD 以及具体时间段，提升按日期检索命中率
+const formatDateTimeForIndex = (d) => {
+  const start = d.startTime ? new Date(d.startTime) : null;
+  const end = d.endTime ? new Date(d.endTime) : null;
+  const dateStr = start
+    ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
+    : '';
+  const fmt = (dt) => dt ? dt.toLocaleString('zh-CN', { hour12: false }) : '';
+  const timeRange = start && end ? `${fmt(start)} - ${fmt(end)}` : (start ? fmt(start) : '');
+  return (dateStr || timeRange) ? `时间:${dateStr}${timeRange ? ` ${timeRange}` : ''}` : '';
+};
+
+// 构建单条日记的索引文本：标题 + 正文 + 地点 + 标签 + 时间
 const buildIndexText = (d) => [
   d.title || '',
   d.content || d.text || '',
   d.location ? `地点:${d.location}` : '',
-  Array.isArray(d.tags) && d.tags.length ? `标签:${d.tags.join(' ')}` : ''
+  Array.isArray(d.tags) && d.tags.length ? `标签:${d.tags.join(' ')}` : '',
+  formatDateTimeForIndex(d)
 ].filter(Boolean).join('\n');
 
 // 重新索引当前用户的所有日记
@@ -176,7 +189,41 @@ exports.query = async (req, res) => {
       return null;
     };
 
-    const dateRange = parseRelativeDateRange(question);
+    // 增加绝对日期解析：YYYY-MM-DD / YYYY/MM/DD / YYYY年MM月DD日 / MM月DD日 / MM/DD / MM-DD
+    const parseAbsoluteDateRange = (q) => {
+      const now = new Date();
+      const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+      const endOfDay = (d) => { const x = new Date(d); x.setHours(23,59,59,999); return x; };
+      const ymd1 = q.match(/(\d{4})\s*[\/-]\s*(\d{1,2})\s*[\/-]\s*(\d{1,2})/);
+      const ymd2 = q.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*(?:日|号)?/);
+      if (ymd1 || ymd2) {
+        const m = ymd1 || ymd2;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        if (month>=1 && month<=12 && day>=1 && day<=31) {
+          const target = new Date(year, month-1, day);
+          return { label: `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
+                   start: startOfDay(target), end: endOfDay(target) };
+        }
+      }
+      const md1 = q.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*(?:日|号)?/);
+      const md2 = q.match(/(\d{1,2})\s*[\/-]\s*(\d{1,2})/);
+      if (md1 || md2) {
+        const m = md1 || md2;
+        const month = Number(m[1]);
+        const day = Number(m[2]);
+        const year = now.getFullYear();
+        if (month>=1 && month<=12 && day>=1 && day<=31) {
+          const target = new Date(year, month-1, day);
+          return { label: `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
+                   start: startOfDay(target), end: endOfDay(target) };
+        }
+      }
+      return null;
+    };
+
+    const dateRange = parseRelativeDateRange(question) || parseAbsoluteDateRange(question);
 
     // 优先使用用户默认嵌入配置
     let embedder;
