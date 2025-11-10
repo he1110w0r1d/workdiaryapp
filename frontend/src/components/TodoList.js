@@ -39,8 +39,18 @@ const TodoList = () => {
   const fetchTodos = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/todos');
-      setTodos(response.data.todos || []);
+      // 请求全部状态的列表，并提高limit避免分页遗漏
+      const response = await api.get('/todos?limit=1000');
+      const list = response.data.todos || [];
+      setTodos(list);
+      // 将待处理数量同步到导航栏
+      try {
+        const pendingCount = Array.isArray(list) ? list.filter(t => t.status === '待办').length : 0;
+        window.dispatchEvent(new CustomEvent('todosCountUpdated', { detail: pendingCount }));
+      } catch (e) {
+        // 忽略事件分发错误，避免影响主流程
+        console.warn('同步待办数量事件失败:', e);
+      }
     } catch (error) {
       console.error('获取待办列表失败:', error);
       message.error('获取待办列表失败');
@@ -195,173 +205,163 @@ const TodoList = () => {
           }} 
         />
       </div>
-      
-      {/* 待处理的待办 */}
+      {/* 标签页：四个状态切换展示 */}
       <Card 
-        title={`⏳ 待处理 (${pendingTodos.length})`}
-        style={{ marginBottom: '24px' }}
+        title="🗂 待办事项"
         styles={{ header: { backgroundColor: '#f0f8ff', fontWeight: 'bold' } }}
       >
-        <Spin spinning={loading}>
-          {pendingTodos.length === 0 ? (
-            <Empty 
-              description="暂无待处理的待办事项" 
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          ) : (
-            <List
-              dataSource={pendingTodos}
-              renderItem={(todo) => {
-                const statusDisplay = getStatusDisplay(todo.status);
-                
-                return (
-                  <List.Item
-                    style={{
-                      border: '1px solid #f0f0f0',
-                      borderRadius: '8px',
-                      marginBottom: '12px',
-                      padding: '16px',
-                      backgroundColor: '#fafafa'
-                    }}
-                  >
-                    <div style={{ width: '100%' }}>
-                      {/* 两行布局：第一行内容；第二行标签/时间/操作按钮 */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {/* 第一行：内容 */}
-                        <div style={{ width: '100%' }}>
-                          <Text 
-                            strong 
-                            style={{ 
-                              fontSize: '16px', 
-                              display: 'block', 
-                              whiteSpace: 'pre-wrap', 
-                              wordBreak: 'break-word' 
+        <Tabs
+          defaultActiveKey="pending"
+          items={[
+            {
+              key: 'pending',
+              label: `⏳ 待处理 (${pendingTodos.length})`,
+              children: (
+                <Spin spinning={loading}>
+                  {pendingTodos.length === 0 ? (
+                    <Empty 
+                      description="暂无待处理的待办事项" 
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <List
+                      dataSource={pendingTodos}
+                      renderItem={(todo) => {
+                        const statusDisplay = getStatusDisplay(todo.status);
+                        return (
+                          <List.Item
+                            style={{
+                              border: '1px solid #f0f0f0',
+                              borderRadius: '8px',
+                              marginBottom: '12px',
+                              padding: '16px',
+                              backgroundColor: '#fafafa'
                             }}
                           >
-                            {todo.content}
-                          </Text>
-                        </div>
-
-                        {/* 第二行：状态标签、时间信息与操作按钮 */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                          <Tag color={statusDisplay.color}>
-                            {statusDisplay.emoji} {statusDisplay.text}
-                          </Tag>
-                          <Text type="secondary">
-                            <CalendarOutlined /> 创建时间: {moment(todo.createdAt).format('YYYY-MM-DD HH:mm')}
-                          </Text>
-                          {todo.dueDate && (
-                            <Text type={moment(todo.dueDate).isBefore(moment()) ? 'danger' : 'secondary'}>
-                              <ClockCircleOutlined /> 截止时间: {moment(todo.dueDate).format('YYYY-MM-DD')}
-                            </Text>
-                          )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <Button 
-                              type="primary" 
-                              icon={<CheckOutlined />}
-                              size="small"
-                              onClick={() => openActionModal(todo, '已完成')}
-                            >
-                              已完成
-                            </Button>
-                            <Button 
-                              danger 
-                              icon={<CloseOutlined />}
-                              size="small"
-                              onClick={() => openActionModal(todo, '已放弃')}
-                            >
-                              放弃
-                            </Button>
-                            <Button 
-                              type="default" 
-                              icon={<SwapOutlined />}
-                              size="small"
-                              onClick={() => openActionModal(todo, '已转交')}
-                            >
-                              转交
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </List.Item>
-                );
-              }}
-            />
-          )}
-        </Spin>
+                            <div style={{ width: '100%' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ width: '100%' }}>
+                                  <Text 
+                                    strong 
+                                    style={{ 
+                                      fontSize: '16px', 
+                                      display: 'block', 
+                                      whiteSpace: 'pre-wrap', 
+                                      wordBreak: 'break-word' 
+                                    }}
+                                  >
+                                    {todo.content}
+                                  </Text>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                  <Tag color={statusDisplay.color}>
+                                    {statusDisplay.emoji} {statusDisplay.text}
+                                  </Tag>
+                                  <Text type="secondary">
+                                    <CalendarOutlined /> 创建时间: {moment(todo.createdAt).format('YYYY-MM-DD HH:mm')}
+                                  </Text>
+                                  {todo.dueDate && (
+                                    <Text type={moment(todo.dueDate).isBefore(moment()) ? 'danger' : 'secondary'}>
+                                      <ClockCircleOutlined /> 截止时间: {moment(todo.dueDate).format('YYYY-MM-DD')}
+                                    </Text>
+                                  )}
+                                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                                    <Button 
+                                      type="primary" 
+                                      icon={<CheckOutlined />}
+                                      size="small"
+                                      onClick={() => openActionModal(todo, '已完成')}
+                                    >
+                                      已完成
+                                    </Button>
+                                    <Button 
+                                      danger 
+                                      icon={<CloseOutlined />}
+                                      size="small"
+                                      onClick={() => openActionModal(todo, '已放弃')}
+                                    >
+                                      放弃
+                                    </Button>
+                                    <Button 
+                                      type="default" 
+                                      icon={<SwapOutlined />}
+                                      size="small"
+                                      onClick={() => openActionModal(todo, '已转交')}
+                                    >
+                                      转交
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  )}
+                </Spin>
+              )
+            },
+            {
+              key: 'completed',
+              label: `✅ 已完成 (${completedTodos.length})`,
+              children: (
+                <div>
+                  {completedTodos.length === 0 ? (
+                    <Empty 
+                      description="暂无已完成的待办事项" 
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <List
+                      dataSource={completedTodos}
+                      renderItem={(todo) => renderProcessedTodoItem(todo)}
+                    />
+                  )}
+                </div>
+              )
+            },
+            {
+              key: 'abandoned',
+              label: `❌ 已放弃 (${abandonedTodos.length})`,
+              children: (
+                <div>
+                  {abandonedTodos.length === 0 ? (
+                    <Empty 
+                      description="暂无已放弃的待办事项" 
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <List
+                      dataSource={abandonedTodos}
+                      renderItem={(todo) => renderProcessedTodoItem(todo)}
+                    />
+                  )}
+                </div>
+              )
+            },
+            {
+              key: 'transferred',
+              label: `🔄 已转交 (${transferredTodos.length})`,
+              children: (
+                <div>
+                  {transferredTodos.length === 0 ? (
+                    <Empty 
+                      description="暂无已转交的待办事项" 
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <List
+                      dataSource={transferredTodos}
+                      renderItem={(todo) => renderProcessedTodoItem(todo)}
+                    />
+                  )}
+                </div>
+              )
+            }
+          ]}
+        />
       </Card>
-      
-      {/* 已处理的待办 - 使用页签形式 */}
-      {(completedTodos.length > 0 || abandonedTodos.length > 0 || transferredTodos.length > 0) && (
-        <Card 
-          title="📁 已处理"
-          styles={{ header: { backgroundColor: '#f6ffed', fontWeight: 'bold' } }}
-        >
-          <Tabs
-            defaultActiveKey="completed"
-            items={[
-              {
-                key: 'completed',
-                label: `✅ 已完成 (${completedTodos.length})`,
-                children: (
-                  <div>
-                    {completedTodos.length === 0 ? (
-                      <Empty 
-                        description="暂无已完成的待办事项" 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    ) : (
-                      <List
-                        dataSource={completedTodos}
-                        renderItem={(todo) => renderProcessedTodoItem(todo)}
-                      />
-                    )}
-                  </div>
-                )
-              },
-              {
-                key: 'abandoned',
-                label: `❌ 已放弃 (${abandonedTodos.length})`,
-                children: (
-                  <div>
-                    {abandonedTodos.length === 0 ? (
-                      <Empty 
-                        description="暂无已放弃的待办事项" 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    ) : (
-                      <List
-                        dataSource={abandonedTodos}
-                        renderItem={(todo) => renderProcessedTodoItem(todo)}
-                      />
-                    )}
-                  </div>
-                )
-              },
-              {
-                key: 'transferred',
-                label: `🔄 已转交 (${transferredTodos.length})`,
-                children: (
-                  <div>
-                    {transferredTodos.length === 0 ? (
-                      <Empty 
-                        description="暂无已转交的待办事项" 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    ) : (
-                      <List
-                        dataSource={transferredTodos}
-                        renderItem={(todo) => renderProcessedTodoItem(todo)}
-                      />
-                    )}
-                  </div>
-                )
-              }
-            ]}
-          />
-        </Card>
-      )}
       
       {/* 操作确认弹窗 */}
       <Modal

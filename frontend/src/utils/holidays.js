@@ -77,6 +77,66 @@ const holidays = {
     '2025-09-28': { name: '国庆节调休', type: 'workday' },
     '2025-10-11': { name: '国庆节调休', type: 'workday' }
   }
+  ,
+  // 2026年节假日（依据国务院办公厅通知）
+  '2026': {
+    // 元旦
+    '2026-01-01': { name: '元旦', type: 'holiday' },
+    '2026-01-02': { name: '元旦', type: 'holiday' },
+    '2026-01-03': { name: '元旦', type: 'holiday' },
+    // 调休工作日
+    '2026-01-04': { name: '元旦调休', type: 'workday' },
+
+    // 春节
+    '2026-02-15': { name: '春节', type: 'holiday' },
+    '2026-02-16': { name: '春节', type: 'holiday' },
+    '2026-02-17': { name: '春节', type: 'holiday' },
+    '2026-02-18': { name: '春节', type: 'holiday' },
+    '2026-02-19': { name: '春节', type: 'holiday' },
+    '2026-02-20': { name: '春节', type: 'holiday' },
+    '2026-02-21': { name: '春节', type: 'holiday' },
+    '2026-02-22': { name: '春节', type: 'holiday' },
+    '2026-02-23': { name: '春节', type: 'holiday' },
+    // 调休工作日
+    '2026-02-14': { name: '春节调休', type: 'workday' },
+    '2026-02-28': { name: '春节调休', type: 'workday' },
+
+    // 清明节
+    '2026-04-04': { name: '清明节', type: 'holiday' },
+    '2026-04-05': { name: '清明节', type: 'holiday' },
+    '2026-04-06': { name: '清明节', type: 'holiday' },
+
+    // 劳动节
+    '2026-05-01': { name: '劳动节', type: 'holiday' },
+    '2026-05-02': { name: '劳动节', type: 'holiday' },
+    '2026-05-03': { name: '劳动节', type: 'holiday' },
+    '2026-05-04': { name: '劳动节', type: 'holiday' },
+    '2026-05-05': { name: '劳动节', type: 'holiday' },
+    // 调休工作日
+    '2026-05-09': { name: '劳动节调休', type: 'workday' },
+
+    // 端午节
+    '2026-06-19': { name: '端午节', type: 'holiday' },
+    '2026-06-20': { name: '端午节', type: 'holiday' },
+    '2026-06-21': { name: '端午节', type: 'holiday' },
+
+    // 中秋节
+    '2026-09-25': { name: '中秋节', type: 'holiday' },
+    '2026-09-26': { name: '中秋节', type: 'holiday' },
+    '2026-09-27': { name: '中秋节', type: 'holiday' },
+
+    // 国庆节
+    '2026-10-01': { name: '国庆节', type: 'holiday' },
+    '2026-10-02': { name: '国庆节', type: 'holiday' },
+    '2026-10-03': { name: '国庆节', type: 'holiday' },
+    '2026-10-04': { name: '国庆节', type: 'holiday' },
+    '2026-10-05': { name: '国庆节', type: 'holiday' },
+    '2026-10-06': { name: '国庆节', type: 'holiday' },
+    '2026-10-07': { name: '国庆节', type: 'holiday' },
+    // 调休工作日
+    '2026-09-20': { name: '国庆节调休', type: 'workday' },
+    '2026-10-10': { name: '国庆节调休', type: 'workday' }
+  }
 };
 
 // 获取指定日期的节假日信息

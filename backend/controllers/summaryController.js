@@ -601,7 +601,8 @@ const generateDefaultHTML = (summaryData, type) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 优先使用国内CDN加载 Chart.js，若失败可考虑回退到内联或本地版本 -->
+    <script src="https://cdn.staticfile.org/Chart.js/4.4.0/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Microsoft YaHei', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
@@ -3009,23 +3010,49 @@ ${diaries.map(diary => {
 
         // 准备LLM所需数据
         const tagDistribution = generateTagDistribution(diaries);
+        // 构建供LLM使用的工作详情（Markdown格式，避免 [object Object]）
+        const workDetailsByDate = {};
+        diaries.forEach(diary => {
+          const dateKey = new Date(diary.startTime).toLocaleDateString('zh-CN');
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          if (!workDetailsByDate[dateKey]) {
+            workDetailsByDate[dateKey] = {
+              date: dateKey,
+              entries: [],
+              totalTime: 0
+            };
+          }
+          workDetailsByDate[dateKey].entries.push({
+            content: diary.content,
+            startTime: new Date(diary.startTime).toLocaleTimeString('zh-CN'),
+            endTime: new Date(diary.endTime).toLocaleTimeString('zh-CN'),
+            workTime: workTime,
+            tags: diary.tags.join(', '),
+            location: diary.location || '未记录地点'
+          });
+          workDetailsByDate[dateKey].totalTime += workTime;
+        });
+
+        const workDetailsMarkdown = Object.values(workDetailsByDate)
+          .sort((a, b) => new Date(a.date) - new Date(b.date))
+          .map(dateGroup => {
+            const dateHeader = `### ${dateGroup.date} (总时长: ${Math.floor(dateGroup.totalTime / 60)}小时${dateGroup.totalTime % 60}分钟)`;
+            const entries = dateGroup.entries.map((entry, index) =>
+              `**工作条目 ${index + 1}**\n` +
+              `- 具体工作内容: ${entry.content}\n` +
+              `- 工作时间: ${entry.startTime} - ${entry.endTime} (${entry.workTime}分钟)\n` +
+              `- 工作标签: ${entry.tags}\n` +
+              `- 工作地点: ${entry.location}`
+            ).join('\n\n');
+            return `${dateHeader}\n\n${entries}`;
+          }).join('\n\n');
+
         const llmData = {
           date: lastWeekStart,
           diaries: diaries,
           totalWorkTime: totalWorkTime,
           totalEntries: diaries.length,
-          workDetails: diaries.map(diary => {
-            const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-            return {
-              date: new Date(diary.startTime).toLocaleDateString('zh-CN'),
-              time: `${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')}`,
-              duration: `${workTime}分钟`,
-              content: diary.content,
-              tags: diary.tags,
-              priority: diary.workPriority || '中',
-              location: diary.location || ''
-            };
-          }),
+          workDetails: workDetailsMarkdown,
           dailyWork: dailyWork,
           tagDistribution: tagDistribution,
           user: user,

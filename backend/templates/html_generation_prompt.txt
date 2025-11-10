@@ -4,8 +4,8 @@
 1. 现代化设计，响应式布局，蓝紫色配色
 2. 包含：标题、数据概览卡片、Chart.js图表、详细内容
 3. 日期处理：使用getFullYear()和getMonth()+1正确显示月份
-4. 引入Chart.js和（如需）Font Awesome图标库
-5. 直接返回完整HTML，包含所有CSS和JavaScript
+4. 引入Chart.js（优先使用国内CDN，如 BootCDN 或 Staticfile；不可用时内联必要脚本）。如需图标，避免外部CDN，优先使用内嵌SVG或内联样式。
+5. 直接返回完整HTML，包含所有CSS和JavaScript；不要引用海外CDN链接。
 
 统计数据（仅用于图表与指标）：
 {{summaryData}}

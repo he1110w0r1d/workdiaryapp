@@ -132,9 +132,11 @@ const AppLayout = ({ children }) => {
   // 获取待办事项数量
   const fetchPendingTodosCount = async () => {
     try {
-      const response = await api.get('/todos?status=待办');
-      const pendingTodos = response.data.todos || [];
-      setPendingTodosCount(pendingTodos.length);
+      // 使用统计接口获取各状态总数，避免分页导致计数不准
+      const response = await api.get('/todos/stats');
+      const statusStats = (response.data && response.data.stats && response.data.stats.statusStats) || [];
+      const pendingStat = statusStats.find((s) => s._id === '待办');
+      setPendingTodosCount((pendingStat && pendingStat.count) || 0);
     } catch (error) {
       console.error('获取待办事项数量失败:', error);
     }
@@ -173,11 +175,18 @@ const AppLayout = ({ children }) => {
     window.addEventListener('userInfoUpdated', handleUserInfoUpdate);
     window.addEventListener('todosUpdated', handleTodosUpdate);
     window.addEventListener('summariesUpdated', handleSummariesUpdate);
+    // 监听来自待办页面的数量同步事件
+    const handleTodosCountUpdated = (e) => {
+      const nextCount = (e && e.detail) || 0;
+      setPendingTodosCount(Number(nextCount) || 0);
+    };
+    window.addEventListener('todosCountUpdated', handleTodosCountUpdated);
     
     return () => {
         window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
         window.removeEventListener('todosUpdated', handleTodosUpdate);
         window.removeEventListener('summariesUpdated', handleSummariesUpdate);
+        window.removeEventListener('todosCountUpdated', handleTodosCountUpdated);
       };
     }, []);
   
