@@ -254,12 +254,8 @@ const DiaryForm = () => {
             <img 
               src={process.env.PUBLIC_URL + '/pic/logo2.png'} 
               alt="认真记录每一天"
-              style={{ 
-                height: '48px', 
-                width: 'auto', 
-                display: 'block', 
-                margin: '0'
-              }}
+              className="page-logo"
+              style={{ margin: 0 }}
             />
           </div>
         }

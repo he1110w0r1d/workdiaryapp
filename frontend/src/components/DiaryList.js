@@ -15,7 +15,8 @@ import {
   Tooltip,
   Form,
   Table,
-  Upload
+  Upload,
+  Checkbox
 } from 'antd';
 import { 
   EditOutlined, 
@@ -58,6 +59,14 @@ const DiaryList = () => {
   const [todoStatusForm] = Form.useForm();
   const [currentTodoAction, setCurrentTodoAction] = useState(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
+
+  // 响应式：在小屏上使用卡片式单行布局
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [importLoading, setImportLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [queryInitialized, setQueryInitialized] = useState(false);
@@ -276,6 +285,136 @@ const DiaryList = () => {
     },
   };
 
+  // 渲染移动端卡片式单行项目
+  const renderDiaryCardItem = (diary) => {
+    const checked = selectedRowKeys.includes(diary._id);
+    const todoStatus = diary.isTodo ? (diary.todoStatus || '待办') : null;
+    let statusColor = 'default';
+    let statusEmoji = '📝';
+    let statusText = '普通日记';
+    if (todoStatus) {
+      switch (todoStatus) {
+        case '待办':
+          statusColor = 'processing';
+          statusEmoji = '⏳';
+          statusText = '待处理';
+          break;
+        case '已完成':
+          statusColor = 'success';
+          statusEmoji = '✅';
+          statusText = '已完成';
+          break;
+        case '已放弃':
+          statusColor = 'error';
+          statusEmoji = '❌';
+          statusText = '已放弃';
+          break;
+        case '已转交':
+          statusColor = 'warning';
+          statusEmoji = '🔄';
+          statusText = '已转交';
+          break;
+        default:
+          statusColor = 'processing';
+          statusEmoji = '⏳';
+          statusText = '待处理';
+      }
+    }
+
+    const priority = diary.workPriority || '中';
+    let priorityColor = 'orange';
+    let priorityEmoji = '🟡';
+    if (priority === '高') { priorityColor = 'red'; priorityEmoji = '🔴'; }
+    else if (priority === '低') { priorityColor = 'green'; priorityEmoji = '🟢'; }
+
+    return (
+      <List.Item
+        style={{
+          border: '1px solid #f0f0f0',
+          borderRadius: 8,
+          marginBottom: 12,
+          padding: 12,
+          backgroundColor: '#fafafa'
+        }}
+      >
+        <div style={{ width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <Checkbox
+              checked={checked}
+              onChange={(e) => {
+                const newSelected = e.target.checked
+                  ? [...selectedRowKeys, diary._id]
+                  : selectedRowKeys.filter(id => id !== diary._id);
+                setSelectedRowKeys(newSelected);
+              }}
+              style={{ marginTop: 2 }}
+            />
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: '#1890ff',
+                  cursor: 'pointer',
+                  wordBreak: 'break-word'
+                }}
+                title="点击查看完整内容"
+                onClick={async () => {
+                  try {
+                    const response = await api.get(`/diaries/${diary._id}`);
+                    setViewingDiary(response.data);
+                    setViewModalVisible(true);
+                  } catch (error) {
+                    message.error('获取日记详情失败');
+                  }
+                }}
+              >
+                {(() => {
+                  const text = (diary.content || '').toString();
+                  const trimmed = text.replace(/\s+/g, ' ').trim();
+                  return trimmed.length > 50 ? trimmed.slice(0, 50) + '…' : trimmed;
+                })()}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, color: '#555' }}>
+                <span>📍 {diary.location || '未填写'}</span>
+                <span>⏰ {moment(diary.startTime).format('MM-DD HH:mm')} ~ {moment(diary.endTime).format('MM-DD HH:mm')}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <Tag color={priorityColor}>{priorityEmoji} {priority}</Tag>
+                {todoStatus ? (
+                  <Tag color={statusColor}>{statusEmoji} {statusText}</Tag>
+                ) : (
+                  <Tag>📝 普通日记</Tag>
+                )}
+                {(diary.tags || []).map(tag => {
+                  let color = tag.length > 5 ? 'geekblue' : 'green';
+                  if (tag === '紧急') color = 'volcano';
+                  return (
+                    <Tag key={tag} color={color}>{tag.toUpperCase()}</Tag>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <Link to={`/app/diaries/${diary._id}/edit`}>
+                  <Button icon={<EditOutlined />} size="small">编辑</Button>
+                </Link>
+                <Button 
+                  icon={<DeleteOutlined />} 
+                  size="small" 
+                  danger
+                  onClick={() => { setSelectedDiary(diary); setDeleteModalVisible(true); }}
+                >
+                  删除
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </List.Item>
+    );
+  };
+
   const columns = [
     {
       title: '工作内容',
@@ -468,28 +607,10 @@ const DiaryList = () => {
           <img 
             src={process.env.PUBLIC_URL + '/pic/logo3.png'} 
             alt="logo"
-            style={{ 
-              height: '80px', 
-              width: 'auto', 
-              objectFit: 'contain', 
-              display: 'block' 
-            }} 
+            className="page-logo"
           />
         </div>
         <Space>
-          <Button 
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-            loading={exportLoading}
-          >
-            导出
-          </Button>
-          <Button 
-            icon={<UploadOutlined />}
-            onClick={() => setImportModalVisible(true)}
-          >
-            导入
-          </Button>
           <Link to="/app/diaries/new">
             <Button type="primary">
               新增日记
@@ -566,15 +687,29 @@ const DiaryList = () => {
         )}
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={diaries}
-        loading={loading}
-        pagination={pagination}
-        onChange={handleTableChange}
-        rowKey="_id"
-        rowSelection={rowSelection}
-      />
+      {isMobile ? (
+        <List
+          loading={loading}
+          dataSource={diaries}
+          renderItem={renderDiaryCardItem}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            onChange: (page, pageSize) => setPagination({ ...pagination, current: page, pageSize })
+          }}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={diaries}
+          loading={loading}
+          pagination={pagination}
+          onChange={handleTableChange}
+          rowKey="_id"
+          rowSelection={rowSelection}
+        />
+      )}
 
       <Modal
         title="确认删除"
@@ -948,44 +1083,7 @@ const DiaryList = () => {
         </Form>
       </Modal>
 
-      {/* 导入模态框 */}
-      <Modal
-        title="导入工作日记"
-        open={importModalVisible}
-        onCancel={() => setImportModalVisible(false)}
-        footer={null}
-        width={600}
-      >
-        <div style={{ padding: '20px 0' }}>
-          <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f0f9ff', border: '1px solid #bae7ff', borderRadius: '6px' }}>
-            <div style={{ fontSize: '14px', color: '#1890ff', marginBottom: '8px' }}>
-              📋 导入说明：
-            </div>
-            <ul style={{ fontSize: '12px', color: '#666', margin: 0, paddingLeft: '20px' }}>
-              <li>支持导入JSON格式的工作日记文件</li>
-              <li>文件应包含标准的日记数据结构</li>
-              <li>导入的日记将添加到您的账户中</li>
-              <li>重复的日记将被自动跳过</li>
-            </ul>
-          </div>
-          
-          <Upload.Dragger
-            name="file"
-            accept=".json"
-            beforeUpload={handleImport}
-            showUploadList={false}
-            loading={importLoading}
-          >
-            <p className="ant-upload-drag-icon">
-              <UploadOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
-            </p>
-            <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-            <p className="ant-upload-hint">
-              支持单个JSON文件上传，文件大小不超过10MB
-            </p>
-          </Upload.Dragger>
-        </div>
-      </Modal>
+      {/* 已移除导入模态框，避免与用户信息导出功能冲突 */}
     </div>
   );
 };

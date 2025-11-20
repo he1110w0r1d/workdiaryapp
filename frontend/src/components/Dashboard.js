@@ -174,6 +174,8 @@ const Dashboard = () => {
     return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   }
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   return (
     <div>
       
@@ -185,7 +187,7 @@ const Dashboard = () => {
       </Row>
       
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={8}>
+        <Col xs={24} sm={12} md={8}>
           <Badge.Ribbon text="总览" color="blue">
             <Card 
               hoverable
@@ -208,7 +210,7 @@ const Dashboard = () => {
             </Card>
           </Badge.Ribbon>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 12 : 0 }}>
           <Badge.Ribbon text="今日" color="green">
             <Card 
               hoverable
@@ -234,7 +236,7 @@ const Dashboard = () => {
             </Card>
           </Badge.Ribbon>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 12 : 0 }}>
           <Badge.Ribbon text="报告" color="purple">
             <Card 
               hoverable
@@ -260,7 +262,7 @@ const Dashboard = () => {
       </Row>
 
       <Row gutter={16}>
-        <Col span={12}>
+        <Col xs={24} md={12}>
           <Card title="工作标签分布">
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -283,7 +285,7 @@ const Dashboard = () => {
             </ResponsiveContainer>
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} md={12} style={{ marginTop: isMobile ? 12 : 0 }}>
           <Card title="月度工作趋势">
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={monthlyData}>
@@ -310,7 +312,7 @@ const Dashboard = () => {
       <Row gutter={16} style={{ marginTop: 24 }}>
         <Col span={24}>
           <Card title="日工作时长趋势（最近30天）">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={isMobile ? 240 : 300}>
               <LineChart data={dailyTrendData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 

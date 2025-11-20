@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, theme, Button, Avatar, Dropdown, Space, Typography, Spin, Modal } from 'antd';
+import { Layout, Menu, theme, Button, Avatar, Dropdown, Space, Typography, Spin, Modal, Drawer } from 'antd';
 import { 
   HomeOutlined, 
   FileTextOutlined, 
@@ -12,7 +12,8 @@ import {
   RobotOutlined,
   CheckSquareOutlined,
   DeleteOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined,
+  MenuOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -93,6 +94,8 @@ const TimeInfo = () => {
 
 const AppLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [showWorkProfileSetup, setShowWorkProfileSetup] = useState(false);
   const [pendingTodosCount, setPendingTodosCount] = useState(0);
@@ -110,6 +113,18 @@ const AppLayout = ({ children }) => {
       textSecondary: '#6B7280',
       border: '#E5E7EB'
     }
+  };
+
+  // 安全拼接头像地址（环境变量可能未设置）
+  const apiBase = process.env.REACT_APP_API_URL || '';
+  const assetBase = apiBase ? apiBase.replace(/\/api$/, '') : '';
+  const getAvatarSrc = () => {
+    const path = userInfo?.avatar;
+    if (!path) return undefined;
+    if (typeof path === 'string' && /^https?:\/\//.test(path)) {
+      return path;
+    }
+    return `${assetBase}${path}`;
   };
 
   // 获取用户信息
@@ -153,6 +168,15 @@ const AppLayout = ({ children }) => {
   };
 
   useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setDrawerVisible(false);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
     fetchUserInfo();
     fetchPendingTodosCount();
     fetchUnreadSummariesCount();
@@ -187,6 +211,7 @@ const AppLayout = ({ children }) => {
         window.removeEventListener('todosUpdated', handleTodosUpdate);
         window.removeEventListener('summariesUpdated', handleSummariesUpdate);
         window.removeEventListener('todosCountUpdated', handleTodosCountUpdated);
+        window.removeEventListener('resize', handleResize);
       };
     }, []);
   
@@ -299,9 +324,12 @@ const AppLayout = ({ children }) => {
           selectedKeys={[location.pathname]} 
           mode="inline" 
           items={menuItems} 
+          onClick={() => {
+            if (isMobile) setDrawerVisible(false);
+          }}
         />
       </Sider>
-      <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
+      <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 80 : 200), transition: 'margin-left 0.2s' }}>
         <Header style={{ 
           padding: '0 24px', 
           background: currentTheme.colors.primary,
@@ -310,10 +338,23 @@ const AppLayout = ({ children }) => {
           alignItems: 'center',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           height: '64px',
-          borderBottom: `1px solid ${currentTheme.colors.border}`
+          borderBottom: `1px solid ${currentTheme.colors.border}`,
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100
         }}>
-          {/* 左侧标题移除以保持简洁 */}
-          <div style={{ width: '1px' }} />
+          {/* 左侧：移动端显示汉堡按钮 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isMobile && (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setDrawerVisible(true)}
+                style={{ color: 'white' }}
+                title="菜单"
+              />
+            )}
+          </div>
           
           {/* 中间信息区域 - 时间、农历显示 */}
           <div style={{ 
@@ -359,7 +400,7 @@ const AppLayout = ({ children }) => {
               }}
               title="使用说明"
             >
-              帮助
+              {!isMobile && '帮助'}
             </Button>
             
             <Button
@@ -373,12 +414,12 @@ const AppLayout = ({ children }) => {
               }}
               title="退出登录"
             >
-              退出
+              {!isMobile && '退出'}
             </Button>
             
             <Avatar 
               size="default" 
-              src={userInfo?.avatar ? `${process.env.REACT_APP_API_URL.replace('/api', '')}${userInfo.avatar}` : undefined}
+              src={getAvatarSrc()}
               icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
               onClick={handleAvatarClick}
               title="点击进入用户设置"
@@ -395,6 +436,25 @@ const AppLayout = ({ children }) => {
           <Outlet />
         </Content>
       </Layout>
+
+      {/* 移动端抽屉侧边栏 */}
+      <Drawer
+        title="📝 工作日记"
+        placement="left"
+        closable={true}
+        onClose={() => setDrawerVisible(false)}
+        open={drawerVisible}
+        styles={{ body: { padding: 0 } }}
+      >
+        <Menu 
+          selectedKeys={[location.pathname]} 
+          mode="inline" 
+          items={menuItems}
+          onClick={({ key }) => {
+            setDrawerVisible(false);
+          }}
+        />
+      </Drawer>
       
       {/* 工作信息配置弹窗 */}
       <WorkProfileSetup

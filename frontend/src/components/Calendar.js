@@ -20,10 +20,20 @@ const Calendar = () => {
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(moment());
   const [diariesData, setDiariesData] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'agenda'
   const navigate = useNavigate();
 
   useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      setViewMode(mobile ? 'agenda' : 'month');
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
     fetchMonthlyDiaries();
+    return () => window.removeEventListener('resize', handleResize);
   }, [currentDate]);
 
   const fetchMonthlyDiaries = async () => {
@@ -144,6 +154,65 @@ const Calendar = () => {
     return days;
   };
 
+  const renderAgendaList = () => {
+    const startOfMonth = currentDate.clone().startOf('month');
+    const endOfMonth = currentDate.clone().endOf('month');
+    const days = [];
+    const current = startOfMonth.clone();
+    // 记录今天的元素引用以便渲染后滚动定位
+    const todayStr = moment().format('YYYY-MM-DD');
+    let todayElementId = null;
+    while (current.isSameOrBefore(endOfMonth)) {
+      const dateStr = current.format('YYYY-MM-DD');
+      const dayDiaries = diariesData[dateStr] || [];
+      days.push(
+        <div 
+          key={dateStr} 
+          className="agenda-day-card" 
+          onClick={() => handleDateClick(current)}
+          id={dateStr === todayStr ? (todayElementId = `agenda-${dateStr}`) : undefined}
+        >
+          <div className="agenda-day-header">
+            <span className="agenda-date">{current.format('MM-DD')}</span>
+            <span className="agenda-weekday">{current.format('dddd')}</span>
+            <button className="agenda-add" onClick={(e) => handleAddDiary(current, e)}>+ 新增</button>
+          </div>
+          <div className="agenda-items">
+            {dayDiaries.length === 0 ? (
+              <div className="agenda-empty">暂无工作日志</div>
+            ) : (
+              dayDiaries.map((diary) => (
+                <div key={diary._id} className="agenda-item" title={diary.content}>
+                  <span className="agenda-time">
+                    {moment(diary.startTime).format('HH:mm')} - {moment(diary.endTime).format('HH:mm')}
+                  </span>
+                  <span className="agenda-content">
+                    {diary.content.length > 40 ? `${diary.content.substring(0, 40)}...` : diary.content}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+      current.add(1, 'day');
+    }
+    // 渲染后滚动到当天（仅移动端且视图为agenda）
+    setTimeout(() => {
+      try {
+        if (viewMode === 'agenda' && isMobile && todayElementId) {
+          const el = document.getElementById(todayElementId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      } catch (e) {
+        // 静默失败，避免影响主流程
+      }
+    }, 0);
+    return days;
+  };
+
   const navigateMonth = (direction) => {
     setCurrentDate(currentDate.clone().add(direction, 'month'));
   };
@@ -161,25 +230,20 @@ const Calendar = () => {
         marginBottom: 24 
       }}>
         {/* 用 logo 图片替换“工作日历”文字 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="calendar-logo">
           <img 
             src={process.env.PUBLIC_URL + '/pic/logo.png'} 
             alt="logo"
-            style={{ 
-              height: '80px', 
-              width: 'auto', 
-              objectFit: 'contain', 
-              display: 'block' 
-            }} 
+            className="page-logo"
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px' }}>
           <div className="calendar-navigation">
             <button 
               className="nav-button" 
               onClick={() => navigateMonth(-1)}
             >
-              ← 上月
+              {isMobile ? '←' : '← 上月'}
             </button>
             <span className="current-month">
               {currentDate.format('YYYY年MM月')}
@@ -188,7 +252,7 @@ const Calendar = () => {
               className="nav-button" 
               onClick={() => navigateMonth(1)}
             >
-              下月 →
+              {isMobile ? '→' : '下月 →'}
             </button>
           </div>
           
@@ -206,7 +270,7 @@ const Calendar = () => {
               padding: '8px',
               borderRadius: '8px',
               transition: 'all 0.3s ease',
-              display: 'flex',
+              display: isMobile ? 'none' : 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
@@ -234,17 +298,22 @@ const Calendar = () => {
 
       <Card>
         <div className="calendar-container">
-          {/* 星期标题 */}
-          <div className="calendar-header">
-            {['一', '二', '三', '四', '五', '六', '日'].map(day => (
-              <div key={day} className="weekday-header">{day}</div>
-            ))}
-          </div>
-          
-          {/* 日历网格 */}
-          <div className="calendar-grid">
-            {renderCalendarGrid()}
-          </div>
+          {viewMode === 'month' ? (
+            <>
+              <div className="calendar-header">
+                {['一', '二', '三', '四', '五', '六', '日'].map(day => (
+                  <div key={day} className="weekday-header">{day}</div>
+                ))}
+              </div>
+              <div className="calendar-grid">
+                {renderCalendarGrid()}
+              </div>
+            </>
+          ) : (
+            <div className="agenda-view">
+              {renderAgendaList()}
+            </div>
+          )}
         </div>
       </Card>
     </div>

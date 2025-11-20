@@ -197,12 +197,7 @@ const TodoList = () => {
         <img 
           src={process.env.PUBLIC_URL + '/pic/todo.png'} 
           alt="待办管理"
-          style={{ 
-            height: '80px', 
-            width: 'auto', 
-            objectFit: 'contain', 
-            display: 'block' 
-          }} 
+          className="page-logo"
         />
       </div>
       {/* 标签页：四个状态切换展示 */}

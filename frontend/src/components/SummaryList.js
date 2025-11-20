@@ -12,7 +12,8 @@ import {
   message,
   Space,
   Popconfirm,
-  Input
+  Input,
+  List,
 } from 'antd';
 import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
@@ -57,6 +58,14 @@ const SummaryList = () => {
     monthly: 0,
     yearly: 0
   });
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 获取未读数量
   const fetchUnreadCounts = async () => {
@@ -509,6 +518,104 @@ const SummaryList = () => {
     const currentLoading = loading[type];
     const currentPagination = pagination[type];
     
+    if (isMobile) {
+      // 移动端卡片渲染，内容摘要截断到50个字符
+      const renderCardItem = (summary) => {
+        const typeTagColor = getTypeColor(summary.type);
+        const typeText = getTypeText(summary.type);
+        const dateText = getTitleDateText(summary);
+        const isRead = summary.isRead;
+        const createdAtText = moment(summary.createdAt).format('YYYY-MM-DD HH:mm');
+        const contentRaw = summary.content || '';
+        const contentSnippet = contentRaw
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 50) + (contentRaw.length > 50 ? '…' : '');
+
+        return (
+          <List.Item key={summary._id} style={{ padding: '8px 12px' }}>
+            <Card
+              hoverable
+              size="small"
+              style={{ width: '100%' }}
+              onClick={() => {
+                setSelectedSummary(summary);
+                if (!summary.isRead) {
+                  markAsRead(summary._id, summary.type);
+                }
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Space size="small" wrap>
+                  <Tag color={typeTagColor}>{typeText}</Tag>
+                  <Tag color={isRead ? 'green' : 'orange'}>{isRead ? '已读' : '未读'}</Tag>
+                </Space>
+                <span style={{ fontSize: 12, color: '#666' }}>{createdAtText}</span>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 14, color: '#333' }}>
+                <strong style={{ color: '#1890ff' }}>{dateText}</strong>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, color: '#555' }}>
+                {contentSnippet || '（无内容）'}
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                {(summary.type === 'weekly' || summary.type === 'monthly' || summary.type === 'yearly') && summary.htmlFilePath && (
+                  <Button 
+                    icon={<LinkOutlined />} 
+                    size="small"
+                    type="primary"
+                    onClick={(e) => { e.stopPropagation(); handleViewWebpage(summary); }}
+                  >
+                    查看网页
+                  </Button>
+                )}
+                <Popconfirm
+                  title="确认删除"
+                  description="确定要删除这个总结吗？此操作不可恢复。"
+                  onConfirm={(e) => { e?.stopPropagation?.(); handleDeleteSummary(summary._id, summary.type); }}
+                  okText="确定"
+                  cancelText="取消"
+                  placement="topRight"
+                >
+                  <Button 
+                    icon={<DeleteOutlined />} 
+                    size="small"
+                    danger
+                    type="text"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              </div>
+            </Card>
+          </List.Item>
+        );
+      };
+
+      return (
+        <List
+          dataSource={summaries}
+          renderItem={renderCardItem}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={`暂无${getTypeText(type)}`}
+              />
+            )
+          }}
+          pagination={{
+            current: currentPagination.current,
+            pageSize: currentPagination.pageSize,
+            total: currentPagination.total,
+            onChange: (page, pageSize) => handleTableChange({ ...currentPagination, current: page, pageSize }, type)
+          }}
+        />
+      );
+    }
+
+    // 桌面端表格渲染
     return (
       <Table
         columns={getColumns(type)}

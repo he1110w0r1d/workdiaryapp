@@ -6,8 +6,16 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #f0f2f5;
-  }
-  
+}
+
+ /* 全局响应式 logo 图片 */
+ .page-logo {
+   display: block;
+   width: auto;
+   height: clamp(36px, 8vw, 80px);
+   object-fit: contain;
+ }
+
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
       monospace;
@@ -28,12 +36,24 @@ body {
   
   /* 响应式设计 */
   @media (max-width: 768px) {
+    /* 当侧边导航开始隐藏（小屏）时，logo跟随页面进一步缩放 */
+    .page-logo {
+      height: clamp(24px, 10vw, 56px);
+    }
     .ant-layout-sider {
       display: none;
     }
     
     .ant-layout-sider-collapsed {
       display: none;
+    }
+    /* 顶部栏固定时，内容区需要足够的顶部间距避免被遮挡 */
+    .ant-layout-content {
+      padding-top: 8px;
+    }
+    /* 按钮密度优化 */
+    .ant-btn {
+      padding: 0 8px;
     }
   }
   
