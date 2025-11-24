@@ -1,11 +1,12 @@
 body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    background-color: #f0f2f5;
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f1f5f9;
+  color: #334155;
 }
 
  /* 全局响应式 logo 图片 */
@@ -58,10 +59,10 @@ body {
   }
   
   /* 卡片样式优化 */
-  .ant-card {
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
+.ant-card {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
   
   /* 表格样式优化 */
   .ant-table {
@@ -71,16 +72,17 @@ body {
   }
   
   /* 按钮样式优化 */
-  .ant-btn {
-    border-radius: 6px;
-  }
+.ant-btn {
+  border-radius: 8px;
+  box-shadow: none;
+}
   
   /* 输入框样式优化 */
-  .ant-input,
-  .ant-select-selector,
-  .ant-picker {
-    border-radius: 6px !important;
-  }
+.ant-input,
+.ant-select-selector,
+.ant-picker {
+  border-radius: 8px !important;
+}
   
   /* 标题样式 */
   .ant-typography {
@@ -93,11 +95,14 @@ body {
   }
   
   /* 标签样式优化 */
-  .ant-tag {
-    border-radius: 4px;
-    margin-right: 8px;
-    margin-bottom: 4px;
-  }
+.ant-tag {
+  border-radius: 6px;
+  margin-right: 8px;
+  margin-bottom: 4px;
+  border: none;
+  padding: 2px 10px;
+  font-weight: 500;
+}
   
   /* 布局优化 */
   .ant-layout-content {

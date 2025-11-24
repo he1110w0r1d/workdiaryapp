@@ -30,7 +30,7 @@ const { Header, Sider, Content } = Layout;
 
 
 // 时间和农历组件
-const TimeInfo = () => {
+const TimeInfo = ({ textColor = '#334155' }) => {
   const [currentTime, setCurrentTime] = useState(moment());
   const [lunarInfo, setLunarInfo] = useState('');
   const [showFullLunar, setShowFullLunar] = useState(false);
@@ -62,7 +62,7 @@ const TimeInfo = () => {
   return (
     <div 
       style={{ 
-        color: 'white', 
+        color: textColor, 
         fontSize: '14px', 
         textAlign: 'center', 
         cursor: 'pointer',
@@ -78,13 +78,13 @@ const TimeInfo = () => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', lineHeight: '1' }}>
         <ClockCircleOutlined style={{ fontSize: '14px', lineHeight: '1' }} />
-        <Text style={{ color: 'white', fontSize: '14px', lineHeight: '1', margin: 0 }}>
+        <Text style={{ color: textColor, fontSize: '14px', lineHeight: '1', margin: 0, fontWeight: 500 }}>
           {currentTime.format('HH:mm:ss')}
         </Text>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', lineHeight: '1' }}>
         <CalendarOutlined style={{ fontSize: '12px', lineHeight: '1' }} />
-        <Text style={{ color: 'white', fontSize: '12px', lineHeight: '1', margin: 0 }}>
+        <Text style={{ color: textColor, fontSize: '12px', lineHeight: '1', margin: 0 }}>
           {currentTime.format('YYYY年MM月DD日')} {lunarInfo}
         </Text>
       </div>
@@ -332,13 +332,13 @@ const AppLayout = ({ children }) => {
       <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 80 : 200), transition: 'margin-left 0.2s' }}>
         <Header style={{ 
           padding: '0 24px', 
-          background: currentTheme.colors.primary,
+          background: '#ffffff',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
           height: '64px',
-          borderBottom: `1px solid ${currentTheme.colors.border}`,
+          borderBottom: `1px solid #f1f5f9`,
           position: 'sticky',
           top: 0,
           zIndex: 1100
@@ -350,7 +350,7 @@ const AppLayout = ({ children }) => {
                 type="text"
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerVisible(true)}
-                style={{ color: 'white' }}
+                style={{ color: '#64748b' }}
                 title="菜单"
               />
             )}
@@ -364,7 +364,7 @@ const AppLayout = ({ children }) => {
             flex: 1, 
             justifyContent: 'center' 
           }}>
-            <TimeInfo />
+            <TimeInfo textColor="#334155" />
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -394,7 +394,7 @@ const AppLayout = ({ children }) => {
                 });
               }}
               style={{ 
-                color: 'white',
+                color: '#64748b',
                 fontSize: '14px',
                 fontWeight: 'normal'
               }}
@@ -408,7 +408,7 @@ const AppLayout = ({ children }) => {
               icon={<LogoutOutlined />}
               onClick={handleLogout}
               style={{ 
-                color: 'white',
+                color: '#64748b',
                 fontSize: '14px',
                 fontWeight: 'normal'
               }}
@@ -427,7 +427,8 @@ const AppLayout = ({ children }) => {
                 cursor: 'pointer',
                 background: userInfo?.avatar ? 'transparent' : currentTheme.colors.accent,
                 color: 'white',
-                border: '1px solid rgba(255,255,255,0.3)'
+                border: '2px solid #f1f5f9',
+                boxShadow: '0 0 0 2px #e2e8f0'
               }} 
             />
           </div>

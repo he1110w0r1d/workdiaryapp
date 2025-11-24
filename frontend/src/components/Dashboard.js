@@ -181,89 +181,132 @@ const Dashboard = () => {
       
       {/* 日历组件 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={24}>
+        <Col span={24} style={{ padding: isMobile ? '0' : undefined }}>
           <Calendar />
         </Col>
       </Row>
       
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={8}>
-          <Badge.Ribbon text="总览" color="blue">
-            <Card 
-              hoverable
-              onClick={() => navigate('/app/diaries')}
-              style={{ 
-                cursor: 'pointer',
-                background: currentTheme.colors.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px'
-              }}
-            >
-              <Statistic
-                title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>总工作日记</span>}
-                value={stats.totalDiaries}
-                valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<FileTextOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
-                suffix={<TrophyOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
-              />
-            </Card>
-          </Badge.Ribbon>
+          <Card 
+            hoverable
+            onClick={() => navigate('/app/diaries')}
+            style={{ 
+              cursor: 'pointer',
+              background: 'linear-gradient(145deg, #ffffff, #f8fafc)',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+              transition: 'all 0.3s ease'
+            }}
+            bodyStyle={{ padding: '24px' }}
+          >
+            <Statistic
+              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>The Diaries</span>}
+              value={stats.totalDiaries}
+              valueStyle={{ color: '#1e293b', fontSize: '32px', fontWeight: 800, fontFamily: 'Inter, -apple-system, sans-serif' }}
+              prefix={
+                <div style={{ 
+                  width: 56, 
+                  height: 56, 
+                  borderRadius: '16px', 
+                  background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  marginRight: 20,
+                  boxShadow: 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.5)'
+                }}>
+                  <FileTextOutlined style={{ color: '#3b82f6', fontSize: '28px' }} />
+                </div>
+              }
+            />
+          </Card>
         </Col>
-        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 12 : 0 }}>
-          <Badge.Ribbon text="今日" color="green">
-            <Card 
-              hoverable
-              onClick={() => {
-                const today = moment().format('YYYY-MM-DD');
-                navigate(`/app/diaries?date=${today}`);
-              }}
-              style={{ 
-                cursor: 'pointer',
-                background: currentTheme.colors.secondary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px'
-              }}
-            >
-              <Statistic
-                title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>今日新增</span>}
-                value={stats.todayDiaries}
-                valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<ClockCircleOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
-                suffix={<FireOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
-              />
-            </Card>
-          </Badge.Ribbon>
+        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 16 : 0 }}>
+          <Card 
+            hoverable
+            onClick={() => {
+              const today = moment().format('YYYY-MM-DD');
+              navigate(`/app/diaries?date=${today}`);
+            }}
+            style={{ 
+              cursor: 'pointer',
+              background: 'linear-gradient(145deg, #ffffff, #f8fafc)',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+              transition: 'all 0.3s ease'
+            }}
+            bodyStyle={{ padding: '24px' }}
+          >
+            <Statistic
+              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's New</span>}
+              value={stats.todayDiaries}
+              valueStyle={{ color: '#1e293b', fontSize: '32px', fontWeight: 800, fontFamily: 'Inter, -apple-system, sans-serif' }}
+              prefix={
+                <div style={{ 
+                  width: 56, 
+                  height: 56, 
+                  borderRadius: '16px', 
+                  background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  marginRight: 20,
+                  boxShadow: 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.5)'
+                }}>
+                  <ClockCircleOutlined style={{ color: '#10b981', fontSize: '28px' }} />
+                </div>
+              }
+            />
+          </Card>
         </Col>
-        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 12 : 0 }}>
-          <Badge.Ribbon text="报告" color="purple">
-            <Card 
-              hoverable
-              onClick={() => navigate('/app/summaries')}
-              style={{ 
-                cursor: 'pointer',
-                background: currentTheme.colors.accent,
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px'
-              }}
-            >
-              <Statistic
-                title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>总结报告</span>}
-                value={stats.totalSummaries}
-                valueStyle={{ color: 'white', fontSize: '2em' }}
-                prefix={<BarChartOutlined style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2em' }} />}
-                suffix={<RocketOutlined style={{ color: 'rgba(255,255,255,0.9)', marginLeft: '8px' }} />}
-              />
-            </Card>
-          </Badge.Ribbon>
+        <Col xs={24} sm={12} md={8} style={{ marginTop: isMobile ? 16 : 0 }}>
+          <Card 
+            hoverable
+            onClick={() => navigate('/app/summaries')}
+            style={{ 
+              cursor: 'pointer',
+              background: 'linear-gradient(145deg, #ffffff, #f8fafc)',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+              transition: 'all 0.3s ease'
+            }}
+            bodyStyle={{ padding: '24px' }}
+          >
+            <Statistic
+              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summaries</span>}
+              value={stats.totalSummaries}
+              valueStyle={{ color: '#1e293b', fontSize: '32px', fontWeight: 800, fontFamily: 'Inter, -apple-system, sans-serif' }}
+              prefix={
+                <div style={{ 
+                  width: 56, 
+                  height: 56, 
+                  borderRadius: '16px', 
+                  background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  marginRight: 20,
+                  boxShadow: 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.5)'
+                }}>
+                  <BarChartOutlined style={{ color: '#8b5cf6', fontSize: '28px' }} />
+                </div>
+              }
+            />
+          </Card>
         </Col>
       </Row>
 
       <Row gutter={16}>
         <Col xs={24} md={12}>
-          <Card title="工作标签分布">
+          <Card 
+            title="工作标签分布" 
+            style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
+            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+          >
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -286,22 +329,27 @@ const Dashboard = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} style={{ marginTop: isMobile ? 12 : 0 }}>
-          <Card title="月度工作趋势">
+          <Card 
+            title="月度工作趋势"
+            style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
+            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+          >
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" orientation="left" stroke="#64748b" axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" stroke="#64748b" axisLine={false} tickLine={false} />
                 <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   formatter={(value, name) => {
                     if (name === 'entries') return [value, '条目数'];
                     if (name === 'totalHours') return [Number(value).toFixed(1), '小时'];
                     return [value, name];
                   }}
                 />
-                <Bar yAxisId="left" dataKey="entries" fill="#8884d8" name="工作条目数" />
-                <Bar yAxisId="right" dataKey="totalHours" fill="#82ca9d" name="工作时长" />
+                <Bar yAxisId="left" dataKey="entries" fill="#8884d8" radius={[4, 4, 0, 0]} name="工作条目数" />
+                <Bar yAxisId="right" dataKey="totalHours" fill="#82ca9d" radius={[4, 4, 0, 0]} name="工作时长" />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -311,39 +359,47 @@ const Dashboard = () => {
       {/* 日工作趋势折线图 */}
       <Row gutter={16} style={{ marginTop: 24 }}>
         <Col span={24}>
-          <Card title="日工作时长趋势（最近30天）">
+          <Card 
+            title="日工作时长趋势（最近30天）"
+            style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
+            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+          >
             <ResponsiveContainer width="100%" height={isMobile ? 240 : 300}>
               <LineChart data={dailyTrendData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis 
                   dataKey="date" 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 12, fill: '#64748b' }}
                   interval={4} // 每5个点显示一个标签
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <YAxis 
                   domain={[0, 'dataMax + 2']} 
-                  tick={{ fontSize: 12 }}
-                  label={{ value: '工作时长(小时)', angle: -90, position: 'insideLeft' }}
+                  tick={{ fontSize: 12, fill: '#64748b' }}
+                  label={{ value: '工作时长(小时)', angle: -90, position: 'insideLeft', fill: '#64748b' }}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <Tooltip 
-                  formatter={(value) => [`${value.toFixed(1)}`, '工作时长']}
-                  labelFormatter={(label) => `日期: ${label}`}
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  formatter={(value) => [Number(value).toFixed(1), '小时']}
+                  labelStyle={{ color: '#64748b' }}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="hours" 
-                  stroke="#1890ff" 
-                  strokeWidth={2}
-                  dot={{ fill: '#1890ff', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#1890ff', strokeWidth: 2 }}
+                  stroke="#f59e0b" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
+                  activeDot={{ r: 6, strokeWidth: 0 }} 
+                  name="工作时长" 
                 />
               </LineChart>
             </ResponsiveContainer>
           </Card>
         </Col>
       </Row>
-
-      {/* 如果需要单独显示工作时长趋势，可以添加这个卡片 */}
       {/* workHoursData 功能暂未实现，先注释掉
       {workHoursData.length > 0 && (
         <Row gutter={16} style={{ marginTop: 24 }}>
