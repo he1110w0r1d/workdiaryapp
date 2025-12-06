@@ -287,48 +287,50 @@ const AppLayout = ({ children }) => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider 
-        collapsible 
-        collapsed={collapsed} 
-        onCollapse={setCollapsed}
-        style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 1000,
-          height: '100vh',
-          overflow: 'auto',
-          backgroundColor: currentTheme.colors.primary
-        }}
-      >
-        <div 
-          className="logo" 
-          style={{ 
-            height: '48px', 
-            margin: '16px', 
-            background: currentTheme.colors.secondary,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            borderRadius: '8px'
+      {!isMobile && (
+        <Sider 
+          collapsible 
+          collapsed={collapsed} 
+          onCollapse={setCollapsed}
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 1000,
+            height: '100vh',
+            overflow: 'auto',
+            backgroundColor: currentTheme.colors.primary
           }}
         >
-          {collapsed ? '📝' : '📝 工作日记'}
-        </div>
-        <Menu 
-          theme="dark" 
-          selectedKeys={[location.pathname]} 
-          mode="inline" 
-          items={menuItems} 
-          onClick={() => {
-            if (isMobile) setDrawerVisible(false);
-          }}
-        />
-      </Sider>
+          <div 
+            className="logo" 
+            style={{ 
+              height: '48px', 
+              margin: '16px', 
+              background: currentTheme.colors.secondary,
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              borderRadius: '8px'
+            }}
+          >
+            {collapsed ? '📝' : '📝 工作日记'}
+          </div>
+          <Menu 
+            theme="dark" 
+            selectedKeys={[location.pathname]} 
+            mode="inline" 
+            items={menuItems} 
+            onClick={() => {
+              if (isMobile) setDrawerVisible(false);
+            }}
+          />
+        </Sider>
+      )}
       <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 80 : 200), transition: 'margin-left 0.2s' }}>
         <Header style={{ 
           padding: '0 24px', 
@@ -446,6 +448,8 @@ const AppLayout = ({ children }) => {
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
         styles={{ body: { padding: 0 } }}
+        getContainer={false}
+        destroyOnClose
       >
         <Menu 
           selectedKeys={[location.pathname]} 

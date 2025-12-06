@@ -130,12 +130,22 @@ const buildDailyTodoSuggestionPrompt = (user, diaries, date) => {
     '  ]',
     '}',
     '',
-    '规则：',
-    '1) 若不需要待办，shouldCreateTodo=false，todos=[]。',
-    '2) 最多给出3条，必须具体可执行；不写泛泛而谈。',
-    '3) 默认截止日期为次日；如确有紧急度可适当安排更早日期。',
-    '4) priority 合理分配：紧急且重要为高，常规为中，非紧急为低。',
-    '5) relatedDiaryIds 参考涉及的日记。',
+    '# Role',
+    '你是一个智能且敏锐的任务管理专家。',
+    '',
+    '# Workflow',
+    '请按照以下步骤处理输入的工作日记：',
+    '',
+    '1. **分析（Analysis）**：逐句阅读日记，区分“已完成的事实”与“未完成的意图”。',
+    '2. **过滤（Filtering）**：剔除所有单纯的情绪表达、纯粹的总结性陈述。',
+    '3. **转化（Transformation）**：将识别到的“未完成意图”转化为具体的可执行指令。',
+    '   - 如果原文说“还有个Bug没修”，转化为“修复[具体模块]的Bug”。',
+    '4. **生成（Generation）**：输出符合要求的 JSON。',
+    '',
+    '# Critical Rules',
+    '1. **宁缺毋滥**：如果日记中没有明确的后续动作指引，或者所有事情都Closed了，必须设置 `shouldCreateTodo=false`。',
+    '2. **动作明确化**：待办标题必须是指令性的（Verb-Noun），让用户看一眼就知道要做什么动作。',
+    '3. **截止日期**：默认为次日。如果文中提到“下周一”、“月底”等具体时间，请解析为具体日期。',
   ].join('\n');
 };
 
@@ -173,11 +183,21 @@ function buildTodoJSONFromSummaryPrompt(summaryText, user, date) {
     '}',
     '',
     '规则：',
-    '1) 若不需要待办，shouldCreateTodo=false，todos=[]。',
-    '2) 最多给出3条，必须具体可执行，不要泛泛而谈。',
-    `3) 若总结未明确截止日期，默认使用翌日：${tomorrowStr}。`,
-    '4) 优先级：紧急且重要为高，常规为中，非紧急为低。',
-    '5) relatedDiaryIds 可为空；如总结中提到具体日记ID，则保留。',
+    '1) 核心判断逻辑：',
+    '   - 只有当工作日记中明确出现"未完成"、"需跟进"、"计划明日"、"待解决"、"下阶段"等表示工作未闭环的关键词时，才生成待办。',
+    '   - 对于"已完成"、"已交付"、"结束"、"总结"等闭环工作，严禁生成待办。',
+    '   - 对于日常例行工作（如"日报"、"周会"），除非明确提到有遗留问题，否则不生成待办。',
+    '2) 宁缺毋滥原则：',
+    '   - 若所有工作均已闭环或无需后续跟进，请务必设置 shouldCreateTodo=false，todos=[]。',
+    '   - 严禁强行凑数！有几条就写几条，如果没有就一条都不要写。',
+    '   - 严禁生成"继续跟进项目"、"完成剩余工作"、"推进项目进度"等泛泛而谈、无具体行动指令的废话待办。',
+    '3) 待办内容规范：',
+    '   - 必须具体可执行：包含具体的"动作" + "对象"（例如："修改登录页面的校验逻辑"，而不是"优化页面"）。',
+    '   - 必须具有独立性：待办项应能独立被理解，不需要回查日记原文。',
+    '4) 属性设置：',
+    `   - dueDate：若总结未明确截止日期，默认使用翌日：${tomorrowStr}。`,
+    '   - priority：紧急且重要=高，常规=中，非紧急=低。',
+    '   - relatedDiaryIds：可为空；如总结中提到具体日记ID，则保留。',
     '',
     '待解析的工作总结文本：',
     summaryText || '',
@@ -313,7 +333,7 @@ const safeParseTodoJSON = (text) => {
 const createTodosFromSuggestions = async (userId, suggestions, diaries) => {
   if (!Array.isArray(suggestions) || suggestions.length === 0) return { created: 0 };
 
-  const MAX_PER_DAY = 3;
+  // const MAX_PER_DAY = 3; // 移除3条限制
   const created = [];
 
   // 今天的时间范围用于去重
@@ -322,7 +342,7 @@ const createTodosFromSuggestions = async (userId, suggestions, diaries) => {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  for (const s of suggestions.slice(0, MAX_PER_DAY)) {
+  for (const s of suggestions) { // 不再限制 .slice(0, MAX_PER_DAY)
     const content = (s && s.content || '').trim();
     if (!content) continue;
 
@@ -752,54 +772,10 @@ exports.generateDailySummary = async () => {
 - 昨日未完成: {{todayTodosPending}}
 - 当前总未完成: {{totalPendingTodos}}
         `.trim();
-        
-        // 准备LLM所需数据
-        const llmData = {
-          date: yesterday,
-          diaries: diaries,
-          totalWorkTime: totalWorkTime,
-          user: user
-        };
-        
-        // 尝试使用LLM生成总结
-        let summaryContent = baseContent;
-        let llmSummary = null;
-        let llmName = null;
-        let llmUsed = 'none';
-        
-        // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = await createLLMInstances(user._id);
-        
-        // 首先尝试使用外部LLM（如果可用）
-        if (externalLLM) {
-          try {
-            llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
-            if (llmSummary) {
-              logger.llm('使用外部LLM生成总结成功');
-            summaryContent = llmSummary;
-          }
-        } catch (error) {
-          logger.warn('外部LLM生成失败，尝试本地LLM', { error: error.message });
-          }
-        }
-        
-        // 如果外部LLM失败或不可用，尝试本地LLM
-        if (!llmSummary && localLLM) {
-          try {
-            llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, user._id);
-            if (llmSummary) {
-              logger.llm('使用本地LLM生成总结成功');
-              summaryContent = llmSummary;
-            }
-          } catch (error) {
-            logger.warn('本地LLM生成失败', { error: error.message });
-          }
-        }
-        
-        // 如果所有LLM都失败，使用默认模板
-        if (!llmSummary) {
-          logger.info('使用默认模板生成总结内容');
-        }
+        const workDetails = diaries.map(diary => {
+          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${Array.isArray(diary.tags) ? diary.tags.join(', ') : ''}`;
+        }).join('\n\n');
         
         // 统计待办事项数据
         const yesterdayStart = new Date(yesterday);
@@ -847,15 +823,67 @@ exports.generateDailySummary = async () => {
           status: { $in: ['待办'] }
         });
 
+        // 准备LLM所需数据
+        const llmData = {
+          date: yesterday,
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: workDetails,
+          user: user,
+          todayTodosCreated,
+          todayTodosCompleted,
+          todayTodosPending,
+          totalPendingTodos
+        };
+        
+        // 尝试使用LLM生成总结
+        let summaryContent = baseContent;
+        let llmSummary = null;
+        let llmName = null;
+        let llmUsed = 'none';
+        
+        // 动态创建LLM实例以获取最新配置
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
+        
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'daily', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用外部LLM生成总结成功');
+            summaryContent = llmSummary;
+          }
+        } catch (error) {
+          logger.warn('外部LLM生成失败，尝试本地LLM', { error: error.message });
+          }
+        }
+        
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
+          try {
+            llmSummary = await localLLM.generateSummary(llmData, 'daily', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用本地LLM生成总结成功');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            logger.warn('本地LLM生成失败', { error: error.message });
+          }
+        }
+        
+        // 如果所有LLM都失败，使用默认模板
+        if (!llmSummary) {
+          logger.info('使用默认模板生成总结内容');
+        }
+        
+        // 统计待办事项数据 - 已在前面统计并注入到llmData
+        
         // 如果使用LLM生成内容，直接使用LLM内容
         if (llmSummary) {
           summaryContent = llmSummary;
         } else {
-          const workDetails = diaries.map(diary => {
-            const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-            return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
-          }).join('\n\n');
-          
+          // 如果没有LLM内容，使用baseContent并进行占位符替换
           summaryContent = summaryContent
             .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
             .replace(/\{\{totalEntries\}\}/g, diaries.length)
@@ -2225,6 +2253,10 @@ exports.regenerateDailySummary = async (req, res) => {
 ## 工作详情
 {{workDetails}}
     `.trim();
+    const workDetails = diaries.map(diary => {
+      const workTime = calculateWorkTime(diary.startTime, diary.endTime);
+      return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${Array.isArray(diary.tags) ? diary.tags.join(', ') : ''}`;
+    }).join('\n\n');
     
     // 获取用户信息
     const user = await User.findById(req.user.id);
@@ -2232,12 +2264,64 @@ exports.regenerateDailySummary = async (req, res) => {
       return res.status(404).json({ message: '用户不存在' });
     }
     
+    // 统计待办事项数据
+    const yesterdayStart = new Date(yesterday);
+    yesterdayStart.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    
+    // 昨日新增的待办事项
+    const todayTodosCreated = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: yesterdayStart,
+        $lt: yesterdayEnd
+      }
+    });
+    
+    // 昨日完成的待办事项
+    const todayTodosCompleted = await Todo.countDocuments({
+      user: req.user.id,
+      status: '已完成',
+      'statusHistory': {
+        $elemMatch: {
+          status: '已完成',
+          changedAt: {
+            $gte: yesterdayStart,
+            $lt: yesterdayEnd
+          }
+        }
+      }
+    });
+    
+    // 昨日待完成的待办事项（昨日新增但未完成的）
+    const todayTodosPending = await Todo.countDocuments({
+      user: req.user.id,
+      createdAt: {
+        $gte: yesterdayStart,
+        $lt: yesterdayEnd
+      },
+      status: { $ne: '已完成' }
+    });
+    
+    // 数据库中所有未完成的待办事项
+    const totalPendingTodos = await Todo.countDocuments({
+      user: req.user.id,
+      status: { $in: ['待办'] }
+    });
+
     // 准备LLM所需数据
     const llmData = {
       date: yesterday,
       diaries: diaries,
       totalWorkTime: totalWorkTime,
-      user: user
+      totalEntries: diaries.length,
+      workDetails: workDetails,
+      user: user,
+      todayTodosCreated,
+      todayTodosCompleted,
+      todayTodosPending,
+      totalPendingTodos
     };
     
     // 尝试使用LLM生成总结
@@ -2282,17 +2366,19 @@ exports.regenerateDailySummary = async (req, res) => {
       logger.info('使用默认模板重新生成的总结内容');
     }
     
-    // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
-    if (!llmSummary) {
-      const workDetails = diaries.map(diary => {
-          const workTime = calculateWorkTime(diary.startTime, diary.endTime);
-          return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
-        }).join('\n\n');
-      
+    // 如果使用LLM生成内容，直接使用LLM内容
+    if (llmSummary) {
+      summaryContent = llmSummary;
+    } else {
+      // 如果没有LLM内容，使用baseContent并进行占位符替换
       summaryContent = summaryContent
         .replace(/\{\{date\}\}/g, yesterday.toLocaleDateString('zh-CN'))
         .replace(/\{\{totalEntries\}\}/g, diaries.length)
         .replace(/\{\{totalTime\}\}/g, `${Math.floor(totalWorkTime / 60)}小时${totalWorkTime % 60}分钟`)
+        .replace(/\{\{todayTodosCreated\}\}/g, todayTodosCreated)
+        .replace(/\{\{todayTodosCompleted\}\}/g, todayTodosCompleted)
+        .replace(/\{\{todayTodosPending\}\}/g, todayTodosPending)
+        .replace(/\{\{totalPendingTodos\}\}/g, totalPendingTodos)
         .replace(/\{\{workDetails\}\}/g, workDetails);
     }
     

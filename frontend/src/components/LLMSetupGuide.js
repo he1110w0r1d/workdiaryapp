@@ -120,7 +120,7 @@ const LLMSetupGuide = () => {
                 <div style={{ marginTop: '8px' }}>
                   <Text type="secondary">还没有API密钥？</Text>
                   <Link 
-                    href="/siliconflowregiest/" 
+                    href="https://cloud.siliconflow.cn/i/TTiemPwh" 
                     target="_blank"
                     style={{ marginLeft: '8px' }}
                   >

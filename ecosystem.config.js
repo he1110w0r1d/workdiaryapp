@@ -15,7 +15,7 @@ module.exports = {
         JWT_SECRET: 'your-secret-key-here',
         ENCRYPTION_KEY: 'your-encryption-key-32-chars!!',
         SESSION_SECRET: 'your-session-secret-key-here',
-        CORS_ORIGIN: 'http://localhost: 13000',
+        CORS_ORIGIN: 'http://localhost:13000',
         LLM_TYPE: 'external',
         PORTAL_VERIFY_URL: 'http://127.0.0.1:3001/api/sso/verify',
         PORTAL_JWT_SECRET: 'portal_sso_dev_secret',

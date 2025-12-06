@@ -199,7 +199,7 @@ const Dashboard = () => {
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
               transition: 'all 0.3s ease'
             }}
-            bodyStyle={{ padding: '24px' }}
+            styles={{ body: { padding: '24px' } }}
           >
             <Statistic
               title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>The Diaries</span>}
@@ -238,7 +238,7 @@ const Dashboard = () => {
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
               transition: 'all 0.3s ease'
             }}
-            bodyStyle={{ padding: '24px' }}
+            styles={{ body: { padding: '24px' } }}
           >
             <Statistic
               title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's New</span>}
@@ -274,7 +274,7 @@ const Dashboard = () => {
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
               transition: 'all 0.3s ease'
             }}
-            bodyStyle={{ padding: '24px' }}
+            styles={{ body: { padding: '24px' } }}
           >
             <Statistic
               title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summaries</span>}
@@ -305,7 +305,7 @@ const Dashboard = () => {
           <Card 
             title="工作标签分布" 
             style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
-            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+            styles={{ header: { borderBottom: '1px solid #f1f5f9' } }}
           >
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -332,7 +332,7 @@ const Dashboard = () => {
           <Card 
             title="月度工作趋势"
             style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
-            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+            styles={{ header: { borderBottom: '1px solid #f1f5f9' } }}
           >
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={monthlyData}>
@@ -362,7 +362,7 @@ const Dashboard = () => {
           <Card 
             title="日工作时长趋势（最近30天）"
             style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: 'none' }}
-            headStyle={{ borderBottom: '1px solid #f1f5f9' }}
+            styles={{ header: { borderBottom: '1px solid #f1f5f9' } }}
           >
             <ResponsiveContainer width="100%" height={isMobile ? 240 : 300}>
               <LineChart data={dailyTrendData}>
