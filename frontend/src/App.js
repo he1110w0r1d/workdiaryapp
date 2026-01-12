@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import 'moment/locale/zh-cn';
+import 'dayjs/locale/zh-cn';
 import GlobalStyles from './styles/GlobalStyles';
 
 import Login from './components/Login';

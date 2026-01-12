@@ -341,9 +341,13 @@ const AppLayout = ({ children }) => {
           boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
           height: '64px',
           borderBottom: `1px solid #f1f5f9`,
-          position: 'sticky',
+          position: 'fixed',
           top: 0,
-          zIndex: 1100
+          left: 0,
+          right: 0,
+          zIndex: 1100,
+          width: '100%', // 确保Header在固定时宽度正确
+          flexShrink: 0  // 防止在flex布局中被压缩
         }}>
           {/* 左侧：移动端显示汉堡按钮 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -352,7 +356,11 @@ const AppLayout = ({ children }) => {
                 type="text"
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerVisible(true)}
-                style={{ color: '#64748b' }}
+                style={{ 
+                  color: '#64748b',
+                  // 确保汉堡按钮始终可点击
+                  zIndex: 1101 
+                }}
                 title="菜单"
               />
             )}
@@ -435,22 +443,72 @@ const AppLayout = ({ children }) => {
             />
           </div>
         </Header>
-        <Content style={{ margin: '24px 16px', padding: 24, background: colorBgContainer }}>
+        <Content style={{ 
+          margin: isMobile ? '88px 16px 24px' : '88px 16px 24px', 
+          padding: 24, 
+          background: colorBgContainer 
+        }}>
           <Outlet />
         </Content>
       </Layout>
 
-      {/* 移动端抽屉侧边栏 */}
+      {/* 移动端浮动菜单按钮 - 已移除，改用Header联动抽屉 */}
+      {/* 
+      {isMobile && (
+        <Button
+          type="primary"
+          shape="circle"
+          icon={<MenuOutlined />}
+          ...
+        />
+      )} 
+      */}
+
+      {/* 移动端抽屉侧边栏 - 直接挂载到Header下方 */}
       <Drawer
         title="📝 工作日记"
         placement="left"
         closable={true}
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
-        styles={{ body: { padding: 0 } }}
-        getContainer={false}
+        styles={{ 
+          body: { padding: 0 }, 
+          header: { display: 'none' }, // 隐藏Drawer自己的Header，避免重复
+          mask: {
+            marginTop: '64px', // 遮罩也从Header下方开始
+            height: 'calc(100vh - 64px)',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0
+          }
+        }}
+        width={240}
+        style={{
+          marginTop: '64px', // 让Drawer从Header下方开始
+          height: 'calc(100vh - 64px)', // 使用100vh确保占满可视高度
+          position: 'fixed', // 强制固定定位
+          top: 0,
+          left: 0
+        }}
+        getContainer={false} // 不挂载到 body，而是保留在 Layout 树中
         destroyOnClose
       >
+        <div style={{
+          height: '48px',
+          margin: '16px',
+          background: currentTheme.colors.secondary,
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          borderRadius: '8px'
+        }}>
+          📝 工作日记
+        </div>
         <Menu 
           selectedKeys={[location.pathname]} 
           mode="inline" 

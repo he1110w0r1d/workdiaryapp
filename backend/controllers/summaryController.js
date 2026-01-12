@@ -1825,56 +1825,6 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           return `**工作内容**\n- 时间: ${new Date(diary.startTime).toLocaleTimeString('zh-CN')} - ${new Date(diary.endTime).toLocaleTimeString('zh-CN')} (${workTime}分钟)\n- 描述: ${diary.content}\n- 标签: ${diary.tags.join(', ')}`;
         }).join('\n\n');
 
-        // 准备LLM所需数据
-        const llmData = {
-          date: new Date(targetYear, 0, 1),
-          diaries: diaries,
-          totalWorkTime: totalWorkTime,
-          totalEntries: diaries.length,
-          workDetails: workDetails,
-          monthlyWork: monthlyWork,
-          tagDistribution: tagStats,
-          user: user
-        };
-        
-        // 尝试使用LLM生成总结
-        let summaryContent = baseContent;
-        let llmSummary = null;
-        
-        // 动态创建LLM实例以获取最新配置
-        const { localLLM, externalLLM } = await createLLMInstances(user._id);
-        
-        // 首先尝试使用外部LLM（如果可用）
-        if (externalLLM) {
-          try {
-            llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
-            if (llmSummary) {
-              logger.llm('使用外部LLM生成的年度总结内容');
-              summaryContent = llmSummary;
-            }
-          } catch (error) {
-            logger.info('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
-          }
-        }
-        
-        // 如果外部LLM失败或不可用，尝试本地LLM
-        if (!llmSummary && localLLM) {
-          try {
-            llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
-            if (llmSummary) {
-              logger.llm('使用本地LLM生成的年度总结内容');
-              summaryContent = llmSummary;
-            }
-          } catch (error) {
-            logger.info('本地LLM生成年度总结失败:', error.message);
-          }
-        }
-        
-        // 如果所有LLM都失败，使用默认模板
-        if (!llmSummary) {
-          logger.info('使用默认模板生成的年度总结内容');
-        }
-        
         // 统计年度待办事项数据
         const yearStart = new Date(targetYear, 0, 1);
         const yearEnd = new Date(targetYear, 11, 31, 23, 59, 59, 999);
@@ -1918,6 +1868,60 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
           user: user._id,
           status: { $in: ['待办'] }
         });
+
+        // 准备LLM所需数据
+        const llmData = {
+          date: new Date(targetYear, 0, 1),
+          diaries: diaries,
+          totalWorkTime: totalWorkTime,
+          totalEntries: diaries.length,
+          workDetails: workDetails,
+          monthlyWork: monthlyWork,
+          tagDistribution: tagStats,
+          user: user,
+          yearTodosCreated,
+          yearTodosCompleted,
+          yearTodosPending,
+          totalPendingTodos
+        };
+        
+        // 尝试使用LLM生成总结
+        let summaryContent = baseContent;
+        let llmSummary = null;
+        
+        // 动态创建LLM实例以获取最新配置
+        const { localLLM, externalLLM } = await createLLMInstances(user._id);
+        
+        // 首先尝试使用外部LLM（如果可用）
+        if (externalLLM) {
+          try {
+            llmSummary = await externalLLM.generateSummary(llmData, 'yearly', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用外部LLM生成的年度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            logger.info('外部LLM生成年度总结失败，尝试本地LLM:', error.message);
+          }
+        }
+        
+        // 如果外部LLM失败或不可用，尝试本地LLM
+        if (!llmSummary && localLLM) {
+          try {
+            llmSummary = await localLLM.generateSummary(llmData, 'yearly', {}, user._id);
+            if (llmSummary) {
+              logger.llm('使用本地LLM生成的年度总结内容');
+              summaryContent = llmSummary;
+            }
+          } catch (error) {
+            logger.info('本地LLM生成年度总结失败:', error.message);
+          }
+        }
+        
+        // 如果所有LLM都失败，使用默认模板
+        if (!llmSummary) {
+          logger.info('使用默认模板生成的年度总结内容');
+        }
 
         // 只有在没有使用LLM生成内容时，才使用默认模板并进行占位符替换
         if (!llmSummary) {

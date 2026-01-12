@@ -14,6 +14,7 @@ import {
   Popconfirm,
   Input,
   List,
+  DatePicker,
 } from 'antd';
 import { FileTextOutlined, CalendarOutlined, BarChartOutlined, TrophyOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined, LinkOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
@@ -21,6 +22,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import api from '../utils/api';  // 修改这里
 import moment from 'moment';
+import dayjs from 'dayjs';
 import Logger from '../utils/logger';
 
 const { TextArea } = Input;
@@ -58,6 +60,7 @@ const SummaryList = () => {
     monthly: 0,
     yearly: 0
   });
+  const [generateYear, setGenerateYear] = useState(dayjs());
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
 
   useEffect(() => {
@@ -245,7 +248,8 @@ const SummaryList = () => {
   const handleGenerateYearlySummary = async () => {
     setGenerateYearlyLoading(true);
     try {
-      const response = await api.post('/summaries/generate/yearly');
+      const year = generateYear.year();
+      const response = await api.post(`/summaries/generate/yearly?year=${year}`);
       message.success(response.data.message);
       // 重新获取年度总结列表
       fetchSummaries('yearly');
@@ -828,6 +832,15 @@ const SummaryList = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>年度工作总结</span>
                     <Space>
+                      <DatePicker 
+                        picker="year" 
+                        value={generateYear} 
+                        onChange={setGenerateYear} 
+                        allowClear={false}
+                        style={{ width: 100 }}
+                        disabled={generateYearlyLoading}
+                        size="small"
+                      />
                       <Button 
                         type="text" 
                         icon={<EyeOutlined />}
@@ -845,7 +858,7 @@ const SummaryList = () => {
                         size="small"
                         style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
                       >
-                        立即生成年度总结
+                        生成{generateYear ? generateYear.year() : ''}年度总结
                       </Button>
                     </Space>
                   </div>

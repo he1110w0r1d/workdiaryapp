@@ -28,9 +28,17 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      const reqUrl = error.config?.url || '';
+      const isLoginRequest = reqUrl.includes('/users/login');
+      const isRegisterRequest = reqUrl.includes('/users/register');
+      const isOnLoginPage = window.location.pathname === '/login' || window.location.pathname === '/welcome';
+      if (!isLoginRequest && !isRegisterRequest && !isOnLoginPage) {
+        window.location.href = '/login';
+      }
+      // 对登录页的401错误不进行跳转，让页面自行显示错误信息
     }
     return Promise.reject(error);
   }
