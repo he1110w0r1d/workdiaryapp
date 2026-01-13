@@ -184,7 +184,7 @@ const UserSettings = () => {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Avatar 
             size={80} 
-            src={userInfo?.avatar ? `${process.env.REACT_APP_API_URL.replace('/api', '')}${userInfo.avatar}` : undefined}
+            src={userInfo?.avatar ? `${(process.env.REACT_APP_API_URL || '').replace('/api', '')}${userInfo.avatar}` : undefined}
             icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
             style={{ 
               background: userInfo?.avatar ? 'transparent' : 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',

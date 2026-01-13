@@ -13,13 +13,13 @@ exports.register = async (req, res) => {
     const { username, email, password } = req.body;
 
     // 检查用户是否已存在
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { username }] 
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }]
     });
 
     if (existingUser) {
-      return res.status(400).json({ 
-        message: '用户名或邮箱已存在' 
+      return res.status(400).json({
+        message: '用户名或邮箱已存在'
       });
     }
 
@@ -65,6 +65,7 @@ exports.login = async (req, res) => {
       token
     });
   } catch (error) {
+    logger.error('登录失败:', error);
     res.status(500).json({ message: error.message });
   }
 };

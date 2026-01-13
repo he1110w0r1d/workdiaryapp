@@ -21,12 +21,14 @@
 ### 方式一：Docker 部署（推荐）
 
 1. **克隆项目**
+
 ```bash
 git clone https://github.com/he1110w0r1d/workdiaryapp.git
 cd workdiaryapp
 ```
 
-2. **配置环境变量**
+1. **配置环境变量**
+
 ```bash
 # 复制环境变量模板
 cp backend/.env.example backend/.env
@@ -37,7 +39,8 @@ cp frontend/.env.example frontend/.env
 # frontend/.env - 修改 REACT_APP_API_URL 等
 ```
 
-3. **启动服务**
+1. **启动服务**
+
 ```bash
 # Linux/macOS
 ./deploy.sh
@@ -49,13 +52,22 @@ deploy.bat
 docker-compose up --build -d
 ```
 
-4. **访问应用**
-- 前端: http://localhost:13000
-- 后端API: http://localhost:5000
+1. **初始化向量数据库** (首次部署必须执行)
+
+```bash
+# 进入后端容器
+docker-compose exec backend node scripts/initPgVector.js
+```
+
+1. **访问应用**
+
+- 前端: <http://localhost:13000>
+- 后端API: <http://localhost:5000>
 
 ### 方式二：本地开发
 
 1. **安装依赖**
+
 ```bash
 # 后端
 cd backend
@@ -66,13 +78,15 @@ cd ../frontend
 npm install
 ```
 
-2. **启动MongoDB**
+1. **启动MongoDB**
+
 ```bash
 # 确保MongoDB服务运行在 localhost:27017
 mongod
 ```
 
-3. **配置环境变量**
+1. **配置环境变量**
+
 ```bash
 # backend/.env
 PORT=5000
@@ -84,7 +98,8 @@ NODE_ENV=development
 REACT_APP_API_URL=http://localhost:5000
 ```
 
-4. **启动服务**
+1. **启动服务**
+
 ```bash
 # 启动后端 (在 backend 目录)
 npm start
@@ -143,12 +158,14 @@ REACT_APP_USE_MOCK_WEATHER=true
 ## 数据备份与恢复
 
 ### 备份数据
+
 ```bash
 cd backend
 node backup-script.js
 ```
 
 ### 恢复数据
+
 ```bash
 cd backend
 node restore-script.js
@@ -179,17 +196,21 @@ workdiaryapp/
 ## 常见问题
 
 ### 端口冲突
+
 如果端口被占用，修改环境变量中的端口配置。
 
 ### MongoDB连接失败
+
 确保MongoDB服务正在运行，检查连接字符串是否正确。
 
 ### Docker启动失败
+
 检查Docker服务是否运行，确保有足够的磁盘空间。
 
 ## 部署文档
 
 详细的部署和配置说明请参考：
+
 - [部署指南](DEPLOYMENT.md)
 - [环境配置](ENV_SETUP.md)
 - [网络安全](NETWORK_SECURITY.md)
@@ -200,8 +221,8 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 联系方式
 
-- 项目主页: https://github.com/he1110w0r1d/workdiaryapp
-- 问题反馈: https://github.com/he1110w0r1d/workdiaryapp/issues
+- 项目主页: <https://github.com/he1110w0r1d/workdiaryapp>
+- 问题反馈: <https://github.com/he1110w0r1d/workdiaryapp/issues>
 
 ---
 

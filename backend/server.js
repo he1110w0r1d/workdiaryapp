@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB限制
@@ -45,17 +45,17 @@ if (fs.existsSync(settingsFilePath)) {
   try {
     const settingsData = fs.readFileSync(settingsFilePath, 'utf8');
     const settings = JSON.parse(settingsData);
-    
+
     // 设置LLM类型
     if (settings.llmType) process.env.LLM_TYPE = settings.llmType;
-    
+
     // 设置本地LLM环境变量
     if (settings.useLocalLLM !== undefined) process.env.USE_LOCAL_LLM = String(settings.useLocalLLM);
     if (settings.apiUrl) process.env.LOCAL_LLM_API_URL = settings.apiUrl;
     if (settings.model) process.env.LOCAL_LLM_MODEL = settings.model;
     if (settings.timeout) process.env.LOCAL_LLM_TIMEOUT = String(settings.timeout);
     if (settings.temperature) process.env.LOCAL_LLM_TEMPERATURE = String(settings.temperature);
-    
+
     // 设置外部LLM环境变量
     if (settings.externalProvider) process.env.EXTERNAL_LLM_PROVIDER = settings.externalProvider;
     if (settings.externalApiKey) process.env.EXTERNAL_LLM_API_KEY = settings.externalApiKey;
@@ -64,14 +64,14 @@ if (fs.existsSync(settingsFilePath)) {
     if (settings.externalTimeout) process.env.EXTERNAL_LLM_TIMEOUT = String(settings.externalTimeout);
     if (settings.externalTemperature) process.env.EXTERNAL_LLM_TEMPERATURE = String(settings.externalTemperature);
     if (settings.externalMaxTokens) process.env.EXTERNAL_LLM_MAX_TOKENS = String(settings.externalMaxTokens);
-    
+
     // 设置 Embeddings 环境变量（用于RAG索引/查询）
     if (settings.externalEmbeddingsProvider) process.env.EXTERNAL_EMBEDDINGS_PROVIDER = settings.externalEmbeddingsProvider;
     if (settings.externalEmbeddingsApiKey) process.env.EXTERNAL_EMBEDDINGS_API_KEY = settings.externalEmbeddingsApiKey;
     if (settings.externalEmbeddingsApiUrl) process.env.EXTERNAL_EMBEDDINGS_API_URL = settings.externalEmbeddingsApiUrl;
     if (settings.externalEmbeddingsModel) process.env.EXTERNAL_EMBEDDINGS_MODEL = settings.externalEmbeddingsModel;
     if (settings.externalEmbeddingsTimeout) process.env.EXTERNAL_EMBEDDINGS_TIMEOUT = String(settings.externalEmbeddingsTimeout);
-    
+
     logger.info('LLM配置已加载:', {
       type: settings.llmType,
       useLocalLLM: settings.useLocalLLM,
@@ -172,8 +172,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/workdiary
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => logger.info('MongoDB connected'))
-.catch(err => logger.info(err));
+  .then(() => logger.info('MongoDB connected'))
+  .catch(err => logger.error('MongoDB connection error:', err));
 
 // 路由
 app.use('/api/users', userRoutes);
@@ -200,19 +200,19 @@ const checkAndGenerateYesterdaySummary = async () => {
   try {
     const now = new Date();
     const currentHour = now.getHours();
-    
+
     // 如果当前时间在凌晨1点之后启动，检查昨日总结是否已生成
     if (currentHour >= 1) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       yesterday.setHours(0, 0, 0, 0);
-      
+
       const Summary = require('./models/Summary');
       const existingSummary = await Summary.findOne({
         type: 'daily',
         date: yesterday
       });
-      
+
       if (!existingSummary) {
         logger.info('检测到昨日总结未生成，正在补生成...');
         await generateDailySummary();

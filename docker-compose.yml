@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # MongoDB 数据库
+  mongodb:
+    image: mongo:7
+    container_name: workdiary-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-workdiary123}
+      MONGO_INITDB_DATABASE: workdiary
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - workdiary-network
+
+  # PostgreSQL + pgvector 向量数据库
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: workdiary-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-workdiary123}
+      POSTGRES_DB: workdiary_vectors
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"
+    networks:
+      - workdiary-network
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: workdiary-backend
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - pgvector
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=mongodb://admin:${MONGO_PASSWORD:-workdiary123}@mongodb:27017/workdiary?authSource=admin
+      - PG_HOST=pgvector
+      - PG_PORT=5432
+      - PG_DATABASE=workdiary_vectors
+      - PG_USER=postgres
+      - PG_PASSWORD=${PG_PASSWORD:-workdiary123}
+      - VECTOR_DIM=4096
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-change-me}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-32-char-encryption-key!!}
+      - SESSION_SECRET=${SESSION_SECRET:-your-session-secret-key}
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_backup:/app/backup
+    ports:
+      - "5000:5000"
+    networks:
+      - workdiary-network
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
+    container_name: workdiary-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "13000:80"
+    networks:
+      - workdiary-network
+
+volumes:
+  mongodb_data:
+  pgvector_data:
+  backend_uploads:
+  backend_backup:
+
+
+networks:
+  workdiary-network:
+    driver: bridge

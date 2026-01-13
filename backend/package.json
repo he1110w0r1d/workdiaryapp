@@ -20,6 +20,7 @@
         "multer": "^2.0.2",
         "node-cron": "^3.0.2",
         "nodemailer": "^6.9.4",
+        "pg": "^8.16.3",
         "unzipper": "^0.12.3"
     },
     "devDependencies": {

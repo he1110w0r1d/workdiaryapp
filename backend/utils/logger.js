@@ -57,7 +57,12 @@ class Logger {
       localTimestamp,
       level,
       message,
-      ...(data && { data })
+      message,
+      ...(data && {
+        data: data instanceof Error ?
+          { message: data.message, stack: data.stack, name: data.name } :
+          data
+      })
     };
 
     const logLine = JSON.stringify(logEntry) + '\n';
@@ -72,10 +77,10 @@ class Logger {
     try {
       fs.appendFileSync(logFile, logLine);
     } catch (e) {
-      try { console.warn('[logger] file write failed:', e.message); } catch (_) {}
+      try { console.warn('[logger] file write failed:', e.message); } catch (_) { }
     }
     if (level === 'LLM' || level === 'ERROR') {
-      try { console.log(logLine.trim()); } catch (_) {}
+      try { console.log(logLine.trim()); } catch (_) { }
     }
   }
 
