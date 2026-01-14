@@ -139,7 +139,10 @@ const corsOptions = {
     if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
       return callback(null, true);
     }
-
+    // 允许生产环境域名（支持 HTTP 和 HTTPS）
+    if (origin.match(/^https?:\/\/(.*\.)?workdiary\.cn(:\d+)?$/)) {
+      return callback(null, true);
+    }
     // 允许局域网IP地址来源（包含192.168.*、172.*、10.*）
     if (
       origin.match(/^http:\/\/192\.168\.\d+\.\d+:/) ||
