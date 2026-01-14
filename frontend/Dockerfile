@@ -12,11 +12,11 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 # 安装依赖
 COPY package*.json ./
-RUN NODE_OPTIONS="--max-old-space-size=512" npm ci
+RUN npm ci
 
 # 复制源代码并构建
 COPY . .
-RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
+RUN npm run build
 
 # 阶段2: 生产环境
 FROM nginx:alpine

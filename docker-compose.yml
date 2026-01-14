@@ -35,7 +35,7 @@ services:
 
   # 后端服务
   backend:
-    image: he1loworlld/workdiaryapp-backend:latest
+    image: registry.cn-hangzhou.aliyuncs.com/workdiaryapp/app:backend
     container_name: workdiary-backend
     restart: unless-stopped
     depends_on:
@@ -64,7 +64,7 @@ services:
 
   # 前端服务
   frontend:
-    image: he1loworlld/workdiaryapp-frontend:latest
+    image: registry.cn-hangzhou.aliyuncs.com/workdiaryapp/app:frontend
     container_name: workdiary-frontend
     environment:
       - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
