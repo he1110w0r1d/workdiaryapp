@@ -35,7 +35,7 @@ services:
 
   # 后端服务
   backend:
-    image: registry.cn-hangzhou.aliyuncs.com/workdiaryapp/app:backend
+    image: crpi-lhdxtg9rdr6kvuy3.cn-shanghai.personal.cr.aliyuncs.com/workdiaryapp/app:backend
     container_name: workdiary-backend
     restart: unless-stopped
     depends_on:
@@ -64,7 +64,7 @@ services:
 
   # 前端服务
   frontend:
-    image: registry.cn-hangzhou.aliyuncs.com/workdiaryapp/app:frontend
+    image: crpi-lhdxtg9rdr6kvuy3.cn-shanghai.personal.cr.aliyuncs.com/workdiaryapp/app:frontend
     container_name: workdiary-frontend
     restart: unless-stopped
     depends_on:
