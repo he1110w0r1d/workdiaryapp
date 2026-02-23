@@ -1,6 +1,9 @@
 # 后端 Dockerfile
 FROM node:18-alpine
 
+# 安装 tzdata 以支持时区设置
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 # 安装依赖

@@ -4,11 +4,9 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# 构建参数
-ARG REACT_APP_API_URL=http://localhost:5000/api
-
-# 设置环境变量
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# NOTE: REACT_APP_API_URL is intentionally NOT set
+# This allows the app to dynamically use window.location.hostname:5000
+# So it works from any IP/hostname (localhost, LAN IP, domain, etc.)
 
 # 安装依赖
 COPY package*.json ./

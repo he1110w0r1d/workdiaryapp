@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Space } from 'antd';
-import { UserOutlined, SettingOutlined, RobotOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { UserOutlined, SettingOutlined, RobotOutlined, ExperimentOutlined, ApiOutlined } from '@ant-design/icons';
 import UserSettings from './UserSettings';
 import UserLLMSettings from './UserLLMSettings';
 import UserEmbeddingsSettings from './UserEmbeddingsSettings';
-
-const { TabPane } = Tabs;
+import ApiKeySettings from './ApiKeySettings';
 
 const UserSettingsPage = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -40,6 +39,16 @@ const UserSettingsPage = () => {
         </Space>
       ),
       children: <UserEmbeddingsSettings />
+    },
+    {
+      key: 'apikeys',
+      label: (
+        <Space>
+          <ApiOutlined />
+          API Key管理
+        </Space>
+      ),
+      children: <ApiKeySettings />
     }
   ];
 

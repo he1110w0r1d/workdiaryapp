@@ -7,13 +7,14 @@ services:
     container_name: workdiary-mongodb
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-workdiary123}
       MONGO_INITDB_DATABASE: workdiary
     volumes:
       - mongodb_data:/data/db
     ports:
-      - "27017:27017"
+      - "27018:27017"
     networks:
       - workdiary-network
 
@@ -23,6 +24,7 @@ services:
     container_name: workdiary-pgvector
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${PG_PASSWORD:-workdiary123}
       POSTGRES_DB: workdiary_vectors
@@ -35,13 +37,16 @@ services:
 
   # 后端服务
   backend:
-    image: crpi-lhdxtg9rdr6kvuy3.cn-shanghai.personal.cr.aliyuncs.com/workdiaryapp/app:backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: workdiary-backend
     restart: unless-stopped
     depends_on:
       - mongodb
       - pgvector
     environment:
+      - TZ=Asia/Shanghai
       - NODE_ENV=production
       - PORT=5000
       - MONGODB_URI=mongodb://admin:${MONGO_PASSWORD:-workdiary123}@mongodb:27017/workdiary?authSource=admin
@@ -64,11 +69,15 @@ services:
 
   # 前端服务
   frontend:
-    image: crpi-lhdxtg9rdr6kvuy3.cn-shanghai.personal.cr.aliyuncs.com/workdiaryapp/app:frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: workdiary-frontend
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      - TZ=Asia/Shanghai
     ports:
       - "13000:80"
     networks:

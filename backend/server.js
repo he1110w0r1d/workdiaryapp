@@ -102,6 +102,8 @@ const summaryRoutes = require('./routes/summaries');
 const settingsRoutes = require('./routes/settingsRoutes');
 const todoRoutes = require('./routes/todos');
 const backupRoutes = require('./routes/backup');
+const apiKeyRoutes = require('./routes/apiKeys');
+const publicApiRoutes = require('./routes/publicApi');
 
 // 导入定时任务
 const { generateDailySummary, generateMonthlySummary, generateYearlySummary, batchGenerateWeeklySummary } = require('./controllers/summaryController');
@@ -186,10 +188,13 @@ app.use('/api/diaries', diaryRoutes);
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
+app.use('/api/apikeys', apiKeyRoutes);
 // 对于备份路由，使用带有文件上传中间件的路由
 app.use('/api/backup', upload.single('backupFile'), backupRoutes);
 app.use('/api', ragRoutes);
 app.use('/api', difyRoutes);
+// 公开API路由（供外部Agent调用）
+app.use('/api/v1', publicApiRoutes);
 
 // 定时任务
 const cronTimeZone = 'Asia/Shanghai';
