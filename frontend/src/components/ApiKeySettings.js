@@ -1,32 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Form, 
-  Input, 
-  Button, 
-  Select, 
-  message, 
-  Modal, 
-  Table, 
-  Space, 
+import {
+  Card,
+  Form,
+  Input,
+  Button,
+  Select,
+  message,
+  Modal,
+  Table,
+  Space,
   Popconfirm,
   Tag,
   Alert,
   Typography,
   DatePicker,
-  Switch,
-  Descriptions
+  Switch
 } from 'antd';
-import { 
-  PlusOutlined, 
-  DeleteOutlined, 
+import {
+  PlusOutlined,
+  DeleteOutlined,
   CopyOutlined,
   KeyOutlined,
   ApiOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
-  EyeOutlined
+  CloseCircleOutlined
 } from '@ant-design/icons';
 import api from '../utils/api';
 import dayjs from 'dayjs';
@@ -49,7 +47,6 @@ const ApiKeySettings = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [newKeyModalVisible, setNewKeyModalVisible] = useState(false);
   const [newApiKey, setNewApiKey] = useState(null);
-  const [docModalVisible, setDocModalVisible] = useState(false);
   const [form] = Form.useForm();
 
   const fetchApiKeys = async () => {
@@ -91,9 +88,9 @@ const ApiKeySettings = () => {
         scopes: values.scopes,
         expiresAt: values.expiresAt ? values.expiresAt.toISOString() : null
       };
-      
+
       const response = await api.post('/apikeys', payload);
-      
+
       setNewApiKey(response.data.apiKey.key);
       setNewKeyModalVisible(true);
       handleCloseModal();
@@ -259,21 +256,13 @@ const ApiKeySettings = () => {
         </Space>
       }
       extra={
-        <Space>
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => setDocModalVisible(true)}
-          >
-            API文档
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
-            创建API Key
-          </Button>
-        </Space>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleOpenModal}
+        >
+          创建API Key
+        </Button>
       }
     >
       <Alert
@@ -282,7 +271,6 @@ const ApiKeySettings = () => {
           <span>
             创建API Key后，其他AI Agent或应用可以通过API接口访问您的工作日记数据。
             请妥善保管API Key，不要泄露给他人。
-            <Button type="link" onClick={() => setDocModalVisible(true)}>查看API文档</Button>
           </span>
         }
         type="info"
@@ -345,8 +333,8 @@ const ApiKeySettings = () => {
             label="过期时间"
             extra="留空表示永不过期"
           >
-            <DatePicker 
-              style={{ width: '100%' }} 
+            <DatePicker
+              style={{ width: '100%' }}
               placeholder="选择过期日期（可选）"
               disabledDate={(current) => current && current < dayjs().endOf('day')}
             />
@@ -391,10 +379,10 @@ const ApiKeySettings = () => {
           showIcon
           style={{ marginBottom: 16 }}
         />
-        
-        <div style={{ 
-          background: '#f5f5f5', 
-          padding: '16px', 
+
+        <div style={{
+          background: '#f5f5f5',
+          padding: '16px',
           borderRadius: '4px',
           wordBreak: 'break-all',
           fontFamily: 'monospace'
@@ -402,163 +390,7 @@ const ApiKeySettings = () => {
           {newApiKey}
         </div>
       </Modal>
-
-      <Modal
-        title="API文档"
-        open={docModalVisible}
-        onCancel={() => setDocModalVisible(false)}
-        footer={null}
-        width={800}
-      >
-        <ApiDocumentation />
-      </Modal>
     </Card>
-  );
-};
-
-const ApiDocumentation = () => {
-  const baseUrl = `${window.location.protocol}//${window.location.hostname}:5000/api/v1`;
-  
-  return (
-    <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-      <Alert
-        message="API认证"
-        description={
-          <span>
-            所有API请求需要在Header中携带 <Text code>X-API-Key</Text> 进行认证。
-          </span>
-        }
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-      />
-
-      <Descriptions title="基础信息" bordered column={1} size="small">
-        <Descriptions.Item label="Base URL">
-          <Text code copyable>{baseUrl}</Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="认证方式">
-          <Text code>X-API-Key: wdk_your_api_key</Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="响应格式">JSON</Descriptions.Item>
-      </Descriptions>
-
-      <Card title="日记相关接口" size="small" style={{ marginTop: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/diaries</Text>
-            <Text type="secondary"> - 获取日记列表</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              参数: startDate, endDate, search, tags, priority, page, limit, sort
-            </Paragraph>
-          </div>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/diaries/:id</Text>
-            <Text type="secondary"> - 获取单个日记详情</Text>
-          </div>
-          <div>
-            <Tag color="blue">POST</Tag>
-            <Text code>/diaries</Text>
-            <Text type="secondary"> - 创建新日记</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              必填: content, startTime, endTime
-            </Paragraph>
-          </div>
-          <div>
-            <Tag color="orange">PUT</Tag>
-            <Text code>/diaries/:id</Text>
-            <Text type="secondary"> - 更新日记</Text>
-          </div>
-          <div>
-            <Tag color="red">DELETE</Tag>
-            <Text code>/diaries/:id</Text>
-            <Text type="secondary"> - 删除日记</Text>
-          </div>
-        </Space>
-      </Card>
-
-      <Card title="待办相关接口" size="small" style={{ marginTop: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/todos</Text>
-            <Text type="secondary"> - 获取待办列表</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              参数: status, priority, page, limit, sort
-            </Paragraph>
-          </div>
-          <div>
-            <Tag color="blue">POST</Tag>
-            <Text code>/todos</Text>
-            <Text type="secondary"> - 创建待办</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              必填: content, dueDate
-            </Paragraph>
-          </div>
-          <div>
-            <Tag color="orange">PUT</Tag>
-            <Text code>/todos/:id/status</Text>
-            <Text type="secondary"> - 更新待办状态</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              状态值: 待办, 已完成, 已放弃, 已转交
-            </Paragraph>
-          </div>
-        </Space>
-      </Card>
-
-      <Card title="总结相关接口" size="small" style={{ marginTop: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/summaries</Text>
-            <Text type="secondary"> - 获取总结列表</Text>
-            <Paragraph type="secondary" style={{ marginLeft: 50, marginTop: 4 }}>
-              参数: type (daily/weekly/monthly/yearly), page, limit
-            </Paragraph>
-          </div>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/summaries/:id</Text>
-            <Text type="secondary"> - 获取总结详情</Text>
-          </div>
-        </Space>
-      </Card>
-
-      <Card title="其他接口" size="small" style={{ marginTop: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/tags</Text>
-            <Text type="secondary"> - 获取所有标签</Text>
-          </div>
-          <div>
-            <Tag color="green">GET</Tag>
-            <Text code>/stats</Text>
-            <Text type="secondary"> - 获取统计数据</Text>
-          </div>
-        </Space>
-      </Card>
-
-      <Card title="请求示例" size="small" style={{ marginTop: 16 }}>
-        <Paragraph>
-          <Text strong>创建日记示例：</Text>
-        </Paragraph>
-        <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, overflow: 'auto' }}>
-{`curl -X POST "${baseUrl}/diaries" \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: wdk_your_api_key" \\
-  -d '{
-    "content": "今天完成了API开发工作",
-    "startTime": "2024-01-01T09:00:00Z",
-    "endTime": "2024-01-01T18:00:00Z",
-    "tags": ["开发", "API"],
-    "workPriority": "高"
-  }'`}
-        </pre>
-      </Card>
-    </div>
   );
 };
 

@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Menu, theme, Button, Avatar, Dropdown, Space, Typography, Spin, Modal, Drawer } from 'antd';
-import { 
-  HomeOutlined, 
-  FileTextOutlined, 
-  BarChartOutlined, 
+import {
+  HomeOutlined,
+  FileTextOutlined,
+  BarChartOutlined,
   UserOutlined,
   QuestionCircleOutlined,
   ClockCircleOutlined,
   CalendarOutlined,
   LogoutOutlined,
-  RobotOutlined,
+
   CheckSquareOutlined,
   DeleteOutlined,
   CloudDownloadOutlined,
-  MenuOutlined
+  MenuOutlined,
+  ApiOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import moment from 'moment';
@@ -39,7 +40,7 @@ const TimeInfo = ({ textColor = '#334155' }) => {
     const updateTimeAndLunar = () => {
       const now = moment();
       setCurrentTime(now);
-      
+
       // 更新农历信息
       const currentDate = now.toDate();
       const lunarDate = getLunarDateString(currentDate);
@@ -49,7 +50,7 @@ const TimeInfo = ({ textColor = '#334155' }) => {
 
     // 立即更新一次
     updateTimeAndLunar();
-    
+
     // 每秒更新时间
     const timer = setInterval(updateTimeAndLunar, 1000);
     return () => clearInterval(timer);
@@ -60,11 +61,11 @@ const TimeInfo = ({ textColor = '#334155' }) => {
   };
 
   return (
-    <div 
-      style={{ 
-        color: textColor, 
-        fontSize: '14px', 
-        textAlign: 'center', 
+    <div
+      style={{
+        color: textColor,
+        fontSize: '14px',
+        textAlign: 'center',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -105,7 +106,7 @@ const AppLayout = ({ children }) => {
   const currentTheme = {
     colors: {
       primary: '#1E3A8A',
-      secondary: '#2563EB', 
+      secondary: '#2563EB',
       accent: '#3B82F6',
       background: '#F8FAFC',
       surface: '#FFFFFF',
@@ -132,7 +133,7 @@ const AppLayout = ({ children }) => {
     try {
       const response = await api.get('/users/profile');
       setUserInfo(response.data);
-      
+
       // 检查用户是否需要配置工作信息
       const user = response.data;
       if (!user.workProfile || !user.workProfile.industry) {
@@ -205,16 +206,16 @@ const AppLayout = ({ children }) => {
       setPendingTodosCount(Number(nextCount) || 0);
     };
     window.addEventListener('todosCountUpdated', handleTodosCountUpdated);
-    
+
     return () => {
-        window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
-        window.removeEventListener('todosUpdated', handleTodosUpdate);
-        window.removeEventListener('summariesUpdated', handleSummariesUpdate);
-        window.removeEventListener('todosCountUpdated', handleTodosCountUpdated);
-        window.removeEventListener('resize', handleResize);
-      };
-    }, []);
-  
+      window.removeEventListener('userInfoUpdated', handleUserInfoUpdate);
+      window.removeEventListener('todosUpdated', handleTodosUpdate);
+      window.removeEventListener('summariesUpdated', handleSummariesUpdate);
+      window.removeEventListener('todosCountUpdated', handleTodosCountUpdated);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
   const {
     token: { colorBgContainer },
   } = theme.useToken();
@@ -248,11 +249,10 @@ const AppLayout = ({ children }) => {
         </Link>
       ),
     },
-    // 隐藏模型设置，避免与用户设置功能冲突
     {
-      key: '/app/ai-assistant',
-      icon: <RobotOutlined />,
-      label: <Link to="/app/ai-assistant">AI 助手</Link>,
+      key: '/app/api-management',
+      icon: <ApiOutlined />,
+      label: <Link to="/app/api-management">API 管理</Link>,
     },
     {
       key: '/app/user-settings',
@@ -288,9 +288,9 @@ const AppLayout = ({ children }) => {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {!isMobile && (
-        <Sider 
-          collapsible 
-          collapsed={collapsed} 
+        <Sider
+          collapsible
+          collapsed={collapsed}
           onCollapse={setCollapsed}
           style={{
             position: 'fixed',
@@ -303,11 +303,11 @@ const AppLayout = ({ children }) => {
             backgroundColor: currentTheme.colors.primary
           }}
         >
-          <div 
-            className="logo" 
-            style={{ 
-              height: '48px', 
-              margin: '16px', 
+          <div
+            className="logo"
+            style={{
+              height: '48px',
+              margin: '16px',
               background: currentTheme.colors.secondary,
               color: 'white',
               display: 'flex',
@@ -320,11 +320,11 @@ const AppLayout = ({ children }) => {
           >
             {collapsed ? '📝' : '📝 工作日记'}
           </div>
-          <Menu 
-            theme="dark" 
-            selectedKeys={[location.pathname]} 
-            mode="inline" 
-            items={menuItems} 
+          <Menu
+            theme="dark"
+            selectedKeys={[location.pathname]}
+            mode="inline"
+            items={menuItems}
             onClick={() => {
               if (isMobile) setDrawerVisible(false);
             }}
@@ -332,8 +332,8 @@ const AppLayout = ({ children }) => {
         </Sider>
       )}
       <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 80 : 200), transition: 'margin-left 0.2s' }}>
-        <Header style={{ 
-          padding: '0 24px', 
+        <Header style={{
+          padding: '0 24px',
           background: '#ffffff',
           display: 'flex',
           justifyContent: 'space-between',
@@ -356,29 +356,29 @@ const AppLayout = ({ children }) => {
                 type="text"
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerVisible(true)}
-                style={{ 
+                style={{
                   color: '#64748b',
                   // 确保汉堡按钮始终可点击
-                  zIndex: 1101 
+                  zIndex: 1101
                 }}
                 title="菜单"
               />
             )}
           </div>
-          
+
           {/* 中间信息区域 - 时间、农历显示 */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '32px',
-            flex: 1, 
-            justifyContent: 'center' 
+            flex: 1,
+            justifyContent: 'center'
           }}>
             <TimeInfo textColor="#334155" />
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            
+
             <Button
               type="text"
               icon={<QuestionCircleOutlined />}
@@ -389,21 +389,21 @@ const AppLayout = ({ children }) => {
                   content: (
                     <div>
                       <h4>工作日记系统使用指南</h4>
-                      
+
                       <h5 style={{ marginTop: '16px' }}>核心功能模块</h5>
                       <ul style={{ lineHeight: '1.6' }}>
                         <li><strong>仪表板：</strong>查看工作数据统计和图表分析</li>
                         <li><strong>工作日记：</strong>记录每日工作内容</li>
                         <li><strong>待办管理：</strong>管理待办事项</li>
                         <li><strong>工作总结：</strong>AI智能生成总结</li>
-                        <li><strong>模型设置：</strong>配置AI助手参数</li>
+
                         <li><strong>用户设置：</strong>管理个人信息</li>
                       </ul>
                     </div>
                   )
                 });
               }}
-              style={{ 
+              style={{
                 color: '#64748b',
                 fontSize: '14px',
                 fontWeight: 'normal'
@@ -412,12 +412,12 @@ const AppLayout = ({ children }) => {
             >
               {!isMobile && '帮助'}
             </Button>
-            
+
             <Button
               type="text"
               icon={<LogoutOutlined />}
               onClick={handleLogout}
-              style={{ 
+              style={{
                 color: '#64748b',
                 fontSize: '14px',
                 fontWeight: 'normal'
@@ -426,27 +426,27 @@ const AppLayout = ({ children }) => {
             >
               {!isMobile && '退出'}
             </Button>
-            
-            <Avatar 
-              size="default" 
+
+            <Avatar
+              size="default"
               src={getAvatarSrc()}
               icon={!userInfo?.avatar ? <UserOutlined /> : undefined}
               onClick={handleAvatarClick}
               title="点击进入用户设置"
-              style={{ 
+              style={{
                 cursor: 'pointer',
                 background: userInfo?.avatar ? 'transparent' : currentTheme.colors.accent,
                 color: 'white',
                 border: '2px solid #f1f5f9',
                 boxShadow: '0 0 0 2px #e2e8f0'
-              }} 
+              }}
             />
           </div>
         </Header>
-        <Content style={{ 
-          margin: isMobile ? '88px 16px 24px' : '88px 16px 24px', 
-          padding: 24, 
-          background: colorBgContainer 
+        <Content style={{
+          margin: isMobile ? '88px 16px 24px' : '88px 16px 24px',
+          padding: 24,
+          background: colorBgContainer
         }}>
           <Outlet />
         </Content>
@@ -471,8 +471,8 @@ const AppLayout = ({ children }) => {
         closable={true}
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
-        styles={{ 
-          body: { padding: 0 }, 
+        styles={{
+          body: { padding: 0 },
           header: { display: 'none' }, // 隐藏Drawer自己的Header，避免重复
           mask: {
             marginTop: '64px', // 遮罩也从Header下方开始
@@ -509,16 +509,16 @@ const AppLayout = ({ children }) => {
         }}>
           📝 工作日记
         </div>
-        <Menu 
-          selectedKeys={[location.pathname]} 
-          mode="inline" 
+        <Menu
+          selectedKeys={[location.pathname]}
+          mode="inline"
           items={menuItems}
           onClick={({ key }) => {
             setDrawerVisible(false);
           }}
         />
       </Drawer>
-      
+
       {/* 工作信息配置弹窗 */}
       <WorkProfileSetup
         visible={showWorkProfileSetup}

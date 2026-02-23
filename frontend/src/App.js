@@ -23,7 +23,8 @@ import BackupRestore from './components/BackupRestore';
 import Layout from './components/Layout';
 import RootRedirect from './components/RootRedirect';
 import RagQA from './pages/RagQA';
-import AIAssistant from './pages/AIAssistant';
+import ApiManagement from './pages/ApiManagement';
+
 
 import './App.css';
 
@@ -32,7 +33,7 @@ function AppContent() {
     name: '专业蓝',
     colors: {
       primary: '#1E3A8A',
-      secondary: '#2563EB', 
+      secondary: '#2563EB',
       accent: '#3B82F6',
       background: '#F8FAFC',
       surface: '#FFFFFF',
@@ -45,40 +46,41 @@ function AppContent() {
       info: '#2563EB'
     }
   };
-  
+
   return (
     <>
       <GlobalStyles theme={professionalTheme} />
       <Router>
         <div className="App">
           <Routes>
-              <Route path="/welcome" element={<Welcome />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/llm-setup" element={<LLMSetupGuide />} />
-              <Route path="/app" element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }>
-                <Route index element={<Dashboard />} />
-                <Route path="diaries" element={<DiaryList />} />
-                <Route path="diaries/new" element={<DiaryForm />} />
-                <Route path="diaries/:id/edit" element={<DiaryForm />} />
-                <Route path="recycle" element={<RecycleBin />} />
-                <Route path="todos" element={<TodoList />} />
-                <Route path="summaries" element={<SummaryList />} />
-                <Route path="rag" element={<RagQA />} />
-                <Route path="ai-assistant" element={<AIAssistant />} />
-                <Route path="model-settings" element={<ModelSettings />} />
-                <Route path="user-settings" element={<UserSettingsPage />} />
-                <Route path="backup" element={<BackupRestore />} />
-              </Route>
-              <Route path="/" element={<RootRedirect />} />
-            </Routes>
-          </div>
-        </Router>
-      </>
+            <Route path="/welcome" element={<Welcome />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/llm-setup" element={<LLMSetupGuide />} />
+            <Route path="/app" element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Dashboard />} />
+              <Route path="diaries" element={<DiaryList />} />
+              <Route path="diaries/new" element={<DiaryForm />} />
+              <Route path="diaries/:id/edit" element={<DiaryForm />} />
+              <Route path="recycle" element={<RecycleBin />} />
+              <Route path="todos" element={<TodoList />} />
+              <Route path="summaries" element={<SummaryList />} />
+              <Route path="rag" element={<RagQA />} />
+              <Route path="api-management" element={<ApiManagement />} />
+
+              <Route path="model-settings" element={<ModelSettings />} />
+              <Route path="user-settings" element={<UserSettingsPage />} />
+              <Route path="backup" element={<BackupRestore />} />
+            </Route>
+            <Route path="/" element={<RootRedirect />} />
+          </Routes>
+        </div>
+      </Router>
+    </>
   );
 }
 

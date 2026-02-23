@@ -196,6 +196,17 @@ app.use('/api', difyRoutes);
 // 公开API路由（供外部Agent调用）
 app.use('/api/v1', publicApiRoutes);
 
+// 提供API文档（Markdown原文）
+app.get('/api/docs/api-documentation', (req, res) => {
+  const docPath = path.join(__dirname, 'API_DOCUMENTATION.md');
+  if (fs.existsSync(docPath)) {
+    const content = fs.readFileSync(docPath, 'utf8');
+    res.type('text/plain').send(content);
+  } else {
+    res.status(404).json({ message: 'API文档未找到' });
+  }
+});
+
 // 定时任务
 const cronTimeZone = 'Asia/Shanghai';
 

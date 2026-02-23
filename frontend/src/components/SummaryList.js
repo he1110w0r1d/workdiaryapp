@@ -362,9 +362,9 @@ const SummaryList = () => {
         message.error('未找到网页地址');
         return;
       }
-      // 动态获取 API 基础 URL，与 api.js 保持一致
-      const apiBaseUrl = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
-      const baseUrl = apiBaseUrl.replace('/api', '');
+      // 从 api 实例获取 baseURL，去掉末尾的 /api 得到服务器根地址
+      const apiBaseUrl = api.defaults.baseURL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+      const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
       const full = `${baseUrl}${url}`;
       window.open(full, '_blank');
     } catch (err) {
