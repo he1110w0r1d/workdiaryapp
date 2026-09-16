@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import PageHeading from './PageHeading';
 import React, { useState } from 'react';
 import { Tabs, Card, Space } from 'antd';
 import { UserOutlined, SettingOutlined, RobotOutlined, ExperimentOutlined } from '@ant-design/icons';
@@ -25,7 +27,7 @@ const UserSettingsPage = () => {
       label: (
         <Space>
           <RobotOutlined />
-          个人LLM设置
+          AI 模型
         </Space>
       ),
       children: <UserLLMSettings />
@@ -35,7 +37,7 @@ const UserSettingsPage = () => {
       label: (
         <Space>
           <ExperimentOutlined />
-          用户嵌入设置
+          问答检索配置
         </Space>
       ),
       children: <UserEmbeddingsSettings />
@@ -44,7 +46,9 @@ const UserSettingsPage = () => {
   ];
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="settings-page">
+      <PageHeading eyebrow="YOUR WORKSPACE" title="设置" description="让这个空间，更适合你的工作习惯。" />
+      <div className="settings-links"><Link to="/app/backup">数据备份与恢复</Link><Link to="/app/api-management">API 管理</Link><Link to="/app/recycle">日记回收站</Link></div>
       <Card
         title={
           <Space>

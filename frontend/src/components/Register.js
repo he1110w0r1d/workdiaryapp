@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Typography } from 'antd';
+import { Form, Input, Button, message } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
+import AuthFrame from './AuthFrame';
 import api from '../utils/api';  // 修改这里
 
-const { Title } = Typography;
+
 
 const Register = () => {
   const [loading, setLoading] = useState(false);
@@ -32,47 +33,41 @@ const Register = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      minHeight: '100vh',
-      background: '#f0f2f5'
-    }}>
-      <Card style={{ width: 400 }}>
-        <Title level={2} style={{ textAlign: 'center', marginBottom: 30 }}>
-          注册账号
-        </Title>
+    <AuthFrame title="创建你的工作空间" subtitle="从第一篇日记，开始积累。">
         <Form
           name="register"
           onFinish={onFinish}
-          autoComplete="off"
+          layout="vertical"
+          size="large"
         >
           <Form.Item
             name="username"
+            label="用户名"
             rules={[{ required: true, message: '请输入用户名!' }]}
           >
-            <Input prefix={<UserOutlined />} placeholder="用户名" />
+            <Input prefix={<UserOutlined />} placeholder="怎么称呼你" autoComplete="nickname" />
           </Form.Item>
 
           <Form.Item
             name="email"
+            label="邮箱"
             rules={[
               { required: true, message: '请输入邮箱!' },
               { type: 'email', message: '请输入有效的邮箱地址!' }
             ]}
           >
-            <Input prefix={<MailOutlined />} placeholder="邮箱" />
+            <Input prefix={<MailOutlined />} placeholder="name@example.com" autoComplete="email" type="email" />
           </Form.Item>
 
           <Form.Item
             name="password"
+            label="密码"
             rules={[
               { required: true, message: '请输入密码!' },
               { min: 6, message: '密码至少6位!' }
             ]}
           >
-            <Input prefix={<LockOutlined />} type="password" placeholder="密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" autoComplete="new-password" />
           </Form.Item>
 
           <Form.Item>
@@ -85,8 +80,7 @@ const Register = () => {
             <Link to="/login">已有账号？立即登录</Link>
           </Form.Item>
         </Form>
-      </Card>
-    </div>
+    </AuthFrame>
   );
 };
 

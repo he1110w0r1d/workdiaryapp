@@ -5,6 +5,9 @@ import zhCN from 'antd/locale/zh_CN';
 import 'moment/locale/zh-cn';
 import 'dayjs/locale/zh-cn';
 import GlobalStyles from './styles/GlobalStyles';
+import { workTheme, antdTheme } from './styles/theme';
+import './styles/workspace.css';
+import Overview from './components/Overview';
 
 import Login from './components/Login';
 import Register from './components/Register';
@@ -29,27 +32,10 @@ import ApiManagement from './pages/ApiManagement';
 import './App.css';
 
 function AppContent() {
-  const professionalTheme = {
-    name: '专业蓝',
-    colors: {
-      primary: '#1E3A8A',
-      secondary: '#2563EB',
-      accent: '#3B82F6',
-      background: '#F8FAFC',
-      surface: '#FFFFFF',
-      text: '#1F2937',
-      textSecondary: '#6B7280',
-      border: '#E5E7EB',
-      success: '#059669',
-      warning: '#D97706',
-      error: '#DC2626',
-      info: '#2563EB'
-    }
-  };
 
   return (
     <>
-      <GlobalStyles theme={professionalTheme} />
+      <GlobalStyles theme={workTheme} />
       <Router>
         <div className="App">
           <Routes>
@@ -63,6 +49,7 @@ function AppContent() {
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
+              <Route path="overview" element={<Overview />} />
               <Route path="diaries" element={<DiaryList />} />
               <Route path="diaries/new" element={<DiaryForm />} />
               <Route path="diaries/:id/edit" element={<DiaryForm />} />
@@ -86,7 +73,7 @@ function AppContent() {
 
 function App() {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider locale={zhCN} theme={antdTheme}>
       <AppContent />
     </ConfigProvider>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   List, 
   Card, 
@@ -16,7 +16,10 @@ import {
   Form,
   Table,
   Upload,
-  Checkbox
+  Checkbox,
+  Segmented,
+  Collapse,
+  Drawer
 } from 'antd';
 import { 
   EditOutlined, 
@@ -31,11 +34,15 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import moment from 'moment';
+import dayjs from 'dayjs';
+import PageHeading from './PageHeading';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
 
 const DiaryList = () => {
+  const [view, setView] = useState('列表');
+  const fetchId = useRef(0);
   const [diaries, setDiaries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -78,15 +85,18 @@ const DiaryList = () => {
   useEffect(() => {
     // 检查URL参数中的日期筛选
     // 兼容不同的查询参数键：优先使用 `date`，回退到 `dates`
+    setSearchText(searchParams.get('search') || '');
+    setPagination(p => ({ ...p, current: 1 }));
     const dateParam = searchParams.get('date') || searchParams.get('dates');
     if (dateParam) {
-      const date = moment(dateParam);
+      const date = dayjs(dateParam);
       if (date.isValid()) {
         setDateRange([date, date]);
         setHasUrlDate(true);
       }
     } else {
       // 无URL日期参数，直接允许初始化后的首次拉取
+      setDateRange(null);
       setQueryInitialized(true);
       setHasUrlDate(false);
     }
@@ -102,7 +112,7 @@ const DiaryList = () => {
   useEffect(() => {
     if (!queryInitialized) return;
     fetchDiaries();
-  }, [queryInitialized, pagination.current, searchText, dateRange, selectedTags, selectedPriority, selectedTodoStatus]);
+  }, [queryInitialized, pagination.current, pagination.pageSize, searchText, dateRange, selectedTags, selectedPriority, selectedTodoStatus]);
 
   // 获取可用标签
   const fetchAvailableTags = async () => {
@@ -136,6 +146,7 @@ const DiaryList = () => {
   }, []);
 
   const fetchDiaries = async () => {
+    const request = ++fetchId.current;
     setLoading(true);
     try {
       const params = {
@@ -166,15 +177,16 @@ const DiaryList = () => {
 
       const response = await api.get('/diaries', { params });  // 修改这里
       
+      if (request !== fetchId.current) return;
       setDiaries(response.data.diaries);
       setPagination({
         ...pagination,
         total: response.data.total
       });
     } catch (error) {
-      message.error('获取工作日记失败');
+      if (request === fetchId.current) message.error('获取工作日记失败');
     } finally {
-      setLoading(false);
+      if (request === fetchId.current) setLoading(false);
     }
   };
 
@@ -286,135 +298,6 @@ const DiaryList = () => {
   };
 
   // 渲染移动端卡片式单行项目
-  const renderDiaryCardItem = (diary) => {
-    const checked = selectedRowKeys.includes(diary._id);
-    const todoStatus = diary.isTodo ? (diary.todoStatus || '待办') : null;
-    let statusColor = 'default';
-    let statusEmoji = '📝';
-    let statusText = '普通日记';
-    if (todoStatus) {
-      switch (todoStatus) {
-        case '待办':
-          statusColor = 'processing';
-          statusEmoji = '⏳';
-          statusText = '待处理';
-          break;
-        case '已完成':
-          statusColor = 'success';
-          statusEmoji = '✅';
-          statusText = '已完成';
-          break;
-        case '已放弃':
-          statusColor = 'error';
-          statusEmoji = '❌';
-          statusText = '已放弃';
-          break;
-        case '已转交':
-          statusColor = 'warning';
-          statusEmoji = '🔄';
-          statusText = '已转交';
-          break;
-        default:
-          statusColor = 'processing';
-          statusEmoji = '⏳';
-          statusText = '待处理';
-      }
-    }
-
-    const priority = diary.workPriority || '中';
-    let priorityColor = 'orange';
-    let priorityEmoji = '🟡';
-    if (priority === '高') { priorityColor = 'red'; priorityEmoji = '🔴'; }
-    else if (priority === '低') { priorityColor = 'green'; priorityEmoji = '🟢'; }
-
-    return (
-      <List.Item
-        style={{
-          border: '1px solid #f0f0f0',
-          borderRadius: 8,
-          marginBottom: 12,
-          padding: 12,
-          backgroundColor: '#fafafa'
-        }}
-      >
-        <div style={{ width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <Checkbox
-              checked={checked}
-              onChange={(e) => {
-                const newSelected = e.target.checked
-                  ? [...selectedRowKeys, diary._id]
-                  : selectedRowKeys.filter(id => id !== diary._id);
-                setSelectedRowKeys(newSelected);
-              }}
-              style={{ marginTop: 2 }}
-            />
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: '#1890ff',
-                  cursor: 'pointer',
-                  wordBreak: 'break-word'
-                }}
-                title="点击查看完整内容"
-                onClick={async () => {
-                  try {
-                    const response = await api.get(`/diaries/${diary._id}`);
-                    setViewingDiary(response.data);
-                    setViewModalVisible(true);
-                  } catch (error) {
-                    message.error('获取日记详情失败');
-                  }
-                }}
-              >
-                {(() => {
-                  const text = (diary.content || '').toString();
-                  const trimmed = text.replace(/\s+/g, ' ').trim();
-                  return trimmed.length > 50 ? trimmed.slice(0, 50) + '…' : trimmed;
-                })()}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, color: '#555' }}>
-                <span>📍 {diary.location || '未填写'}</span>
-                <span>⏰ {moment(diary.startTime).format('MM-DD HH:mm')} ~ {moment(diary.endTime).format('MM-DD HH:mm')}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                <Tag color={priorityColor}>{priorityEmoji} {priority}</Tag>
-                {todoStatus ? (
-                  <Tag color={statusColor}>{statusEmoji} {statusText}</Tag>
-                ) : (
-                  <Tag>📝 普通日记</Tag>
-                )}
-                {(diary.tags || []).map(tag => {
-                  let color = tag.length > 5 ? 'geekblue' : 'green';
-                  if (tag === '紧急') color = 'volcano';
-                  return (
-                    <Tag key={tag} color={color}>{tag.toUpperCase()}</Tag>
-                  );
-                })}
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <Link to={`/app/diaries/${diary._id}/edit`}>
-                  <Button icon={<EditOutlined />} size="small">编辑</Button>
-                </Link>
-                <Button 
-                  icon={<DeleteOutlined />} 
-                  size="small" 
-                  danger
-                  onClick={() => { setSelectedDiary(diary); setDeleteModalVisible(true); }}
-                >
-                  删除
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </List.Item>
-    );
-  };
-
   const columns = [
     {
       title: '工作内容',
@@ -428,7 +311,7 @@ const DiaryList = () => {
             textOverflow: 'ellipsis', 
             whiteSpace: 'nowrap',
             cursor: 'pointer',
-            color: '#1890ff',
+            color: '#315d4e',
             transition: 'all 0.3s'
           }}
           onClick={async () => {
@@ -442,7 +325,7 @@ const DiaryList = () => {
             }
           }}
           onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#f0f8ff';
+            e.target.style.backgroundColor = '#f2f5ed';
             e.target.style.padding = '4px 8px';
             e.target.style.borderRadius = '4px';
           }}
@@ -499,16 +382,16 @@ const DiaryList = () => {
         // 处理优先级字段缺失的情况，默认为'中'
         const actualPriority = priority || '中';
         let color = 'default';
-        let emoji = '🟡';
+        let emoji = '';
         if (actualPriority === '高') {
           color = 'red';
-          emoji = '🔴';
+          emoji = '';
         } else if (actualPriority === '低') {
           color = 'green';
-          emoji = '🟢';
+          emoji = '';
         } else {
           color = 'orange';
-          emoji = '🟡';
+          emoji = '';
         }
         return (
           <Tag color={color}>
@@ -522,7 +405,7 @@ const DiaryList = () => {
       key: 'todoStatus',
       render: (_, record) => {
         if (!record.isTodo) {
-          return <Tag color="default">📝 普通日记</Tag>;
+          return <Tag color="default"> 普通日记</Tag>;
         }
         
         const status = record.todoStatus || '待办';
@@ -536,17 +419,17 @@ const DiaryList = () => {
             break;
           case '已完成':
             color = 'success';
-            emoji = '✅';
+            emoji = '';
             text = '已完成';
             break;
           case '已放弃':
             color = 'default';
-            emoji = '❌';
+            emoji = '';
             text = '已放弃';
             break;
           case '已转交':
             color = 'warning';
-            emoji = '🔄';
+            emoji = '';
             text = '已转交';
             break;
           default:
@@ -597,46 +480,38 @@ const DiaryList = () => {
 
   return (
     <div>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: 16 
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img 
-            src={process.env.PUBLIC_URL + '/pic/logo3.png'} 
-            alt="logo"
-            className="page-logo"
-          />
-        </div>
-        <Space>
-          <Link to="/app/diaries/new">
-            <Button type="primary">
-              新增日记
-            </Button>
-          </Link>
-        </Space>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
+      <PageHeading eyebrow="WORK NOTES" title="工作日记" description="让每一次进展，都有迹可循。" actions={<Space wrap><Link to="/app/recycle"><Button type="text">回收站</Button></Link><Link to="/app/diaries/new"><Button type="primary">记一笔</Button></Link></Space>} />
+      <div className="diary-list-toolbar">
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input
             placeholder="搜索工作内容"
             prefix={<SearchOutlined />}
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => { setSearchText(e.target.value); setPagination(p => ({ ...p, current: 1 })); }}
             style={{ width: 200 }}
           />
           <RangePicker 
-            onChange={setDateRange}
+            value={dateRange}
+            onChange={value => { setDateRange(value); setPagination(p => ({ ...p, current: 1 })); }}
             placeholder={['开始日期', '结束日期']}
           />
-          <Select
+          {!isMobile && <Segmented aria-label="日记显示方式" options={['列表', '表格']} value={view} onChange={setView} />}
+          <Button onClick={() => {
+            setPagination(p => ({ ...p, current: 1 }));
+            setSearchText('');
+            setDateRange(null);
+            setSelectedTags([]);
+            setSelectedPriority('');
+            setSelectedTodoStatus('');
+          }}>
+            清除筛选
+          </Button>
+        </div>
+        <Collapse ghost items={[{ key: 'filters', label: '更多筛选：标签、优先级和待办状态', children: <Space wrap>          <Select
             mode="multiple"
             placeholder="选择标签"
             value={selectedTags}
-            onChange={setSelectedTags}
+            onChange={value => { setSelectedTags(value); setPagination(p => ({ ...p, current: 1 })); }}
             style={{ minWidth: 150 }}
             allowClear
           >
@@ -647,35 +522,26 @@ const DiaryList = () => {
           <Select
             placeholder="选择优先级"
             value={selectedPriority || undefined}
-            onChange={setSelectedPriority}
+            onChange={value => { setSelectedPriority(value); setPagination(p => ({ ...p, current: 1 })); }}
             style={{ width: 140 }}
             allowClear
           >
-            <Select.Option value="高">🔴 高</Select.Option>
-            <Select.Option value="中">🟡 中</Select.Option>
-            <Select.Option value="低">🟢 低</Select.Option>
+            <Select.Option value="高"> 高</Select.Option>
+            <Select.Option value="中"> 中</Select.Option>
+            <Select.Option value="低"> 低</Select.Option>
           </Select>
           <Select
             placeholder="选择待办状态"
             value={selectedTodoStatus || undefined}
-            onChange={setSelectedTodoStatus}
+            onChange={value => { setSelectedTodoStatus(value); setPagination(p => ({ ...p, current: 1 })); }}
             style={{ width: 140 }}
             allowClear
           >
             <Select.Option value="待办">⏳ 待办</Select.Option>
-            <Select.Option value="已完成">✅ 已完成</Select.Option>
-            <Select.Option value="已取消">❌ 已取消</Select.Option>
+            <Select.Option value="已完成"> 已完成</Select.Option>
+            <Select.Option value="已放弃">已放弃</Select.Option><Select.Option value="已转交">已转交</Select.Option>
           </Select>
-          <Button onClick={() => {
-            setSearchText('');
-            setDateRange(null);
-            setSelectedTags([]);
-            setSelectedPriority('');
-            setSelectedTodoStatus('');
-          }}>
-            清除筛选
-          </Button>
-        </div>
+</Space> }]} />
         {selectedRowKeys.length > 0 && (
           <Button 
             danger
@@ -687,11 +553,18 @@ const DiaryList = () => {
         )}
       </div>
 
-      {isMobile ? (
+      {isMobile || view === '列表' ? (
         <List
           loading={loading}
           dataSource={diaries}
-          renderItem={renderDiaryCardItem}
+          className="diary-reading-list"
+          locale={{ emptyText: '没有符合条件的记录，可以调整筛选或记下第一笔。' }}
+          renderItem={entry => <List.Item key={entry._id}><div className="diary-reading-row">
+            <Checkbox aria-label="选择这条日记" checked={selectedRowKeys.includes(entry._id)} onChange={e => setSelectedRowKeys(keys => e.target.checked ? [...keys, entry._id] : keys.filter(key => key !== entry._id))} />
+            <div className="diary-reading-body"><button onClick={async () => { try { const response = await api.get(`/diaries/${entry._id}`); setViewingDiary(response.data); setViewModalVisible(true); } catch (_) { message.error('获取日记详情失败'); } }}>{entry.content}</button>
+              <div className="diary-reading-meta"><span>{moment(entry.startTime).format('YYYY-MM-DD HH:mm')}</span><span>{Math.round((new Date(entry.endTime) - new Date(entry.startTime)) / 60000)} 分钟</span>{entry.location && <span>{entry.location}</span>}{entry.tags?.map(tag => <Tag key={tag}>{tag}</Tag>)}{entry.isTodo && <Tag>{entry.todoStatus || '待办'}</Tag>}</div></div>
+            <div className="diary-row-actions"><Link to={`/app/diaries/${entry._id}/edit`}><Button type="text" icon={<EditOutlined />} aria-label="编辑日记" /></Link><Button type="text" icon={<DeleteOutlined />} aria-label="移至回收站" onClick={() => { setSelectedDiary(entry); setDeleteModalVisible(true); }} /></div>
+          </div></List.Item>}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,
@@ -737,10 +610,10 @@ const DiaryList = () => {
         <p style={{ color: '#666', fontSize: '12px' }}>删除后的日记将移至回收站，可在30天内恢复。</p>
       </Modal>
 
-      <Modal
+      <Drawer
         title="工作日记详情"
         open={viewModalVisible}
-        onCancel={() => setViewModalVisible(false)}
+        onClose={() => setViewModalVisible(false)}
         footer={[
           <Button key="close" onClick={() => setViewModalVisible(false)}>
             关闭
@@ -753,12 +626,12 @@ const DiaryList = () => {
             </Link>
           )
         ]}
-        width={800}
+        width={720}
       >
         {viewingDiary && (
           <div style={{ lineHeight: '1.8' }}>
             <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#1890ff', fontSize: '16px' }}>📝 工作内容：</strong>
+              <strong style={{ color: '#315d4e', fontSize: '16px' }}> 工作内容：</strong>
               <div style={{ 
                 marginTop: '8px', 
                 padding: '12px', 
@@ -774,7 +647,7 @@ const DiaryList = () => {
             </div>
             
             <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#52c41a', fontSize: '14px' }}>📍 工作地点：</strong>
+              <strong style={{ color: '#52c41a', fontSize: '14px' }}> 工作地点：</strong>
               <span style={{ marginLeft: '8px', fontSize: '14px' }}>{viewingDiary.location || '未填写'}</span>
             </div>
             
@@ -791,7 +664,7 @@ const DiaryList = () => {
             
             {viewingDiary.tags && viewingDiary.tags.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#722ed1', fontSize: '14px' }}>🏷️ 标签：</strong>
+                <strong style={{ color: '#722ed1', fontSize: '14px' }}> 标签：</strong>
                 <div style={{ marginTop: '8px' }}>
                   {viewingDiary.tags.map((tag) => {
                     let color = tag.length > 5 ? 'geekblue' : 'green';
@@ -809,21 +682,21 @@ const DiaryList = () => {
             )}
             
             <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#eb2f96', fontSize: '14px' }}>⚡ 优先级：</strong>
+              <strong style={{ color: '#eb2f96', fontSize: '14px' }}> 优先级：</strong>
               <div style={{ marginTop: '8px' }}>
                 {(() => {
                   const priority = viewingDiary.workPriority || '中';
                   let color = 'default';
-                  let emoji = '🟡';
+                  let emoji = '';
                   if (priority === '高') {
                     color = 'red';
-                    emoji = '🔴';
+                    emoji = '';
                   } else if (priority === '低') {
                     color = 'green';
-                    emoji = '🟢';
+                    emoji = '';
                   } else {
                     color = 'orange';
-                    emoji = '🟡';
+                    emoji = '';
                   }
                   return (
                     <Tag color={color}>
@@ -836,7 +709,7 @@ const DiaryList = () => {
             
             {/* 待办状态显示与管理 */}
             <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#13c2c2', fontSize: '14px' }}>📋 待办状态：</strong>
+              <strong style={{ color: '#13c2c2', fontSize: '14px' }}> 待办状态：</strong>
               <div style={{ marginTop: '8px' }}>
                 {(() => {
                   // 判断是否为待办日记 - 使用isTodo字段
@@ -845,7 +718,7 @@ const DiaryList = () => {
                   if (!isTodoItem) {
                     return (
                       <Tag color="default">
-                        📝 无待办状态
+                         无待办状态
                       </Tag>
                     );
                   }
@@ -861,17 +734,17 @@ const DiaryList = () => {
                       break;
                     case '已完成':
                       color = 'success';
-                      emoji = '✅';
+                      emoji = '';
                       text = '已完成';
                       break;
                     case '已放弃':
                       color = 'error';
-                      emoji = '❌';
+                      emoji = '';
                       text = '已放弃';
                       break;
                     case '已转交':
                       color = 'warning';
-                      emoji = '🔄';
+                      emoji = '';
                       text = '已转交';
                       break;
                     default:
@@ -897,7 +770,7 @@ const DiaryList = () => {
                                 setTodoStatusModalVisible(true);
                               }}
                             >
-                              ✅ 完成
+                               完成
                             </Button>
                           )}
                           {status !== '已放弃' && (
@@ -909,7 +782,7 @@ const DiaryList = () => {
                                 setTodoStatusModalVisible(true);
                               }}
                             >
-                              ❌ 放弃
+                               放弃
                             </Button>
                           )}
                           {status !== '已转交' && (
@@ -920,7 +793,7 @@ const DiaryList = () => {
                                 setTodoStatusModalVisible(true);
                               }}
                             >
-                              🔄 转交
+                               转交
                             </Button>
                           )}
                           {status !== '待办' && (
@@ -947,7 +820,7 @@ const DiaryList = () => {
                           borderRadius: '6px'
                         }}>
                           <div style={{ marginBottom: '8px', fontWeight: 'bold', color: '#389e0d', fontSize: '13px' }}>
-                            📝 状态变更记录：
+                             状态变更记录：
                           </div>
                           {viewingDiary.relatedTodo.statusHistory
                             .slice(-3) // 只显示最近3条记录
@@ -958,27 +831,27 @@ const DiaryList = () => {
                               
                               switch (historyStatus) {
                                 case '待办':
-                                  statusColor = '#1890ff';
+                                  statusColor = '#315d4e';
                                   statusEmoji = '⏳';
                                   statusText = '待处理';
                                   break;
                                 case '已完成':
                                   statusColor = '#52c41a';
-                                  statusEmoji = '✅';
+                                  statusEmoji = '';
                                   statusText = '已完成';
                                   break;
                                 case '已放弃':
                                   statusColor = '#ff4d4f';
-                                  statusEmoji = '❌';
+                                  statusEmoji = '';
                                   statusText = '已放弃';
                                   break;
                                 case '已转交':
                                   statusColor = '#fa8c16';
-                                  statusEmoji = '🔄';
+                                  statusEmoji = '';
                                   statusText = '已转交';
                                   break;
                                 default:
-                                  statusColor = '#1890ff';
+                                  statusColor = '#315d4e';
                                   statusEmoji = '⏳';
                                   statusText = '待处理';
                               }
@@ -1037,7 +910,7 @@ const DiaryList = () => {
             </div>
           </div>
         )}
-      </Modal>
+      </Drawer>
 
       {/* 待办状态更新Modal */}
       <Modal

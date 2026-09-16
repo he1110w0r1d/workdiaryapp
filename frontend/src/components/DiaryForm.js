@@ -20,7 +20,7 @@ import {
   SaveOutlined,
   RollbackOutlined
 } from '@ant-design/icons';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
@@ -34,6 +34,7 @@ const { TextArea } = Input;
 const DiaryForm = () => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -49,20 +50,31 @@ const DiaryForm = () => {
       if (!active || !data._id) return;
       const key = `workdiary-draft:${data._id}:${id || 'new'}`;
       setDraftKey(key);
-      try { setSavedDraft(JSON.parse(sessionStorage.getItem(key) || 'null')); } catch (_) {}
+      try {
+        const existing = JSON.parse(sessionStorage.getItem(key) || 'null');
+        setSavedDraft(existing);
+        if (!existing && location.state?.captureContent && !id) sessionStorage.setItem(key, JSON.stringify(form.getFieldsValue(true)));
+      } catch (_) {}
     }).catch(() => {});
     const warn = event => { if (dirty.current) { event.preventDefault(); event.returnValue = ''; } };
     const guardLink = event => {
       const anchor = event.target.closest?.('a[href]');
       if (!dirty.current || !anchor || event.ctrlKey || event.metaKey || anchor.target === '_blank') return;
-      if (new URL(anchor.href).origin !== window.location.origin) return;
+      const target = new URL(anchor.href);
+      if (target.origin !== window.location.origin || (target.pathname === window.location.pathname && target.hash)) return;
       event.preventDefault(); event.stopPropagation();
       Modal.confirm({ title: '离开未提交的记录？', content: '已缓存的草稿可在当前标签页恢复。', okText: '离开', cancelText: '继续编辑',
         onOk: () => { dirty.current = false; navigate(new URL(anchor.href).pathname + new URL(anchor.href).search); } });
     };
+    const guardLogout = event => {
+      if (!dirty.current) return;
+      event.preventDefault();
+      Modal.confirm({ title: '退出前还有未提交的记录', content: '草稿仅保留在当前标签页，关闭标签页后可能丢失。', okText: '仍然退出', cancelText: '继续编辑', onOk: () => { dirty.current = false; event.detail.finish(); } });
+    };
+    window.addEventListener('workdiary:before-logout', guardLogout);
     document.addEventListener('click', guardLink, true);
     window.addEventListener('beforeunload', warn);
-    return () => { active = false; document.removeEventListener('click', guardLink, true); window.removeEventListener('beforeunload', warn); };
+    return () => { active = false; window.removeEventListener('workdiary:before-logout', guardLogout); document.removeEventListener('click', guardLink, true); window.removeEventListener('beforeunload', warn); };
   }, [id]);
 
   const leaveTo = path => {
@@ -102,7 +114,7 @@ const DiaryForm = () => {
       const now = dayjs();
       
       const defaultValues = {
-        content: '',
+        content: location.state?.captureContent || '',
         location: '',
         tags: [],
         startDate: today,
@@ -117,6 +129,7 @@ const DiaryForm = () => {
       
       setInitialValues(defaultValues);
       form.setFieldsValue(defaultValues);
+      if (location.state?.captureContent) dirty.current = true;
     }
   }, [id, isEdit, form, searchParams]);
 
@@ -210,6 +223,7 @@ const DiaryForm = () => {
       
       dirty.current = false;
       if (draftKey) sessionStorage.removeItem(draftKey);
+      if (location.state?.captureKey) sessionStorage.removeItem(location.state.captureKey);
       navigate(`/app/diaries?date=${dayjs(values.startDate).format('YYYY-MM-DD')}`);
     } catch (error) {
       message.error(error.response?.data?.message || '操作失败');
@@ -279,36 +293,9 @@ const DiaryForm = () => {
   }, []);
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <Card 
-        title={
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'flex-start',
-            gap: '8px',
-            margin: '0',
-            padding: '0'
-          }}>
-            
-            <img 
-              src={process.env.PUBLIC_URL + '/pic/logo2.png'} 
-              alt="认真记录每一天"
-              className="page-logo"
-              style={{ margin: 0 }}
-            />
-          </div>
-        }
-        style={{
-          borderRadius: '16px',
-          overflow: 'hidden',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
-        }}
-        className="float"
-      >
-        <div style={{ fontSize: '14px', color: '#666', marginBottom: '20px', padding: '12px 16px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
-          💡 为了更好地使用系统，建议每次只填写单项工作内容，多项工作请分别填写
-        </div>
+    <div className="diary-editor">
+      <Card title={isEdit ? '编辑工作日记' : '记一笔工作'} extra={<span className="quiet-label">WORK NOTES</span>}>
+        <p className="editor-hint">一次记录一件事。先写内容，再补充时间；地点和标签可以稍后填写。</p>
         {savedDraft && <Alert type="info" showIcon message="发现此账号在当前浏览器标签页的未提交草稿"
           action={<Space><Button onClick={restoreDraft}>恢复草稿</Button><Button onClick={() => { sessionStorage.removeItem(draftKey); setSavedDraft(null); }}>丢弃草稿</Button></Space>} />}
         <Form
@@ -323,7 +310,7 @@ const DiaryForm = () => {
           label="工作内容"
           rules={[{ required: true, message: '请输入工作内容' }]}
         >
-          <TextArea rows={4} placeholder="详细描述工作内容" />
+          <TextArea autoSize={{ minRows: 7, maxRows: 20 }} placeholder="做了什么，有什么进展，接下来需要留意什么……" />
         </Form.Item>
 
 
@@ -435,9 +422,9 @@ const DiaryForm = () => {
                         fontWeight: '500',
                         cursor: 'pointer',
                         transition: 'all 0.3s ease',
-                        border: isSelected ? '2px solid #1890ff' : '2px solid #d9d9d9',
-                        backgroundColor: isSelected ? '#e6f7ff' : '#fafafa',
-                        color: isSelected ? '#1890ff' : '#666',
+                        border: isSelected ? '2px solid #315d4e' : '2px solid #d9d9d9',
+                        backgroundColor: isSelected ? '#edf3e9' : '#fafafa',
+                        color: isSelected ? '#315d4e' : '#666',
                         boxShadow: isSelected ? '0 2px 8px rgba(24, 144, 255, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
                       }}
                     >
@@ -593,17 +580,17 @@ const DiaryForm = () => {
                   color = isSelected ? '#ff4d4f' : '#666';
                   bgColor = isSelected ? '#fff2f0' : '#fafafa';
                   shadowColor = 'rgba(255, 77, 79, 0.2)';
-                  emoji = '🔴';
+                  emoji = '';
                 } else if (priority === '中') {
                   color = isSelected ? '#faad14' : '#666';
                   bgColor = isSelected ? '#fffbe6' : '#fafafa';
                   shadowColor = 'rgba(250, 173, 20, 0.2)';
-                  emoji = '🟡';
+                  emoji = '';
                 } else {
                   color = isSelected ? '#52c41a' : '#666';
                   bgColor = isSelected ? '#f6ffed' : '#fafafa';
                   shadowColor = 'rgba(82, 196, 26, 0.2)';
-                  emoji = '🟢';
+                  emoji = '';
                 }
                 
                 return (
@@ -656,7 +643,7 @@ const DiaryForm = () => {
           action={<Button onClick={() => leaveTo('/app/todos')}>管理待办</Button>} />}
 
         <Form.Item>
-          <Space size="large" style={{ width: '100%', justifyContent: 'center' }}>
+          <Space wrap size="middle" style={{ width: '100%', justifyContent: 'center' }}>
             <Button 
               type="primary" 
               htmlType="submit" 
@@ -664,16 +651,16 @@ const DiaryForm = () => {
               size="large"
               icon={<SaveOutlined />}
               style={{
-                background: '#3B82F6',
+                background: '#315d4e',
                 border: 'none',
                 borderRadius: '8px',
                 height: '48px',
-                padding: '0 32px',
+                padding: '0 22px',
                 fontSize: '16px',
                 fontWeight: 'bold'
               }}
             >
-              {id ? '💾 更新日记' : '✨ 创建日记'}
+              {id ? '保存修改' : '保存日记'}
             </Button>
             <Button 
               onClick={() => leaveTo('/app/diaries')}
@@ -682,11 +669,11 @@ const DiaryForm = () => {
               style={{
                 borderRadius: '8px',
                 height: '48px',
-                padding: '0 32px',
+                padding: '0 22px',
                 fontSize: '16px'
               }}
             >
-              🔙 返回列表
+               返回列表
             </Button>
           </Space>
         </Form.Item>

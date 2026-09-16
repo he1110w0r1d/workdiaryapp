@@ -432,3 +432,14 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 120, 117, 0.3);
 }
+/* Quiet calendar surfaces, shared with the workspace. */
+.calendar-logo { font-size:16px; font-weight:600; }
+.weekday-header,.weekday-header:hover { background:#edf1e7; color:#66775c; text-shadow:none; box-shadow:none; transform:none; font-size:12px; font-weight:500; }
+.calendar-navigation .current-month { color:#4c6243; font-size:15px; }
+.nav-button,.agenda-add { background:#edf1e7; color:#46633f; border:1px solid #dce4d4; border-radius:6px; }
+.nav-button:hover,.agenda-add:hover { background:#dce6d4; }
+.calendar-cell,.calendar-cell:hover { box-shadow:none; transform:none; border-radius:5px; background:#fff; }
+.calendar-cell.today { border-color:#78956a; background:#f4f7ef; }
+.calendar-cell.other-month { background:#f7f8f5; }
+.calendar-cell .date-number { font-size:13px; color:#506848; }
+.diary-item { background:#eaf0e3; color:#4b6341; }

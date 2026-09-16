@@ -1,47 +1,11 @@
-.App {
-  text-align: left;
-}
-
-/* 自定义滚动条 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .ant-layout-sider {
-    display: none;
-  }
-  
-  .ant-layout-sider-collapsed {
-    display: none;
-  }
-}
-
-.logo {
-  height: 32px;
-  margin: 16px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-}
+.App { text-align: left; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d8ce; border-radius: 8px; }
+.ant-table-wrapper { max-width: 100%; }
+.ant-table-content { overflow-x: auto; }
+.ant-card-head-title { white-space: normal !important; }
+.ant-modal-body { overflow-wrap: anywhere; }
+.ant-card { border-radius: 12px; }
+.ant-tag { border-radius: 5px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

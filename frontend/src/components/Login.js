@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Typography } from 'antd';
+import { Form, Input, Button, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
+import AuthFrame from './AuthFrame';
 import api from '../utils/api';  // 修改这里
 
-const { Title } = Typography;
+
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -25,34 +26,27 @@ const Login = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      minHeight: '100vh',
-      background: '#f0f2f5'
-    }}>
-      <Card style={{ width: 400 }}>
-        <Title level={2} style={{ textAlign: 'center', marginBottom: 30 }}>
-          工作日记系统
-        </Title>
+    <AuthFrame title="欢迎回来" subtitle="继续记录，接着把事情做好。">
         <Form
           name="login"
           onFinish={onFinish}
-          autoComplete="off"
+          layout="vertical"
+          size="large"
         >
           <Form.Item
             name="email"
-            rules={[{ required: true, message: '请输入邮箱!' }]}
+            label="邮箱"
+            rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入有效的邮箱地址' }]}
           >
-            <Input prefix={<UserOutlined />} placeholder="邮箱" />
+            <Input prefix={<UserOutlined />} placeholder="name@example.com" autoComplete="username" type="email" />
           </Form.Item>
 
           <Form.Item
             name="password"
+            label="密码"
             rules={[{ required: true, message: '请输入密码!' }]}
           >
-            <Input prefix={<LockOutlined />} type="password" placeholder="密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" autoComplete="current-password" />
           </Form.Item>
 
           <Form.Item>
@@ -65,8 +59,7 @@ const Login = () => {
             <Link to="/register">还没有账号？立即注册</Link>
           </Form.Item>
         </Form>
-      </Card>
-    </div>
+    </AuthFrame>
   );
 };
 

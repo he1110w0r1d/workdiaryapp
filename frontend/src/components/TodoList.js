@@ -4,6 +4,7 @@ import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { Link, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import api from '../utils/api';
+import PageHeading from './PageHeading';
 
 const { Text } = Typography;
 const statuses = ['待办', '已完成', '已放弃', '已转交'];
@@ -81,9 +82,9 @@ const TodoList = () => {
     if (todo.status !== '待办') return due.format('YYYY-MM-DD HH:mm');
     return `${due.isBefore(dayjs()) ? '已逾期 · ' : due.isSame(dayjs(), 'day') ? '今天到期 · ' : ''}${due.format('YYYY-MM-DD HH:mm')}`;
   };
-  return <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-    <img src={process.env.PUBLIC_URL + '/pic/todo.png'} alt="待办管理" className="page-logo" />
-    <Card title="🗂 待办事项" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增待办</Button>}>
+  return <div className="task-list">
+    <PageHeading eyebrow="NEXT ACTIONS" title="待办事项" description="把下一步写清楚，一件一件完成。" actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增待办</Button>} />
+    <Card>
       <Input.Search allowClear placeholder="搜索待办内容" onSearch={value => { setSearch(value); setPage(1); }} style={{ maxWidth: 360, marginBottom: 16 }} />
       <Tabs activeKey={status} onChange={value => { setStatus(value); setPage(1); }} items={statuses.map(s => ({ key: s, label: `${s === '待办' ? '待处理' : s} (${counts[s] || 0})` }))} />
       {status === '待办' && <Text type="secondary">按截止时间排序，逾期和最早到期的任务优先显示。</Text>}
@@ -94,9 +95,9 @@ const TodoList = () => {
             {todo.relatedDiary && <Link to={`/app/diaries/${todo.relatedDiary._id}/edit`}>查看来源日记</Link>}
           </Space>
           {todo.statusHistory?.length > 0 && <Text type="secondary">最近处理：{todo.statusHistory[todo.statusHistory.length - 1].reason || '已更新状态'}</Text>}
-          <Space wrap>
+          <Space wrap className="task-actions">
             <Button icon={<EditOutlined />} onClick={() => openEditor(todo)}>编辑 / 延期</Button>
-            {(todo.status === '待办' ? ['已完成', '已放弃', '已转交'] : ['待办']).map(next => <Button key={next} onClick={() => { actionForm.resetFields(); setAction({ todo, status: next }); }}>{next === '待办' ? '重新打开' : next === '已完成' ? '完成' : next.slice(1)}</Button>)}
+            {(todo.status === '待办' ? ['已完成', '已放弃', '已转交'] : ['待办']).map(next => <Button type={next === '已完成' ? 'primary' : 'default'} key={next} onClick={() => { actionForm.resetFields(); setAction({ todo, status: next }); }}>{next === '待办' ? '重新打开' : next === '已完成' ? '完成' : next.slice(1)}</Button>)}
           </Space>
         </Space>
       </List.Item>} />

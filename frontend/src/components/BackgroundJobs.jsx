@@ -46,12 +46,12 @@ export default function BackgroundJobs({ kind = 'summary', onComplete, onOpen })
     finally { setBusy(false); }
   };
   const input = { type, anchor: anchor?.format('YYYY-MM-DD') };
-  return <Card size="small" title={kind === 'summary' ? '生成任务与历史周期' : '检索同步任务'} style={{ marginBottom: 20 }}>
+  return <Card size="small" title={kind === 'summary' ? '整理一份新的总结' : '检索同步任务'} style={{ marginBottom: 20 }}>
     {kind === 'summary' && <>
       <Space wrap>
         <Select aria-label="总结类型" value={type} options={Object.entries(types).map(([value, label]) => ({ value, label }))} onChange={v => { setType(v); setPreview(null); }} />
         <DatePicker aria-label="统计日期" value={anchor} allowClear={false} onChange={v => { setAnchor(v); setPreview(null); }} />
-        <Button loading={busy} onClick={async () => { const result = await request(`${base}/preview`, input); if (result) setPreview({ ...result.data, input }); }}>预览统计范围</Button>
+        <Button type="primary" loading={busy} onClick={async () => { const result = await request(`${base}/preview`, input); if (result) setPreview({ ...result.data, input }); }}>预览统计范围</Button>
       </Space>
       <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>按北京时间统计所选日期所在的日、周、月或年。生成新版本会保留已有总结；关闭页面后任务继续运行。</Typography.Paragraph>
       {preview && <Alert type={preview.count ? 'info' : 'warning'} style={{ marginBottom: 12 }} message={`${preview.rangeLabel} · ${preview.count} 条日记 · ${preview.totalMinutes} 分钟`} action={<Button disabled={!preview.count} loading={busy} onClick={async () => {
@@ -60,7 +60,9 @@ export default function BackgroundJobs({ kind = 'summary', onComplete, onOpen })
       }}>确认生成新版本</Button>} />}
     </>}
     {error && <Alert type="warning" message={error} />}
-    <List size="small" pagination={{ pageSize: 5 }} dataSource={jobs} locale={{ emptyText: '暂无任务' }} renderItem={job => <List.Item actions={[
+    <details className="jobs-history" open={jobs.some(job => job.status === 'running' || job.status === 'queued' || job.status === 'failed') ? true : undefined}>
+      <summary>任务记录 · {jobs.filter(job => job.status === 'running' || job.status === 'queued').length} 项处理中{jobs.some(job => job.status === 'failed') ? ' · 有失败任务待处理' : ''}</summary>
+    <List size="small" pagination={{ pageSize: 5, hideOnSinglePage: true }} dataSource={jobs} locale={{ emptyText: '暂无任务' }} renderItem={job => <List.Item actions={[
       job.status === 'failed' && <Button key="retry" size="small" loading={busy} onClick={async () => { const result = await request(`${base}/${job._id}/retry`); if (result) { message.success(result.message); setJobs(list => list.map(j => j._id === job._id ? result.data : j)); } }}>重试</Button>,
       job.result?.summaryId && onOpen && <Button key="open" size="small" onClick={() => onOpen(job.result.summaryId)}>查看报告与建议</Button>
     ].filter(Boolean)}>
@@ -69,5 +71,6 @@ export default function BackgroundJobs({ kind = 'summary', onComplete, onOpen })
         <Typography.Text type="secondary">{job.stage} · {dayjs(job.createdAt).format('MM-DD HH:mm')} · 已尝试 {job.attempts} 次{job.error ? ` · ${job.error}` : ''}</Typography.Text>
       </Space>
     </List.Item>} />
+    </details>
   </Card>;
 }

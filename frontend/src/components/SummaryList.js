@@ -1,3 +1,4 @@
+import PageHeading from './PageHeading';
 import BackgroundJobs from './BackgroundJobs';
 import SummarySuggestions from './SummarySuggestions';
 import rehypeSanitize from 'rehype-sanitize';
@@ -582,7 +583,7 @@ const SummaryList = () => {
                 <span style={{ fontSize: 12, color: '#666' }}>{createdAtText}</span>
               </div>
               <div style={{ marginTop: 6, fontSize: 14, color: '#333' }}>
-                <strong style={{ color: '#1890ff' }}>{dateText}</strong>
+                <strong style={{ color: '#315d4e' }}>{dateText}</strong>
               </div>
               <div style={{ marginTop: 6, fontSize: 13, color: '#555' }}>
                 {contentSnippet || '（无内容）'}
@@ -671,27 +672,15 @@ const SummaryList = () => {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
-        <img 
-          src={process.env.PUBLIC_URL + '/pic/logo5.png'} 
-          alt="工作总结"
-          style={{ 
-            height: '80px', 
-            width: 'auto', 
-            objectFit: 'contain', 
-            display: 'block' 
-          }} 
-        />
-      </div>
-      
+    <div className="summary-page">
+      <PageHeading eyebrow="REFLECT & REVIEW" title="工作总结" description="从记录中整理脉络，让每一次回顾都有依据。" />
       <BackgroundJobs onComplete={() => ['daily', 'weekly', 'monthly', 'yearly'].forEach(type => fetchSummaries(type))} onOpen={async id => {
         try { setSelectedSummary((await api.get(`/summaries/${id}`)).data); } catch (_) { message.error('报告不存在或无法读取'); }
       }} />
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab}
-        type="card"
+        type="line"
         size="large"
         items={[
           {
@@ -733,7 +722,7 @@ const SummaryList = () => {
                         loading={generateTodayLoading}
                         onClick={handleGenerateTodaySummary}
                         size="small"
-                        style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                        style={{ backgroundColor: '#315d4e', borderColor: '#315d4e' }}
                       >
                         立即生成今日工作总结
                       </Button>
@@ -834,7 +823,7 @@ const SummaryList = () => {
                         loading={generateCurrentMonthlyLoading}
                         onClick={handleGenerateCurrentMonthlySummary}
                         size="small"
-                        style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                        style={{ backgroundColor: '#315d4e', borderColor: '#315d4e' }}
                       >
                         生成当月总结
                       </Button>
@@ -923,17 +912,17 @@ const SummaryList = () => {
                 marginBottom: '12px',
                 padding: '8px 12px',
                 background: '#f6f8ff',
-                border: '1px solid #e6f7ff',
+                border: '1px solid #edf3e9',
                 borderRadius: '6px',
                 color: '#595959'
               }}>
-                <strong style={{ color: '#1890ff' }}>范围：</strong>
+                <strong style={{ color: '#315d4e' }}>范围：</strong>
                 {selectedSummary.meta?.rangeLabel || getWeeklyRangeLabel(selectedSummary.date)}
                 <span style={{ margin: '0 8px' }}>|</span>
-                <strong style={{ color: '#1890ff' }}>生成方式：</strong>
+                <strong style={{ color: '#315d4e' }}>生成方式：</strong>
                 {selectedSummary.meta?.generatedBy === 'auto' ? '自动生成' : selectedSummary.meta?.generatedBy === 'manual' ? '手动生成' : '未知'}
                 <span style={{ margin: '0 8px' }}>|</span>
-                <strong style={{ color: '#1890ff' }}>LLM：</strong>
+                <strong style={{ color: '#315d4e' }}>LLM：</strong>
                 {selectedSummary.meta?.model || (selectedSummary.meta?.llmUsed === 'external' ? '外部LLM' : selectedSummary.meta?.llmUsed === 'local' ? '本地LLM' : '未记录')}
               </div>
             )}
@@ -941,18 +930,18 @@ const SummaryList = () => {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw, rehypeSanitize]}
               components={{
-                h1: ({children}) => <h2 style={{color: '#1890ff', borderBottom: '2px solid #1890ff', paddingBottom: '8px'}}>{children}</h2>,
-                h2: ({children}) => <h3 style={{color: '#1890ff', marginTop: '24px', marginBottom: '12px'}}>{children}</h3>,
+                h1: ({children}) => <h2 style={{color: '#315d4e', borderBottom: '2px solid #315d4e', paddingBottom: '8px'}}>{children}</h2>,
+                h2: ({children}) => <h3 style={{color: '#315d4e', marginTop: '24px', marginBottom: '12px'}}>{children}</h3>,
                 h3: ({children}) => <h4 style={{color: '#666', marginTop: '20px', marginBottom: '10px'}}>{children}</h4>,
                 p: ({children}) => <p style={{marginBottom: '12px', textAlign: 'justify'}}>{children}</p>,
                 ul: ({children}) => <ul style={{paddingLeft: '20px', marginBottom: '12px'}}>{children}</ul>,
                 ol: ({children}) => <ol style={{paddingLeft: '20px', marginBottom: '12px'}}>{children}</ol>,
                 li: ({children}) => <li style={{marginBottom: '4px'}}>{children}</li>,
-                strong: ({children}) => <strong style={{color: '#1890ff', fontWeight: 600}}>{children}</strong>,
+                strong: ({children}) => <strong style={{color: '#315d4e', fontWeight: 600}}>{children}</strong>,
                 em: ({children}) => <em style={{color: '#666', fontStyle: 'italic'}}>{children}</em>,
                 blockquote: ({children}) => (
                   <blockquote style={{
-                    borderLeft: '4px solid #1890ff',
+                    borderLeft: '4px solid #315d4e',
                     paddingLeft: '16px',
                     margin: '16px 0',
                     backgroundColor: '#f6f8ff',

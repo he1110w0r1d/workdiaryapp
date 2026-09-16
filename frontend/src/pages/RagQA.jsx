@@ -1,192 +1,51 @@
-import BackgroundJobs from '../components/BackgroundJobs';
-import React, { useState } from 'react';
-import { Button, Input, Typography, Card, Space, message } from 'antd';
-import api from '../utils/api';
+import React, { useState, useRef } from 'react';
+import { Button, Input, Card, Space, message, Alert } from 'antd';
+import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
-import { Link } from 'react-router-dom';
-import './RagQA.css';
-
-const { Text, Paragraph } = Typography;
-
-// 波浪加载动画组件
-const WaveLoader = ({ text = "处理中..." }) => (
-  <div className="loading-animation">
-    <ul className="wave-menu">
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-      <li></li>
-    </ul>
-    <span className="loading-text">{text}</span>
-  </div>
-);
-
+import dayjs from 'dayjs';
+import api from '../utils/api';
+import BackgroundJobs from '../components/BackgroundJobs';
+import PageHeading from '../components/PageHeading';
 export default function RagQA() {
   const [question, setQuestion] = useState('');
-  const [loadingIndex, setLoadingIndex] = useState(false);
-  const [loadingQuery, setLoadingQuery] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [indexing, setIndexing] = useState(false);
   const [answer, setAnswer] = useState('');
+  const [asked, setAsked] = useState('');
   const [snippets, setSnippets] = useState([]);
-
-  const formatDate = (iso) => {
-    if (!iso) return '未知日期';
-    const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-  const formatTimeRange = (start, end) => {
-    if (!start || !end) return '';
-    const s = new Date(start);
-    const e = new Date(end);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${pad(s.getHours())}:${pad(s.getMinutes())} - ${pad(e.getHours())}:${pad(e.getMinutes())}`;
-  };
-
-  const handleReindex = async () => {
-    setLoadingIndex(true);
+  const [error, setError] = useState('');
+  const queryLock = useRef(false);
+  const query = async () => {
+    if (queryLock.current || !question.trim()) return;
+    queryLock.current = true; setLoading(true); setError(''); setAnswer(''); setSnippets([]); setAsked(question.trim());
     try {
-      // 将重建索引改为“整篇日记作为一个切片”模式
-      const resp = await api.post('/rag/reindex?strategy=perDiary');
-      if (resp.data?.success) {
-        message.success(resp.data.message);
-      } else {
-        message.error(resp.data?.message || '重建索引失败');
-      }
-    } catch (e) {
-      message.error(e?.response?.data?.message || e.message || '重建索引异常');
-    } finally {
-      setLoadingIndex(false);
-    }
+      const { data } = await api.post('/rag/query', { question: question.trim(), topK: 10 });
+      if (!data.success) throw new Error(data.message || '查询未完成');
+      setAnswer(data.answer || '没有找到足够的记录来回答这个问题。'); setSnippets(data.snippets || []);
+    } catch (e) { setError(e.response?.data?.message || e.message || '暂时无法回答，请稍后重试。'); }
+    finally { queryLock.current = false; setLoading(false); }
   };
-
-  const handleQuery = async () => {
-    const q = question.trim();
-    if (!q) return message.warning('请输入你的问题');
-    setLoadingQuery(true);
-    setAnswer('');
-    setSnippets([]);
-    try {
-      const resp = await api.post('/rag/query', { question: q, topK: 10 });
-      if (resp.data?.success) {
-        setAnswer(resp.data.answer || '');
-        setSnippets(resp.data.snippets || []);
-      } else {
-        message.error(resp.data?.message || '查询失败');
-      }
-    } catch (e) {
-      message.error(e?.response?.data?.message || e.message || '查询异常');
-    } finally {
-      setLoadingQuery(false);
-    }
+  const reindex = async () => {
+    setIndexing(true);
+    try { const { data } = await api.post('/rag/reindex?strategy=perDiary'); if (data.success) message.success(data.message); else message.error(data.message || '同步未能开始'); }
+    catch (e) { message.error(e.response?.data?.message || '同步未能开始'); }
+    finally { setIndexing(false); }
   };
-
-  // 根据命中片段生成唯一的参考日记列表（按日期升序）
-  const referenceDiaries = Object.values(
-    snippets.reduce((acc, s) => {
-      const id = s.diary;
-      if (!acc[id]) {
-        acc[id] = { diary: id, startTime: s.startTime, endTime: s.endTime };
-      } else {
-        const prev = acc[id];
-        if (s.startTime && prev.startTime && new Date(s.startTime) < new Date(prev.startTime)) {
-          prev.startTime = s.startTime;
-        }
-        if (s.endTime && prev.endTime && new Date(s.endTime) > new Date(prev.endTime)) {
-          prev.endTime = s.endTime;
-        }
-      }
-      return acc;
-    }, {})
-  ).sort((a, b) => new Date(a.startTime || 0) - new Date(b.startTime || 0));
-
-  return (
-    <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <BackgroundJobs kind="index" />
-      {/* 移除原“RAG知识库问答”卡片 */}
-      {/* <Card title="RAG知识库问答">
-        <Space>
-          <Button type="primary" onClick={handleReindex} loading={loadingIndex}>重建索引</Button>
-        </Space>
-      </Card> */}
-
-      <Card 
-        title={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img 
-              src={process.env.PUBLIC_URL + '/pic/logo8.png'} 
-              alt="提问"
-              style={{ height: 60, objectFit: 'contain' }}
-            />
-          </div>
-        }
-      >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Input.TextArea rows={4} value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入你的问题，例如：今年我在哪些项目上投入最多？" />
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Space>
-              <Button type="primary" onClick={handleQuery} loading={loadingQuery}>查询</Button>
-              <Button onClick={handleReindex} loading={loadingIndex}>重建索引</Button>
-            </Space>
-            {/* 显示加载动画 */}
-            {loadingQuery && <WaveLoader text="正在查询..." />}
-            {loadingIndex && <WaveLoader text="正在重建索引..." />}
-          </div>
-        </Space>
-      </Card>
-
-      <Card title="答案">
-        {answer ? (
-          <div style={{ fontSize: 14, lineHeight: 1.7 }}>
-            <ReactMarkdown
-              children={answer}
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw, rehypeSanitize]}
-            />
-            {referenceDiaries.length > 0 && (
-              <div style={{ marginTop: 16, borderTop: '1px solid #eee', paddingTop: 12 }}>
-                <div style={{ fontWeight: 'bold' }}>参考日记日期列表</div>
-                <ul style={{ paddingLeft: '18px', marginTop: 8 }}>
-                  {referenceDiaries.map(d => (
-                    <li key={d.diary}>
-                      <Link to={`/app/diaries/${d.diary}/edit`}>
-                        {formatDate(d.startTime)} {formatTimeRange(d.startTime, d.endTime)}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : (
-          <Paragraph style={{ whiteSpace: 'pre-wrap' }}>（暂无）</Paragraph>
-        )}
-      </Card>
-
-      {/* 移除“命中片段”展示卡片 */}
-      {/* <Card title="命中片段">
-        <List
-          dataSource={snippets}
-          renderItem={(item, idx) => (
-            <List.Item>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Text type="secondary">片段{idx + 1}（score={item.score?.toFixed?.(3)}）</Text>
-                <Paragraph style={{ whiteSpace: 'pre-wrap' }}>{item.text}</Paragraph>
-              </Space>
-            </List.Item>
-          )}
-        />
-      </Card> */}
-    </Space>
-  );
+  const sources = [...new Map(snippets.filter(s => s.diary).map(s => [s.diary, s])).values()];
+  return <div className="rag-page">
+    <PageHeading eyebrow="ASK YOUR WORK" title="问问你的工作记录" description="从已保存的日记中找线索，回答附带来源，方便回看。" />
+    <Card><Input.TextArea className="question-input" aria-label="你的问题" value={question} onChange={e => setQuestion(e.target.value)} autoSize={{ minRows: 4, maxRows: 10 }} placeholder="例如：最近一次项目沟通，确定了哪些后续工作？" maxLength={5000} />
+      <div className="capture-footer"><span>回答基于检索到的记录，请结合来源核对。</span><Button type="primary" disabled={!question.trim()} loading={loading} icon={<ArrowRightOutlined />} onClick={query}>查找答案</Button></div>
+    </Card>
+    {error && <Alert style={{ marginTop: 20 }} showIcon type="error" message={error} action={<Button onClick={query}>重试</Button>} />}
+    <Card title={asked ? '关于你的问题' : '让过去的记录，回答现在的问题'} style={{ marginTop: 24 }} loading={loading}>
+      {answer ? <div className="answer-body"><p className="muted">{asked}</p><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{answer}</ReactMarkdown>
+        {sources.length > 0 && <div className="answer-sources"><h3>参考记录 · {sources.length}</h3><Space wrap>{sources.map(s => <Link className="source-link" key={s.diary} to={`/app/diaries/${s.diary}/edit`}>{dayjs(s.startTime).format('YYYY-MM-DD HH:mm')} <ArrowRightOutlined /></Link>)}</Space></div>}
+      </div> : <div className="rag-empty"><SearchOutlined style={{ fontSize: 23 }} /><p>可以问某个项目的进展，也可以回顾一段时间的工作。</p><Space wrap>{['最近有哪些需要跟进的工作？', '上周的主要工作是什么？'].map(q => <Button key={q} type="dashed" onClick={() => setQuestion(q)}>{q}</Button>)}</Space></div>}
+    </Card>
+    <details className="rag-maintenance"><summary>检索维护与同步状态</summary><p className="muted">日记保存后会自动同步。仅在需要修复检索时手动重建。</p><Button loading={indexing} onClick={reindex}>重建检索索引</Button><BackgroundJobs kind="index" /></details>
+  </div>;
 }
