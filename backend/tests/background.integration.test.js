@@ -73,6 +73,18 @@ test('durable background workflows in an isolated Mongo database', { skip: !proc
       assert.match(job.stage, /备份恢复替换/);
     }
   });
+  await t.test('legacy report HTML uses saved content without current diary data or a model', async () => {
+    const res = response();
+    await require('../controllers/summaryController').ensureSummaryHTML({ user, params: { id: old.id } }, res);
+    assert.equal(res.code, 200);
+    const report = await Summary.findById(old._id);
+    const file = require('../services/summaryFiles').resolveHTMLFile(report.htmlFilePath);
+    const fs = require('fs/promises');
+    const html = await fs.readFile(file, 'utf8');
+    assert.ok(html.includes('old report'));
+    assert.equal(html.includes('Edited content'), false);
+    await fs.unlink(file);
+  });
   await t.test('expired lease is recovered and late completion cannot overwrite owner', async () => {
     const stale = await Job.create({ user: user._id, kind: 'index', payload: { key: 'expired' }, status: 'running', leaseUntil: new Date(0), token: 'old' });
     await queue.runOne('index', async (j, cp) => { assert.equal(j.id, stale.id); await cp('resumed'); return { recovered: true }; });

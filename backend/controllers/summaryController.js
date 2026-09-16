@@ -3679,76 +3679,19 @@ exports.ensureSummaryHTML = async (req, res) => {
       return res.status(403).json({ success: false, message: '无权访问该总结' });
     }
 
-    const type = summary.type;
-    const date = new Date(summary.date);
-    const userId = summary.user;
-
     const htmlUrl = `/api/summaries/${summary._id}/html`;
     const actualPath = resolveHTMLFile(summary.htmlFilePath);
     if (actualPath && fs.existsSync(actualPath)) {
       return res.json({ success: true, url: htmlUrl });
     }
 
-    if (summary.meta?.jobId || summary.meta?.restored) {
-      const escape = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-      summary.htmlFilePath = await saveHTMLFile(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工作总结</title><body><h1>${escape(summary.meta.rangeLabel)}</h1><pre style="white-space:pre-wrap;font:16px/1.8 sans-serif">${escape(summary.content)}</pre></body></html>`);
-      await summary.save();
-      return res.json({ success: true, url: htmlUrl });
-    }
-
-    // 构建数据（根据类型获取对应时间范围内的diaries）
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    let end = new Date(start);
-    if (type === 'weekly') {
-      end.setDate(start.getDate() + 7);
-    } else if (type === 'monthly') {
-      start.setDate(1);
-      end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    } else if (type === 'yearly') {
-      start.setMonth(0, 1);
-      end = new Date(start.getFullYear() + 1, 0, 1);
-    } else { // daily
-      end.setDate(start.getDate() + 1);
-    }
-
-    const diaries = await Diary.find({ isDeleted: false,
-      user: userId,
-      startTime: { $gte: start, $lt: end }
-    }).exec();
-
-    // 计算统计数据
-    let totalWorkTime = 0;
-    const dailyWork = {};
-    diaries.forEach(diary => {
-      totalWorkTime += Math.floor((new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60));
-      const dateKey = new Date(diary.startTime).toDateString();
-      dailyWork[dateKey] = (dailyWork[dateKey] || 0) + Math.floor((new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60));
-    });
-    const tagDistribution = (function (ds) {
-      const map = new Map();
-      ds.forEach(d => (d.tags || []).forEach(t => map.set(t, (map.get(t) || 0) + 1)));
-      return Object.fromEntries(map);
-    })(diaries);
-
-    const htmlData = {
-      date: start,
-      diaries,
-      totalWorkTime,
-      dailyWork,
-      tagDistribution
-    };
-
-    // 生成并保存HTML
-    try {
-      const htmlContent = await generateHTMLPage(htmlData, type, summary.content, userId);
-      const htmlFilePath = await saveHTMLFile(htmlContent, userId, type, start);
-      summary.htmlFilePath = htmlFilePath;
-      await summary.save();
-      return res.json({ success: true, url: htmlUrl });
-    } catch (err) {
-      return res.status(500).json({ success: false, message: '生成HTML失败', error: err.message });
-    }
+    // Historical reports are immutable snapshots too. Never regenerate their
+    // HTML from today's diary data or reuse the old shared filenames.
+    const escape = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const title = summary.meta?.rangeLabel || new Date(summary.date).toISOString().slice(0, 10);
+    summary.htmlFilePath = await saveHTMLFile(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工作总结</title><body><h1>${escape(title)}</h1><pre style="white-space:pre-wrap;font:16px/1.8 sans-serif">${escape(summary.content)}</pre></body></html>`);
+    await summary.save();
+    return res.json({ success: true, url: htmlUrl });
   } catch (error) {
     return res.status(500).json({ success: false, message: '处理请求失败', error: error.message });
   }
