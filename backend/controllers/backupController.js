@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
@@ -192,163 +191,15 @@ const createBackup = async (req, res) => {
 // 恢复备份
 const restoreBackup = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const strategy = (req.body && req.body.strategy) ? String(req.body.strategy) : 'merge'; // merge | overwrite | skip
-    
-    logger.info('开始恢复备份', { 
-      userId, 
-      hasFile: !!req.file,
-      fileType: req.file ? req.file.mimetype : 'none',
-      fileName: req.file ? req.file.originalname : 'none'
-    });
-    
-    // 检查是否有上传的文件
-    if (!req.file) {
-      logger.warn('恢复备份失败: 未上传文件', { userId });
-      return res.status(400).json({
-        success: false,
-        message: '请上传备份文件'
-      });
-    }
-
-    const backupFilePath = req.file.path;
-    logger.info('接收到上传文件', { userId, filePath: backupFilePath, fileName: req.file.originalname });
-    
-    // 读取备份文件
-    const backupData = JSON.parse(fs.readFileSync(backupFilePath, 'utf8'));
-
-    // 验证备份文件格式
-    if (!backupData.metadata || !backupData.data) {
-      fs.unlinkSync(backupFilePath);
-      logger.warn('恢复备份失败: 无效的备份文件格式', { userId });
-      return res.status(400).json({
-        success: false,
-        message: '无效的备份文件格式'
-      });
-    }
-
-    // 删除用户现有数据（不使用事务）
-    await Promise.all([
-      Diary.deleteMany({ user: userId }),
-      Todo.deleteMany({ user: userId }),
-      Summary.deleteMany({ user: userId })
-    ]);
-
-    // 恢复数据
-    const { diaries, todos, summaries, user } = backupData.data;
-
-    // 恢复日记
-    if (diaries && diaries.length > 0) {
-      const diariesWithUserId = diaries.map(diary => ({
-        ...diary,
-        user: userId,
-        _id: new mongoose.Types.ObjectId()
-      }));
-      await Diary.insertMany(diariesWithUserId);
-    }
-
-    // 恢复待办事项
-    if (todos && todos.length > 0) {
-      const todosWithUserId = todos.map(todo => ({
-        ...todo,
-        user: userId,
-        _id: new mongoose.Types.ObjectId()
-      }));
-      await Todo.insertMany(todosWithUserId);
-    }
-
-    // 恢复总结
-    if (summaries && summaries.length > 0) {
-      const summariesWithUserId = summaries.map(summary => ({
-        ...summary,
-        user: userId,
-        _id: new mongoose.Types.ObjectId()
-      }));
-      await Summary.insertMany(summariesWithUserId);
-    }
-
-    // 删除临时文件
-    fs.unlinkSync(backupFilePath);
-
-    // 处理用户资料与模型配置恢复
-    let profileUpdated = false;
-    let llmConfigsApplied = 0;
-    let embeddingConfigsApplied = 0;
-
-    if (user && strategy !== 'skip') {
-      const userDoc = await User.findById(userId);
-      if (userDoc) {
-        const safeProfile = user.profile || null;
-        const incomingLLM = Array.isArray(user.llmConfigs) ? user.llmConfigs : [];
-        const incomingEmb = Array.isArray(user.embeddingConfigs) ? user.embeddingConfigs : [];
-
-        // 更新用户资料（非敏感字段）
-        if (safeProfile) {
-          // 仅更新允许字段
-          userDoc.nickname = safeProfile.nickname ?? userDoc.nickname;
-          userDoc.bio = safeProfile.bio ?? userDoc.bio;
-          userDoc.avatar = safeProfile.avatar ?? userDoc.avatar;
-          userDoc.workProfile = safeProfile.workProfile ?? userDoc.workProfile;
-          userDoc.customPrompts = safeProfile.customPrompts ?? userDoc.customPrompts;
-          profileUpdated = true;
-        }
-
-        const keyOf = (x) => `${x.provider || ''}|${x.model || ''}|${(x.name || '').trim()}`;
-
-        if (strategy === 'overwrite') {
-          // 直接覆盖两个数组
-          userDoc.llmConfigs = incomingLLM.map((x) => ({ ...x }));
-          userDoc.embeddingConfigs = incomingEmb.map((x) => ({ ...x }));
-          llmConfigsApplied = incomingLLM.length;
-          embeddingConfigsApplied = incomingEmb.length;
-        } else if (strategy === 'merge') {
-          // 合并：基于 provider+model+name 去重，不覆盖已有
-          const existingLLMKeys = new Set((userDoc.llmConfigs || []).map(keyOf));
-          const existingEmbKeys = new Set((userDoc.embeddingConfigs || []).map(keyOf));
-          const toAddLLM = incomingLLM.filter((x) => !existingLLMKeys.has(keyOf(x)));
-          const toAddEmb = incomingEmb.filter((x) => !existingEmbKeys.has(keyOf(x)));
-          if (toAddLLM.length) {
-            userDoc.llmConfigs = [...(userDoc.llmConfigs || []), ...toAddLLM];
-          }
-          if (toAddEmb.length) {
-            userDoc.embeddingConfigs = [...(userDoc.embeddingConfigs || []), ...toAddEmb];
-          }
-          llmConfigsApplied = toAddLLM.length;
-          embeddingConfigsApplied = toAddEmb.length;
-        }
-
-        await userDoc.save();
-      }
-    }
-
-    logger.info('数据恢复成功', { 
-      userId,
-      strategy,
-      profileUpdated,
-      llmConfigsApplied,
-      embeddingConfigsApplied
-    });
-
-    res.json({
-      success: true,
-      message: '数据恢复成功',
-      restored: {
-        diaries: diaries?.length || 0,
-        todos: todos?.length || 0,
-        summaries: summaries?.length || 0,
-        profileUpdated,
-        llmConfigsApplied,
-        embeddingConfigsApplied,
-        strategy
-      }
-    });
-
+    if (!req.file) return res.status(400).json({ success: false, message: '请上传备份文件' });
+    const backup = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+    const { restoreBackupData } = require('../services/backupRestore');
+    const restored = await restoreBackupData(backup, req.user.id, req.body?.strategy || 'merge');
+    return res.json({ success: true, message: '数据恢复成功', restored });
   } catch (error) {
     logger.error('恢复备份失败:', error);
-    res.status(500).json({
-      success: false,
-      message: '恢复备份失败: ' + error.message
-    });
+    const status = error.status || (error instanceof SyntaxError || error.name === 'ValidationError' ? 400 : 500);
+    return res.status(status).json({ success: false, message: '恢复备份失败: ' + error.message });
   }
 };
 

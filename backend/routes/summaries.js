@@ -21,6 +21,8 @@ const {
   ensureSummaryHTML
 } = require('../controllers/summaryController');
 
+router.get('/:id/html', protect, require('../controllers/summaryFileController').getSummaryHTML);
+
 router.route('/')
   .get(protect, getSummaries);
 

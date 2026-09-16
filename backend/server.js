@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
-const multer = require('multer');
 const cookieParser = require('cookie-parser');
 
 const logger = require('./utils/logger');
@@ -16,29 +15,6 @@ const path = require('path');
 const settingsFilePath = path.join(__dirname, 'config/llm-settings.json');
 const ragRoutes = require('./routes/rag');
 const difyRoutes = require('./routes/dify');
-
-// 配置multer文件上传
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-    cb(null, tempDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB限制
-  }
-  // 移除fileFilter，让后端控制器自己处理文件类型验证
-});
 
 // 在启动时加载LLM配置到环境变量
 if (fs.existsSync(settingsFilePath)) {
@@ -170,9 +146,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // 静态文件服务
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
-app.use('/uploads/summaries', express.static(path.join(__dirname, 'uploads/summaries')));
+require('./middleware/publicUploads')(app);
 
 // 数据库连接
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/workdiary', {
@@ -190,7 +164,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/todos', todoRoutes);
 app.use('/api/apikeys', apiKeyRoutes);
 // 对于备份路由，使用带有文件上传中间件的路由
-app.use('/api/backup', upload.single('backupFile'), backupRoutes);
+app.use('/api/backup', backupRoutes);
 app.use('/api', ragRoutes);
 app.use('/api', difyRoutes);
 // 公开API路由（供外部Agent调用）

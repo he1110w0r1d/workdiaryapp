@@ -355,21 +355,39 @@ const SummaryList = () => {
 
   // 查看网页时先确保HTML存在
   const handleViewWebpage = async (record) => {
+    // 同步打开窗口避免异步请求后被浏览器拦截；HTML 通过带凭证的 API 获取。
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      message.error('请允许弹出窗口后重试');
+      return;
+    }
+    preview.opener = null;
+    preview.document.title = '正在加载总结';
+    preview.document.body.textContent = '正在加载总结网页…';
+    let blobUrl;
     try {
-      const resp = await api.get(`/summaries/${record._id}/ensure-html`);
-      const url = resp.data?.url || record.htmlFilePath;
-      if (!url) {
-        message.error('未找到网页地址');
-        return;
-      }
-      // 从 api 实例获取 baseURL，去掉末尾的 /api 得到服务器根地址
-      const apiBaseUrl = api.defaults.baseURL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
-      const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
-      const full = `${baseUrl}${url}`;
-      window.open(full, '_blank');
+      await api.get(`/summaries/${record._id}/ensure-html`);
+      const response = await api.get(`/summaries/${record._id}/html`, { responseType: 'text' });
+      if (preview.closed) return;
+      // Blob 不继承 HTTP CSP，必须在沙箱中显示，并限制外部资源和连接。
+      const policy = "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+      const html = `<meta http-equiv="Content-Security-Policy" content="${policy}">${response.data}`;
+      blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      const frame = preview.document.createElement('iframe');
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.title = '总结网页';
+      frame.style.cssText = 'border:0;width:100%;height:100vh;display:block';
+      frame.src = blobUrl;
+      preview.document.title = '总结网页';
+      preview.document.body.style.margin = '0';
+      preview.document.body.replaceChildren(frame);
+      preview.addEventListener('pagehide', () => URL.revokeObjectURL(blobUrl), { once: true });
     } catch (err) {
-      console.error('确保HTML失败:', err);
-      message.error('生成或定位网页失败: ' + (err.response?.data?.message || err.message));
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      preview.close();
+      console.error('加载HTML失败:', err);
+      message.error('生成或打开网页失败: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -473,7 +491,7 @@ const SummaryList = () => {
               标记已读
             </Button>
           )}
-          {(type === 'weekly' || type === 'monthly' || type === 'yearly') && record.htmlFilePath && (
+          {(type === 'weekly' || type === 'monthly' || type === 'yearly') && (
             <Button 
               icon={<LinkOutlined />} 
               size="small"
@@ -566,7 +584,7 @@ const SummaryList = () => {
                 {contentSnippet || '（无内容）'}
               </div>
               <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                {(summary.type === 'weekly' || summary.type === 'monthly' || summary.type === 'yearly') && summary.htmlFilePath && (
+                {(summary.type === 'weekly' || summary.type === 'monthly' || summary.type === 'yearly') && (
                   <Button 
                     icon={<LinkOutlined />} 
                     size="small"

@@ -524,8 +524,10 @@ const generateHTMLPage = async (summaryData, type, summaryContent = '', userId =
     const templatePath = path.join(__dirname, '../templates/html_generation_prompt.txt');
     let htmlPrompt = '';
     
-    if (fs.existsSync(templatePath)) {
-      htmlPrompt = fs.readFileSync(templatePath, 'utf8')
+    const promptUser = userId ? await User.findById(userId) : null;
+    const customHTMLPrompt = promptUser?.customPrompts?.html_generation;
+    if (customHTMLPrompt || fs.existsSync(templatePath)) {
+      htmlPrompt = (customHTMLPrompt || fs.readFileSync(templatePath, 'utf8'))
         .replace('{{summaryData}}', JSON.stringify(safeHtmlData, null, 2))
         .replace('{{summaryContent}}', summaryContent || '暂无总结内容');
     } else {
@@ -708,24 +710,7 @@ const generateDefaultHTML = (summaryData, type) => {
 };
 
 // 保存HTML文件
-const saveHTMLFile = async (htmlContent, userId, type, date) => {
-  const uploadsDir = path.join(__dirname, '../uploads/summaries');
-  
-  // 确保目录存在
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-  
-  const year = date.getFullYear();
-  const month = type === 'monthly' ? String(date.getMonth() + 1).padStart(2, '0') : '';
-  const filename = `${userId}_${type}_${year}${month ? '_' + month : ''}.html`;
-  const filePath = path.join(uploadsDir, filename);
-  
-  fs.writeFileSync(filePath, htmlContent, 'utf8');
-  
-  // 返回相对路径用于存储在数据库中
-  return `/uploads/summaries/${filename}`;
-};
+const { saveHTMLFile, resolveHTMLFile } = require('../services/summaryFiles');
 
 exports.generateDailySummary = async () => {
   try {
@@ -2132,15 +2117,6 @@ exports.getPromptTemplate = async (req, res) => {
       return res.status(400).json({ message: '无效的提示词类型' });
     }
     
-    // 特殊处理HTML生成提示词
-    if (type === 'html_generation') {
-      const htmlTemplatePath = path.join(__dirname, '../templates', 'html_generation_prompt.txt');
-      if (fs.existsSync(htmlTemplatePath)) {
-        const content = fs.readFileSync(htmlTemplatePath, 'utf8');
-        return res.json({ type, content });
-      }
-    }
-    
     // 优先返回用户的定制化提示词
     const userId = req.user.id;
     const user = await User.findById(userId);
@@ -2151,7 +2127,7 @@ exports.getPromptTemplate = async (req, res) => {
     }
     
     // 如果没有定制化提示词，返回默认模板
-    const templatePath = path.join(__dirname, '../templates', `${type}_summary_prompt.txt`);
+    const templatePath = path.join(__dirname, '../templates', type === 'html_generation' ? 'html_generation_prompt.txt' : `${type}_summary_prompt.txt`);
     
     if (fs.existsSync(templatePath)) {
       const content = fs.readFileSync(templatePath, 'utf8');
@@ -2176,18 +2152,10 @@ exports.updatePromptTemplate = async (req, res) => {
       return res.status(400).json({ message: '无效的提示词类型' });
     }
     
-    if (!content || content.trim() === '') {
+    if (typeof content !== 'string' || content.trim() === '') {
       return res.status(400).json({ message: '提示词内容不能为空' });
     }
     
-    // 特殊处理HTML生成提示词 - 保存到文件系统
-    if (type === 'html_generation') {
-      const htmlTemplatePath = path.join(__dirname, '../templates', 'html_generation_prompt.txt');
-      fs.writeFileSync(htmlTemplatePath, content, 'utf8');
-      return res.json({ message: 'HTML生成提示词更新成功' });
-    }
-    
-    // 对于其他类型的提示词，保存到用户的数据库记录中
     const userId = req.user.id;
     const user = await User.findById(userId);
     
@@ -3574,7 +3542,7 @@ ${Object.entries(tagStats).map(([tag, count]) => `- ${tag}: ${count}次`).join('
             tagStats: tagStats
           };
           
-          const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent);
+          const htmlContent = await generateHTMLPage(htmlData, 'yearly', summaryContent, user._id);
           htmlFilePath = await saveHTMLFile(htmlContent, user._id, 'yearly', lastYear);
           logger.info('年度总结HTML网页生成成功:', htmlFilePath);
         } catch (error) {
@@ -3714,23 +3682,10 @@ exports.ensureSummaryHTML = async (req, res) => {
     const date = new Date(summary.date);
     const userId = summary.user;
 
-    const path = require('path');
-    const fs = require('fs');
-
-    // 计算期望文件名
-    const year = date.getFullYear();
-    const monthPart = type === 'monthly' ? String(date.getMonth() + 1).padStart(2, '0') : '';
-    const expectedFilename = `${userId}_${type}_${year}${monthPart ? '_' + monthPart : ''}.html`;
-    const uploadsDir = path.join(__dirname, '../uploads/summaries');
-    const expectedFilePath = path.join(uploadsDir, expectedFilename);
-
-    // 如果已有路径且文件存在，直接返回
-    if (summary.htmlFilePath) {
-      const relative = summary.htmlFilePath.replace('/uploads/summaries/', '');
-      const actualPath = path.join(uploadsDir, relative);
-      if (fs.existsSync(actualPath)) {
-        return res.json({ success: true, url: summary.htmlFilePath });
-      }
+    const htmlUrl = `/api/summaries/${summary._id}/html`;
+    const actualPath = resolveHTMLFile(summary.htmlFilePath);
+    if (actualPath && fs.existsSync(actualPath)) {
+      return res.json({ success: true, url: htmlUrl });
     }
 
     // 构建数据（根据类型获取对应时间范围内的diaries）
@@ -3782,7 +3737,7 @@ exports.ensureSummaryHTML = async (req, res) => {
       const htmlFilePath = await saveHTMLFile(htmlContent, userId, type, start);
       summary.htmlFilePath = htmlFilePath;
       await summary.save();
-      return res.json({ success: true, url: htmlFilePath });
+      return res.json({ success: true, url: htmlUrl });
     } catch (err) {
       return res.status(500).json({ success: false, message: '生成HTML失败', error: err.message });
     }

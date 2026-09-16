@@ -197,6 +197,8 @@ const userSchema = new mongoose.Schema({
   }],
   // 定制化提示词
   customPrompts: {
+    weekly: { type: String, default: '' },
+    html_generation: { type: String, default: '' },
     daily: {
       type: String,
       default: ''

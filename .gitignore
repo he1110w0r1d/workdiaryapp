@@ -96,3 +96,5 @@ backend/query
 # Package lock files (optional, uncomment if you want to ignore them)
 # package-lock.json
 # yarn.lock
+# Private generated reports
+backend/private/
