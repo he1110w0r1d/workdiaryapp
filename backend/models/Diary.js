@@ -21,7 +21,11 @@ const diarySchema = new mongoose.Schema({
   },
   endTime: {
     type: Date,
-    required: true
+    required: true,
+    validate: {
+      validator(value) { return !this.startTime || value >= this.startTime; },
+      message: '结束时间不能早于开始时间'
+    }
   },
   tags: [{
     type: String

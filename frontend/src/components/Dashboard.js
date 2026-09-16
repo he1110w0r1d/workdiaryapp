@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Typography, Spin, Badge } from 'antd';
+import { Row, Col, Card, Statistic, Typography, Spin, Badge, Button, Space, List, Alert } from 'antd';
 import { 
   FileTextOutlined, 
   BarChartOutlined, 
@@ -30,6 +30,9 @@ const Dashboard = () => {
     todayDiaries: 0,
     totalSummaries: 0
   });
+  const [urgentTodos, setUrgentTodos] = useState([]);
+  const [urgentTotal, setUrgentTotal] = useState(0);
+  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tagData, setTagData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
@@ -42,130 +45,22 @@ const Dashboard = () => {
   }, []);
 
   const fetchDashboardData = async () => {
+    setLoading(true); setError(false);
     try {
-      // 并行获取所有需要的数据
-      const [diaryRes, summaryRes, monthlyWorkRes] = await Promise.all([
-        api.get('/diaries?limit=1000'), // 获取所有日记用于统计
-        api.get('/summaries'),
-        fetchMonthlyWorkData() // 获取月度工作数据
+      const [response, tasks] = await Promise.all([
+        api.get('/diaries/dashboard', { params: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+        api.get('/todos', { params: { status: '待办', dueBefore: moment().add(7, 'days').endOf('day').toISOString(), limit: 5 } })
       ]);
-
-      // 生成日工作趋势数据
-      const dailyTrend = generateDailyTrendData(diaryRes.data.diaries);
-      setDailyTrendData(dailyTrend);
-
-      const diaries = diaryRes.data.diaries;
-      const today = new Date().toDateString();
-      const todayDiaries = diaries.filter(diary => 
-        new Date(diary.createdAt).toDateString() === today
-      ).length;
-
-      setStats({
-        totalDiaries: diaries.length,
-        todayDiaries: todayDiaries,
-        totalSummaries: summaryRes.data.total
-      });
-
-      // 生成标签数据
-      const tagCount = {};
-      diaries.forEach(diary => {
-        diary.tags.forEach(tag => {
-          tagCount[tag] = (tagCount[tag] || 0) + 1;
-        });
-      });
-      const tagDataArray = Object.entries(tagCount)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 8);
-      setTagData(tagDataArray);
-
-      // 删除生成词云数据的调用
-      // const wc = generateWordCloudFromDiaries(diaries);
-      // setWordCloudData(wc);
-
-      // 设置月度工作数据
-      setMonthlyData(monthlyWorkRes);
-
-    } catch (error) {
-      console.error('获取仪表板数据失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 生成日工作趋势数据（最近30天）
-  const generateDailyTrendData = (diaries) => {
-    const dailyStats = {};
-    const today = moment();
-    
-    // 初始化最近30天的数据
-    for (let i = 29; i >= 0; i--) {
-      const date = moment().subtract(i, 'days');
-      const dateKey = date.format('YYYY-MM-DD');
-      const dateLabel = date.format('MM-DD');
-      dailyStats[dateKey] = {
-        date: dateLabel,
-        hours: 0
-      };
-    }
-    
-    // 统计每日工作时长
-    diaries.forEach(diary => {
-      const diaryDate = moment(diary.startTime).format('YYYY-MM-DD');
-      if (dailyStats[diaryDate]) {
-        // 计算工作时长（小时）
-        const workDuration = (new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60 * 60);
-        dailyStats[diaryDate].hours += workDuration;
-      }
-    });
-    
-    // 转换为数组格式
-    return Object.values(dailyStats);
-  };
-
-  // 获取月度工作数据
-  const fetchMonthlyWorkData = async () => {
-    try {
-      const diaryRes = await api.get('/diaries?limit=1000');
-      const diaries = diaryRes.data.diaries;
-      
-      // 按月份分组统计工作条目数和工作时长
-      const monthlyStats = {};
-      
-      diaries.forEach(diary => {
-        const date = new Date(diary.startTime);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const monthName = `${date.getFullYear()}年${date.getMonth() + 1}月`;
-        
-        if (!monthlyStats[monthKey]) {
-          monthlyStats[monthKey] = {
-            name: monthName,
-            entries: 0,
-            totalHours: 0
-          };
-        }
-        
-        // 计算工作时长（小时）
-        const workDuration = (new Date(diary.endTime) - new Date(diary.startTime)) / (1000 * 60 * 60);
-        
-        monthlyStats[monthKey].entries += 1;
-        monthlyStats[monthKey].totalHours += workDuration;
-      });
-      
-      // 转换为数组并按日期排序
-      const monthlyDataArray = Object.values(monthlyStats)
-        .sort((a, b) => {
-          const dateA = new Date(a.name.replace('年', '-').replace('月', '-01'));
-          const dateB = new Date(b.name.replace('年', '-').replace('月', '-01'));
-          return dateA - dateB;
-        })
-        .slice(-12); // 只显示最近12个月的数据
-      
-      return monthlyDataArray;
-    } catch (error) {
-      console.error('获取月度工作数据失败:', error);
-      return [];
-    }
+      const data = response.data;
+      setStats(data.stats); setTagData(data.tags); setMonthlyData(data.months);
+      const days = Object.fromEntries(data.days.map(d => [d._id, d.hours]));
+      setDailyTrendData(Array.from({ length: 30 }, (_, i) => {
+        const date = moment().subtract(29 - i, 'days');
+        return { date: date.format('MM-DD'), hours: days[date.format('YYYY-MM-DD')] || 0 };
+      }));
+      setUrgentTodos(tasks.data.todos); setUrgentTotal(tasks.data.pagination.total);
+    } catch (_) { setError(true); }
+    finally { setLoading(false); }
   };
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7300'];
@@ -179,6 +74,19 @@ const Dashboard = () => {
   return (
     <div>
       
+      {error && <Alert type="error" message="部分数据加载失败" action={<Button onClick={fetchDashboardData}>重试</Button>} />}
+      <Card title="今天的工作" style={{ marginBottom: 24 }} extra={<Space wrap>
+        <Button type="primary" onClick={() => navigate('/app/diaries/new')}>记一笔工作</Button>
+        <Button onClick={() => navigate('/app/todos?new=1')}>新增待办</Button>
+      </Space>}>
+        <p>今天已有 {stats.todayDiaries} 条工作记录。<Button type="link" onClick={() => navigate(`/app/diaries?date=${moment().format('YYYY-MM-DD')}`)}>查看今天</Button>
+          <Button type="link" onClick={() => navigate('/app/summaries')}>生成工作总结</Button></p>
+        <List header={`逾期及未来 7 天到期：${urgentTotal} 项`} dataSource={urgentTodos} locale={{ emptyText: '暂无即将到期的待办' }} renderItem={todo => <List.Item>
+          <Button type="link" onClick={() => navigate('/app/todos')}>{todo.content}</Button>
+          <span style={{ color: moment(todo.dueDate).isBefore(moment()) ? '#cf1322' : undefined }}>{moment(todo.dueDate).isBefore(moment()) ? '已逾期 · ' : ''}{moment(todo.dueDate).format('MM-DD HH:mm')}</span>
+        </List.Item>} />
+        {urgentTotal > 5 && <Button onClick={() => navigate('/app/todos')}>查看全部待办</Button>}
+      </Card>
       {/* 日历组件 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={24} style={{ padding: isMobile ? '0' : undefined }}>
@@ -202,7 +110,7 @@ const Dashboard = () => {
             styles={{ body: { padding: '24px' } }}
           >
             <Statistic
-              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>The Diaries</span>}
+              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>全部工作记录</span>}
               value={stats.totalDiaries}
               valueStyle={{ color: '#1e293b', fontSize: '32px', fontWeight: 800, fontFamily: 'Inter, -apple-system, sans-serif' }}
               prefix={
@@ -241,7 +149,7 @@ const Dashboard = () => {
             styles={{ body: { padding: '24px' } }}
           >
             <Statistic
-              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's New</span>}
+              title={<span style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>今天的工作记录</span>}
               value={stats.todayDiaries}
               valueStyle={{ color: '#1e293b', fontSize: '32px', fontWeight: 800, fontFamily: 'Inter, -apple-system, sans-serif' }}
               prefix={

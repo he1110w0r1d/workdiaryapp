@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Form, 
   Input, 
@@ -9,19 +9,16 @@ import {
   Card, 
   message,
   Space,
-  Typography,
   Tag,
-  Radio,
-  Switch,
-  Divider,
   Row,
-  Col
+  Col,
+  Alert,
+  Collapse,
+  Modal
 } from 'antd';
 import {
   SaveOutlined,
-  RollbackOutlined,
-  EditOutlined,
-  PlusOutlined
+  RollbackOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
@@ -33,8 +30,6 @@ import locale from 'antd/es/date-picker/locale/zh_CN';
 dayjs.locale('zh-cn');
 
 const { TextArea } = Input;
-const { Option } = Select;
-const { Title } = Typography;
 
 const DiaryForm = () => {
   const [form] = Form.useForm();
@@ -43,6 +38,55 @@ const DiaryForm = () => {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [initialValues, setInitialValues] = useState({});
+  const [draftKey, setDraftKey] = useState(null);
+  const [savedDraft, setSavedDraft] = useState(null);
+  const dirty = useRef(false);
+  const submitting = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    api.get('/users/profile').then(({ data }) => {
+      if (!active || !data._id) return;
+      const key = `workdiary-draft:${data._id}:${id || 'new'}`;
+      setDraftKey(key);
+      try { setSavedDraft(JSON.parse(sessionStorage.getItem(key) || 'null')); } catch (_) {}
+    }).catch(() => {});
+    const warn = event => { if (dirty.current) { event.preventDefault(); event.returnValue = ''; } };
+    const guardLink = event => {
+      const anchor = event.target.closest?.('a[href]');
+      if (!dirty.current || !anchor || event.ctrlKey || event.metaKey || anchor.target === '_blank') return;
+      if (new URL(anchor.href).origin !== window.location.origin) return;
+      event.preventDefault(); event.stopPropagation();
+      Modal.confirm({ title: '离开未提交的记录？', content: '已缓存的草稿可在当前标签页恢复。', okText: '离开', cancelText: '继续编辑',
+        onOk: () => { dirty.current = false; navigate(new URL(anchor.href).pathname + new URL(anchor.href).search); } });
+    };
+    document.addEventListener('click', guardLink, true);
+    window.addEventListener('beforeunload', warn);
+    return () => { active = false; document.removeEventListener('click', guardLink, true); window.removeEventListener('beforeunload', warn); };
+  }, [id]);
+
+  const leaveTo = path => {
+    if (!dirty.current) { navigate(path); return; }
+    Modal.confirm({ title: '离开未提交的记录？', content: '已缓存的草稿可在当前标签页恢复。', okText: '离开', cancelText: '继续编辑',
+      onOk: () => { dirty.current = false; navigate(path); } });
+  };
+  const saveDraft = () => {
+    dirty.current = true;
+    if (draftKey) {
+      try { sessionStorage.setItem(draftKey, JSON.stringify(form.getFieldsValue(true))); } catch (_) {}
+    }
+  };
+  const restoreDraft = () => {
+    const values = { ...savedDraft };
+    for (const key of ['startDate', 'endDate', 'startTime', 'endTime']) {
+      if (values[key]) values[key] = dayjs(values[key]);
+    }
+    form.setFieldsValue(values);
+    setSelectedTags(values.tags || []);
+    setWorkPriority(values.workPriority || '中');
+    dirty.current = true;
+    setSavedDraft(null);
+  };
   
   // 移除受控状态，使用Form管理
 
@@ -52,7 +96,9 @@ const DiaryForm = () => {
     if (isEdit) {
       fetchDiary();
     } else {
-      const today = dayjs();
+      const requestedDate = searchParams.get('date');
+      const parsedDate = dayjs(requestedDate);
+      const today = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate || '') && parsedDate.isValid() && parsedDate.format('YYYY-MM-DD') === requestedDate ? parsedDate : dayjs();
       const now = dayjs();
       
       const defaultValues = {
@@ -60,7 +106,7 @@ const DiaryForm = () => {
         location: '',
         tags: [],
         startDate: today,
-        endDate: today,
+        endDate: now.add(1, 'hour').isSame(now, 'day') ? today : today.add(1, 'day'),
         startTime: now,
         endTime: now.add(1, 'hour'),
         workPriority: '中',
@@ -72,7 +118,7 @@ const DiaryForm = () => {
       setInitialValues(defaultValues);
       form.setFieldsValue(defaultValues);
     }
-  }, [id, isEdit, form]);
+  }, [id, isEdit, form, searchParams]);
 
   const fetchDiary = async () => {
     try {
@@ -92,11 +138,12 @@ const DiaryForm = () => {
         startTime: startMoment,
         endTime: endMoment,
         isTodo: diary.isTodo || false,
-        todoDueDate: diary.isTodo ? dayjs().add(1, 'day') : dayjs().add(1, 'day'),
+        todoDueDate: diary.relatedTodo?.dueDate ? dayjs(diary.relatedTodo.dueDate) : null,
         todoPriority: diary.workPriority || '中'
       };
       
       setIsTodo(diary.isTodo || false);
+      setWorkPriority(diary.workPriority || '中');
       setSelectedTags(diary.tags || []);
       
       setInitialValues(initialValues);
@@ -108,26 +155,25 @@ const DiaryForm = () => {
   };
 
   const onFinish = async (values) => {
+    if (submitting.current) return;
+    const start = dayjs(values.startDate).hour(values.startTime.hour()).minute(values.startTime.minute());
+    const end = dayjs(values.endDate).hour(values.endTime.hour()).minute(values.endTime.minute());
+    if (end.isBefore(start)) { message.error('结束时间不能早于开始时间'); return; }
+    submitting.current = true;
     setLoading(true);
     try {
       // 检查并保存新的自定义标签
       const currentTags = values.tags || [];
-      console.log('表单提交 - 当前标签:', currentTags);
-      console.log('表单提交 - 预设标签:', commonTags);
-      console.log('表单提交 - 用户自定义标签:', userCustomTags);
       
       const newCustomTags = currentTags.filter(tag => !commonTags.includes(tag) && !userCustomTags.includes(tag));
-      console.log('表单提交 - 发现新自定义标签:', newCustomTags);
       
       if (newCustomTags.length > 0) {
         const updatedCustomTags = [...userCustomTags, ...newCustomTags];
-        console.log('表单提交 - 准备保存自定义标签:', updatedCustomTags);
         setUserCustomTags(updatedCustomTags);
         setCommonTags([...commonTags, ...newCustomTags]);
         // 保存到后端
         await saveCustomTagsToBackend(updatedCustomTags);
       } else {
-        console.log('表单提交 - 没有新的自定义标签需要保存');
       }
       
       const diaryData = {
@@ -146,9 +192,7 @@ const DiaryForm = () => {
           .minute(values.endTime.minute())
           .second(0)
           .millisecond(0)
-          .toISOString(),
-        isTodo: values.isTodo || false,
-        todoDueDate: values.isTodo ? values.todoDueDate.toISOString() : null
+          .toISOString()
         };
 
       if (isEdit) {
@@ -164,10 +208,13 @@ const DiaryForm = () => {
         window.dispatchEvent(new CustomEvent('todosUpdated'));
       }
       
-      navigate('/app/diaries');
+      dirty.current = false;
+      if (draftKey) sessionStorage.removeItem(draftKey);
+      navigate(`/app/diaries?date=${dayjs(values.startDate).format('YYYY-MM-DD')}`);
     } catch (error) {
       message.error(error.response?.data?.message || '操作失败');
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -184,26 +231,20 @@ const DiaryForm = () => {
       const token = localStorage.getItem('token');
       
       if (!token) {
-        console.log('没有找到token，跳过获取用户自定义标签');
         return;
       }
       
-      console.log('开始获取用户自定义标签...');
       const response = await api.get('/users/profile');
       
-      console.log('用户profile响应:', response);
       if (response.status === 200) {
         const userData = response.data;
-        console.log('用户数据:', userData);
         const customTags = userData.workProfile?.customTags || [];
-        console.log('提取的自定义标签:', customTags);
         setUserCustomTags(customTags);
         // 将用户自定义标签合并到commonTags中
         setCommonTags(prev => {
           const defaultTags = ['会议', '工地现场', '沟通', '紧急', '重要'];
           const allTags = [...defaultTags, ...customTags];
           const uniqueTags = [...new Set(allTags)];
-          console.log('合并后的标签列表:', uniqueTags);
           return uniqueTags;
         });
       }
@@ -220,7 +261,6 @@ const DiaryForm = () => {
       });
       if (response.status === 200) {
         const result = response.data;
-        console.log('自定义标签保存成功:', result);
       }
     } catch (error) {
       console.error('保存自定义标签失败:', error);
@@ -269,11 +309,14 @@ const DiaryForm = () => {
         <div style={{ fontSize: '14px', color: '#666', marginBottom: '20px', padding: '12px 16px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
           💡 为了更好地使用系统，建议每次只填写单项工作内容，多项工作请分别填写
         </div>
+        {savedDraft && <Alert type="info" showIcon message="发现此账号在当前浏览器标签页的未提交草稿"
+          action={<Space><Button onClick={restoreDraft}>恢复草稿</Button><Button onClick={() => { sessionStorage.removeItem(draftKey); setSavedDraft(null); }}>丢弃草稿</Button></Space>} />}
         <Form
           form={form}
           layout="vertical"
           onFinish={onFinish}
           initialValues={initialValues}
+          onValuesChange={saveDraft}
         >
         <Form.Item
           name="content"
@@ -283,9 +326,6 @@ const DiaryForm = () => {
           <TextArea rows={4} placeholder="详细描述工作内容" />
         </Form.Item>
 
-        <Form.Item name="location" label="地点">
-          <Input placeholder="工作地点（可选）" />
-        </Form.Item>
 
         <Row gutter={16}>
           <Col span={12}>
@@ -341,6 +381,10 @@ const DiaryForm = () => {
           </Col>
         </Row>
 
+        <Collapse defaultActiveKey={[]} style={{ marginBottom: 16 }} items={[{ key: 'details', label: '补充信息：地点、标签、优先级（可选）', forceRender: true, children: <>
+        <Form.Item name="location" label="地点">
+          <Input placeholder="工作地点（可选）" />
+        </Form.Item>
         {/* 标签选择区域 */}
         <div style={{ marginBottom: '16px', fontSize: '14px', fontWeight: '500', color: '#262626', textAlign: 'left' }}>标签</div>
         <div style={{ marginBottom: '24px' }}>
@@ -376,10 +420,12 @@ const DiaryForm = () => {
                           const newTags = [...selectedTags, tag];
                           setSelectedTags(newTags);
                           form.setFieldsValue({ tags: newTags });
+                          saveDraft();
                         } else {
                           const newTags = selectedTags.filter(t => t !== tag);
                           setSelectedTags(newTags);
                           form.setFieldsValue({ tags: newTags });
+                          saveDraft();
                         }
                       }}
                       style={{
@@ -429,6 +475,7 @@ const DiaryForm = () => {
                           setCommonTags(updatedCommonTags);
                           setSelectedTags(updatedSelectedTags);
                           form.setFieldsValue({ tags: updatedSelectedTags });
+                          saveDraft();
                           
                           // 保存到后端
                           await saveCustomTagsToBackend(updatedCustomTags);
@@ -454,6 +501,7 @@ const DiaryForm = () => {
                     const newTags = [...selectedTags, newTag];
                     setSelectedTags(newTags);
                     form.setFieldsValue({ tags: newTags });
+                          saveDraft();
                     // 如果新标签不在预设标签中，则添加到预设标签列表和用户自定义标签
                     if (!commonTags.includes(newTag)) {
                       setCommonTags([...commonTags, newTag]);
@@ -480,6 +528,7 @@ const DiaryForm = () => {
                     const newTags = [...selectedTags, newTag];
                     setSelectedTags(newTags);
                     form.setFieldsValue({ tags: newTags });
+                          saveDraft();
                     // 如果新标签不在预设标签中，则添加到预设标签列表和用户自定义标签
                     if (!commonTags.includes(newTag)) {
                       setCommonTags([...commonTags, newTag]);
@@ -514,6 +563,7 @@ const DiaryForm = () => {
                         const newTags = selectedTags.filter(t => t !== tag);
                         setSelectedTags(newTags);
                         form.setFieldsValue({ tags: newTags });
+                          saveDraft();
                       }}
                       style={{
                         borderRadius: '12px',
@@ -562,6 +612,7 @@ const DiaryForm = () => {
                     onClick={() => {
                       setWorkPriority(priority);
                       form.setFieldsValue({ workPriority: priority });
+                      saveDraft();
                       // 强制触发表单字段更新
                       form.validateFields(['workPriority']);
                     }}
@@ -590,6 +641,8 @@ const DiaryForm = () => {
           </Form.Item>
         </div>
 
+        </> }]} />
+
         {/* 待办功能区域（隐藏） */}
         {/* Divider 已移除以减少占用空间 */}
         
@@ -598,49 +651,9 @@ const DiaryForm = () => {
           <Input />
         </Form.Item>
 
-        {/* isTodo 开关区域隐藏，不再展示主动设置待办 */}
-        
-        {isTodo && (
-          <div style={{ 
-            backgroundColor: '#fafafa', 
-            border: '1px solid #e8e8e8', 
-            borderRadius: '8px', 
-            padding: '16px', 
-            marginTop: '16px' 
-          }}>
-            <Form.Item
-              name="todoDueDate"
-              label="待办截止日期"
-              rules={[{ required: isTodo, message: '请选择待办截止日期' }]}
-              style={{ marginBottom: '16px' }}
-            >
-              <DatePicker 
-                format="YYYY-MM-DD" 
-                style={{ width: '100%' }} 
-                placeholder="请选择截止日期"
-                locale={locale}
-                disabledDate={(current) => current && current < dayjs().startOf('day')}
-              />
-            </Form.Item>
-            
-
-            
-            <div style={{ 
-              backgroundColor: '#f0f8ff', 
-              border: '1px solid #d6e4ff', 
-              borderRadius: '6px', 
-              padding: '12px', 
-              marginTop: '16px'
-            }}>
-              <div style={{ fontSize: '12px', color: '#1890ff', marginBottom: '4px' }}>
-                💡 待办提示：
-              </div>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                设为待办后，此工作内容将出现在待办列表中，您可以在导航栏的待办区域进行管理。
-              </div>
-            </div>
-          </div>
-        )}
+        {isTodo && <Alert type="info" showIcon style={{ marginBottom: 16 }}
+          message="此记录有关联待办。修改日记不会改变任务内容、截止日期或状态。"
+          action={<Button onClick={() => leaveTo('/app/todos')}>管理待办</Button>} />}
 
         <Form.Item>
           <Space size="large" style={{ width: '100%', justifyContent: 'center' }}>
@@ -663,7 +676,7 @@ const DiaryForm = () => {
               {id ? '💾 更新日记' : '✨ 创建日记'}
             </Button>
             <Button 
-              onClick={() => navigate('/app/diaries')}
+              onClick={() => leaveTo('/app/diaries')}
               size="large"
               icon={<RollbackOutlined />}
               style={{

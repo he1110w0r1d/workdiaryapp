@@ -14,6 +14,7 @@ router.post('/', todoController.createTodo);
 
 // 更新待办状态
 router.put('/:id/status', todoController.updateTodoStatus);
+router.put('/:id', todoController.updateTodo);
 
 // 删除待办
 router.delete('/:id', todoController.deleteTodo);

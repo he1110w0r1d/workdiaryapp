@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -28,6 +28,13 @@ const BackupRestore = () => {
   const [backupInfo, setBackupInfo] = useState(null);
   const [progress, setProgress] = useState(0);
   const [restoreStrategy, setRestoreStrategy] = useState('merge'); // merge | overwrite | skip
+
+  const [capability, setCapability] = useState(null);
+  const [restoreStage, setRestoreStage] = useState('');
+  const [restorePreview, setRestorePreview] = useState(null);
+  useEffect(() => {
+    api.get('/backup/status').then(r => setCapability(r.data)).catch(() => setCapability({ restoreAvailable: false, restoreReason: '无法检查恢复能力，请刷新后重试' }));
+  }, []);
 
   // 创建备份
   const handleBackup = async () => {
@@ -63,56 +70,44 @@ const BackupRestore = () => {
     }
   };
 
-  // 恢复备份
-  const handleRestore = async () => {
-    setRestoreLoading(true);
+  const uploadRestore = async (file, dryRun) => {
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    formData.append('strategy', restoreStrategy);
+    if (dryRun) formData.append('dryRun', 'true');
+    setRestoreStage(dryRun ? '上传并校验备份' : '上传备份');
     setProgress(0);
+    return api.post('/backup/restore', formData, {
+      onUploadProgress: event => {
+        const percent = event.total ? Math.round(event.loaded * 100 / event.total) : 0;
+        setProgress(percent);
+        if (percent === 100) setRestoreStage(dryRun ? '校验记录与关联关系' : '保存恢复前快照并恢复数据，请勿关闭页面');
+      }
+    });
+  };
+  const handleRestore = () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      setRestoreLoading(true);
+      try {
+        const response = await uploadRestore(file, true);
+        setRestorePreview({ file, counts: response.data.counts });
+      } catch (error) { message.error(error.response?.data?.message || '校验失败，现有数据未修改'); }
+      finally { setRestoreLoading(false); setProgress(0); }
+    };
+    input.click();
+  };
+  const confirmRestore = async () => {
+    setRestoreLoading(true);
     try {
-      // 创建文件输入元素
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json,.zip';
-      
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const formData = new FormData();
-        formData.append('backupFile', file);
-        formData.append('strategy', restoreStrategy);
-        
-        try {
-          const response = await api.post('/backup/restore', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-            onUploadProgress: (progressEvent) => {
-              const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setProgress(percent);
-            }
-          });
-          
-          if (response.data.success) {
-            message.success('恢复成功');
-            // 刷新页面以应用恢复的数据
-            window.location.reload();
-          }
-        } catch (error) {
-          console.error('恢复失败:', error);
-          message.error('恢复失败: ' + (error.response?.data?.message || error.message));
-        } finally {
-          setRestoreLoading(false);
-          setProgress(0);
-        }
-      };
-      
-      input.click();
-    } catch (error) {
-      console.error('恢复失败:', error);
-      message.error('恢复失败: ' + (error.response?.data?.message || error.message));
-      setRestoreLoading(false);
-      setProgress(0);
-    }
+      await uploadRestore(restorePreview.file, false);
+      message.success('恢复成功');
+      window.location.reload();
+    } catch (error) { message.error(error.response?.data?.message || '恢复失败，请重试'); }
+    finally { setRestoreLoading(false); setProgress(0); }
   };
 
   // 下载备份文件
@@ -177,22 +172,17 @@ const BackupRestore = () => {
             立即备份
           </Button>
           
-          {backupLoading && (
-            <Progress
-              percent={progress}
-              status="active"
-              style={{ marginTop: 8, width: 200 }}
-            />
-          )}
+          {backupLoading && <Spin tip="正在创建备份" />}
         </div>
 
         <div>
+          {capability?.restoreReason && <Alert type="warning" showIcon message={capability.restoreReason} />}
           <Text strong>恢复数据</Text>
           <br />
-          <Text type="secondary">从备份文件恢复数据（会覆盖当前数据）</Text>
+          <Text type="secondary">日记、待办、总结将完整替换；下面的策略仅控制用户资料与配置。目前此入口支持 JSON 备份。</Text>
           <br />
           <Space style={{ marginTop: 8, marginBottom: 8 }}>
-            <Text>恢复策略：</Text>
+            <Text>用户资料与配置：</Text>
             <Select
               value={restoreStrategy}
               onChange={setRestoreStrategy}
@@ -209,6 +199,7 @@ const BackupRestore = () => {
             icon={<CloudUploadOutlined />}
             loading={restoreLoading}
             onClick={handleRestore}
+            disabled={!capability?.restoreAvailable}
             style={{ marginTop: 8 }}
             danger
           >
@@ -216,15 +207,23 @@ const BackupRestore = () => {
           </Button>
           
           {restoreLoading && (
-            <Progress
+            <div><Text>{restoreStage}</Text><Progress
               percent={progress}
+              format={p => `上传 ${p}%`}
               status="active"
               style={{ marginTop: 8, width: 200 }}
-            />
+            /></div>
           )}
         </div>
       </Space>
 
+          <Modal title="确认完整替换当前数据" open={!!restorePreview} confirmLoading={restoreLoading}
+            onCancel={() => !restoreLoading && setRestorePreview(null)} onOk={confirmRestore} okText="保存快照并替换" okButtonProps={{ danger: true }} maskClosable={!restoreLoading}>
+            <Alert type="warning" message="这不是日记数据合并。系统会先保存恢复前快照，再完整替换当前日记、待办和总结。" />
+            {restorePreview && Object.entries(restorePreview.counts).map(([key, count]) => <p key={key}>{({ diaries: '日记', todos: '待办', summaries: '总结' })[key]}：当前 {count.current} 条 → 导入 {count.incoming} 条</p>)}
+            <p>配置策略：{restoreStrategy === 'merge' ? '补充缺失配置' : restoreStrategy === 'skip' ? '保留现有配置' : '使用备份配置'}</p>
+            {restoreLoading && <p>{restoreStage}</p>}
+          </Modal>
           <Modal
             title="备份创建成功"
             open={modalVisible}

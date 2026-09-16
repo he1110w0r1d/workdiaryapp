@@ -193,7 +193,16 @@ const restoreBackup = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: '请上传备份文件' });
     const backup = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
-    const { restoreBackupData } = require('../services/backupRestore');
+    const { restoreBackupData, prepareBackup } = require('../services/backupRestore');
+    if (req.body?.dryRun === 'true') {
+      const prepared = await prepareBackup(backup, req.user.id);
+      const counts = {};
+      for (const key of ['diaries', 'todos', 'summaries']) {
+        const Model = require(`../models/${{ diaries: 'Diary', todos: 'Todo', summaries: 'Summary' }[key]}`);
+        counts[key] = { current: await Model.countDocuments({ user: req.user.id }), incoming: prepared[key].length };
+      }
+      return res.json({ success: true, counts });
+    }
     const restored = await restoreBackupData(backup, req.user.id, req.body?.strategy || 'merge');
     return res.json({ success: true, message: '数据恢复成功', restored });
   } catch (error) {
@@ -228,8 +237,12 @@ const getBackupStatus = async (req, res) => {
       }
     }
 
+    const hello = await require('mongoose').connection.db.admin().command({ hello: 1 });
+    const restoreAvailable = Boolean(hello.setName || hello.msg === 'isdbgrid');
     res.json({
       success: true,
+      restoreAvailable,
+      restoreReason: restoreAvailable ? null : '当前数据库未启用事务，暂不能安全恢复。备份导出仍可使用，请联系管理员配置副本集。',
       available: backups.length > 0,
       backups: backups.sort((a, b) => b.created - a.created),
       backupDirExists: fs.existsSync(backupDir)

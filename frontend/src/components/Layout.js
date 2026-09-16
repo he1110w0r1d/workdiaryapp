@@ -134,12 +134,7 @@ const AppLayout = ({ children }) => {
       const response = await api.get('/users/profile');
       setUserInfo(response.data);
 
-      // 检查用户是否需要配置工作信息
-      const user = response.data;
-      if (!user.workProfile || !user.workProfile.industry) {
-        // 如果用户没有配置工作信息，显示配置弹窗
-        setShowWorkProfileSetup(true);
-      }
+      // Work profile is optional for recording; users can configure it in settings.
     } catch (error) {
       console.error('获取用户信息失败:', error);
     }

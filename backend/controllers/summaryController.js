@@ -726,7 +726,7 @@ exports.generateDailySummary = async () => {
     const users = await User.find();
     
     for (const user of users) {
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: yesterday,
@@ -1035,7 +1035,7 @@ exports.generateWeeklySummary = async (req, res) => {
     
     logger.info(`为用户 ${user.username} 生成每周总结`);
     
-    const diaries = await Diary.find({
+    const diaries = await Diary.find({ isDeleted: false,
       user: user._id,
       startTime: {
         $gte: thisWeekStart,
@@ -1358,7 +1358,7 @@ exports.generateMonthlySummary = async (req, res) => {
     logger.info(`为用户 ${user.username} 生成月度总结`);
     
     let totalSummariesGenerated = 0;
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: lastMonth,
@@ -1572,7 +1572,7 @@ exports.generateCurrentMonthlySummary = async (req, res) => {
     logger.info(`为用户 ${user.username} 生成当月总结`);
     
     let totalSummariesGenerated = 0;
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: currentMonth,
@@ -1765,7 +1765,7 @@ exports.generateYearlySummary = async (req, res) => {
     }
     
     logger.info(`为用户 ${user.username} 生成${targetYear}年度总结`);
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: yearStart,
@@ -2190,7 +2190,7 @@ exports.regenerateDailySummary = async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     // 查找昨日的工作日记
-    const diaries = await Diary.find({
+    const diaries = await Diary.find({ isDeleted: false,
       user: req.user.id,
       startTime: {
         $gte: yesterday,
@@ -2481,7 +2481,7 @@ exports.generateTodaySummary = async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     // 查找今日的工作日记
-    const diaries = await Diary.find({
+    const diaries = await Diary.find({ isDeleted: false,
       user: req.user.id,
       startTime: {
         $gte: today,
@@ -2773,7 +2773,7 @@ exports.regenerateLastWeeklySummary = async (req, res) => {
     lastWeekEnd.setHours(23, 59, 59, 999);
 
     // 查找上周的工作日记（当前登录用户）
-    const diaries = await Diary.find({
+    const diaries = await Diary.find({ isDeleted: false,
       user: req.user.id,
       startTime: {
         $gte: lastWeekStart,
@@ -2999,7 +2999,7 @@ exports.batchGenerateWeeklySummary = async () => {
     let totalSummariesGenerated = 0;
     
     for (const user of users) {
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: lastWeekStart,
@@ -3265,7 +3265,7 @@ exports.batchGenerateMonthlySummary = async () => {
     let totalSummariesGenerated = 0;
     
     for (const user of users) {
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: lastMonth,
@@ -3440,7 +3440,7 @@ exports.batchGenerateYearlySummary = async () => {
     const users = await User.find();
     
     for (const user of users) {
-      const diaries = await Diary.find({
+      const diaries = await Diary.find({ isDeleted: false,
         user: user._id,
         startTime: {
           $gte: lastYear,
@@ -3704,7 +3704,7 @@ exports.ensureSummaryHTML = async (req, res) => {
       end.setDate(start.getDate() + 1);
     }
 
-    const diaries = await Diary.find({
+    const diaries = await Diary.find({ isDeleted: false,
       user: userId,
       startTime: { $gte: start, $lt: end }
     }).exec();

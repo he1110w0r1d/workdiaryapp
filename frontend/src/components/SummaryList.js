@@ -104,12 +104,12 @@ const SummaryList = () => {
     };
   }, []);
 
-  const fetchSummaries = async (type) => {
+  const fetchSummaries = async (type, requestedPagination = pagination[type]) => {
     setLoading(prev => ({ ...prev, [type]: true }));
     try {
       const params = {
-        page: pagination[type].current,
-        limit: pagination[type].pageSize,
+        page: requestedPagination.current,
+        limit: requestedPagination.pageSize,
         type: type
       };
 
@@ -134,6 +134,7 @@ const SummaryList = () => {
       }));
     } catch (error) {
       console.error(`获取${getTypeText(type)}失败:`, error);
+      message.error("获取总结失败，请重试");
     } finally {
       setLoading(prev => ({ ...prev, [type]: false }));
     }
@@ -144,7 +145,7 @@ const SummaryList = () => {
       ...prev,
       [type]: newPagination
     }));
-    fetchSummaries(type);
+    fetchSummaries(type, newPagination);
   };
 
   // 重新生成昨日总结

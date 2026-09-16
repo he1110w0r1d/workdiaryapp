@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Todo = require('../models/Todo');
 const Diary = require('../models/Diary');
 const logger = require('../utils/logger');
@@ -5,11 +6,19 @@ const logger = require('../utils/logger');
 // 获取用户的待办列表
 exports.getTodos = async (req, res) => {
   try {
-    const { status, priority, page = 1, limit = 10 } = req.query;
+    const { status, priority, search, dueBefore } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const userId = req.user.id;
     
     // 构建查询条件
     const query = { user: userId, isDeleted: false };
+    if (search) query.content = { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    if (dueBefore) {
+      const date = new Date(dueBefore);
+      if (Number.isNaN(date.getTime())) return res.status(400).json({ message: '无效截止日期' });
+      query.dueDate = { $lt: date };
+    }
     if (status) {
       query.status = status;
     }
@@ -23,7 +32,7 @@ exports.getTodos = async (req, res) => {
     // 查询待办列表
     const todos = await Todo.find(query)
       .populate('relatedDiary', 'content startTime endTime')
-      .sort({ createdAt: -1 })
+      .sort(status === '待办' ? { dueDate: 1, _id: 1 } : { updatedAt: -1, _id: -1 })
       .skip(skip)
       .limit(parseInt(limit));
     
@@ -55,6 +64,9 @@ exports.createTodo = async (req, res) => {
     if (!content || !dueDate) {
       return res.status(400).json({ success: false, message: '内容和截止时间为必填项' });
     }
+    if (relatedDiary && !await Diary.exists({ _id: relatedDiary, user: userId, isDeleted: false })) {
+      return res.status(400).json({ message: '来源日记不存在或不属于当前用户' });
+    }
     
     // 创建待办
     const todo = new Todo({
@@ -69,7 +81,7 @@ exports.createTodo = async (req, res) => {
     
     // 如果有关联日记，更新日记的待办状态
     if (relatedDiary) {
-      await Diary.findByIdAndUpdate(relatedDiary, {
+      await Diary.findOneAndUpdate({ _id: relatedDiary, user: userId, relatedTodo: null, isDeleted: false }, {
         isTodo: true,
         relatedTodo: todo._id,
         todoStatus: '待办'
@@ -85,7 +97,7 @@ exports.createTodo = async (req, res) => {
     });
   } catch (error) {
     logger.error('创建待办失败:', error);
-    res.status(500).json({ success: false, message: '创建待办失败' });
+    res.status(400).json({ success: false, message: '创建待办失败，请检查内容、截止日期和优先级' });
   }
 };
 
@@ -107,6 +119,7 @@ exports.updateTodoStatus = async (req, res) => {
     if (!todo) {
       return res.status(404).json({ success: false, message: '待办项不存在' });
     }
+    if (todo.status === status) return res.json({ success: true, todo });
     
     // 添加状态变更记录
     const statusChange = {
@@ -126,8 +139,9 @@ exports.updateTodoStatus = async (req, res) => {
     
     // 如果有关联日记，同步更新日记状态
     if (todo.relatedDiary) {
-      await Diary.findByIdAndUpdate(todo.relatedDiary, {
-        todoStatus: status
+      await Diary.findOneAndUpdate({ _id: todo.relatedDiary, user: userId, relatedTodo: todo._id }, {
+        todoStatus: status,
+        statusDescription: summary || reason || ''
       });
     }
     
@@ -158,7 +172,7 @@ exports.deleteTodo = async (req, res) => {
     
     // 如果有关联日记，清除日记的待办状态
     if (todo.relatedDiary) {
-      await Diary.findByIdAndUpdate(todo.relatedDiary, {
+      await Diary.findOneAndUpdate({ _id: todo.relatedDiary, user: userId, relatedTodo: todo._id }, {
         isTodo: false,
         relatedTodo: null,
         todoStatus: '待办'
@@ -183,8 +197,9 @@ exports.getTodoStats = async (req, res) => {
     const userId = req.user.id;
     
     // 统计各状态的待办数量
+    const aggregateUserId = new mongoose.Types.ObjectId(userId);
     const stats = await Todo.aggregate([
-      { $match: { user: userId, isDeleted: false } },
+      { $match: { user: aggregateUserId, isDeleted: false } },
       {
         $group: {
           _id: '$status',
@@ -195,7 +210,7 @@ exports.getTodoStats = async (req, res) => {
     
     // 统计优先级分布
     const priorityStats = await Todo.aggregate([
-      { $match: { user: userId, status: '待办', isDeleted: false } },
+      { $match: { user: aggregateUserId, status: '待办', isDeleted: false } },
       {
         $group: {
           _id: '$priority',
@@ -227,4 +242,17 @@ exports.getTodoStats = async (req, res) => {
     logger.error('获取待办统计失败:', error);
     res.status(500).json({ success: false, message: '获取待办统计失败' });
   }
+};
+
+// Editing task details does not overwrite its source diary or status history.
+exports.updateTodo = async (req, res) => {
+  try {
+    const todo = await Todo.findOne({ _id: req.params.id, user: req.user.id, isDeleted: false });
+    if (!todo) return res.status(404).json({ message: '待办项不存在' });
+    for (const field of ['content', 'priority', 'dueDate']) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) todo[field] = req.body[field];
+    }
+    await todo.save();
+    res.json({ success: true, todo });
+  } catch (error) { res.status(400).json({ message: '保存失败，请检查内容、截止日期和优先级' }); }
 };

@@ -138,8 +138,8 @@ exports.getDiaries = async (req, res) => {
     let query = { user: req.user.id, isDeleted: false };
     
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(/^\d{4}-\d{2}-\d{2}$/.test(startDate) ? `${startDate}T00:00:00` : startDate);
+      const end = new Date(/^\d{4}-\d{2}-\d{2}$/.test(endDate) ? `${endDate}T00:00:00` : endDate);
       // 设置结束日期为当天的23:59:59.999
       end.setHours(23, 59, 59, 999);
       
@@ -204,9 +204,6 @@ exports.getDiaryById = async (req, res) => {
       return res.status(404).json({ message: '日记未找到' });
     }
 
-    // 自动同步到 Dify
-    await syncDiaryToDify(req, diary);
-
     res.json(diary);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -215,75 +212,18 @@ exports.getDiaryById = async (req, res) => {
 
 exports.updateDiary = async (req, res) => {
   try {
-    const { content, location, startTime, endTime, tags, workPriority, isTodo, todoDueDate } = req.body;
-    
-    // 准备更新数据
-    const updateData = {
-      content,
-      location,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      tags: tags || [],
-      workPriority: workPriority !== undefined ? workPriority : '中',
-      updatedAt: Date.now()
-    };
-    
-    // 处理待办相关字段
-    if (isTodo !== undefined) {
-      updateData.isTodo = isTodo;
-      if (isTodo && todoDueDate) {
-        updateData.todoDueDate = new Date(todoDueDate);
-      } else if (!isTodo) {
-        updateData.todoDueDate = null;
-      }
+    // Diary edits never change or delete tasks. Task changes use the Todo API.
+    const diary = await Diary.findOne({ _id: req.params.id, user: req.user.id, isDeleted: false });
+    if (!diary) return res.status(404).json({ message: '日记未找到' });
+    for (const field of ['content', 'location', 'startTime', 'endTime', 'tags', 'workPriority']) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) diary[field] = req.body[field];
     }
-    
-    const diary = await Diary.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id, isDeleted: false },
-      updateData,
-      { new: true }
-    );
-    
-    // 如果日记从待办状态改为非待办状态，需要删除关联的待办项
-    if (diary && diary.relatedTodo && !isTodo) {
-      await Todo.findByIdAndDelete(diary.relatedTodo);
-      diary.relatedTodo = null;
-      await diary.save();
-      logger.info(`日记编辑时删除了关联的待办项: ${diary.relatedTodo}`);
+    if (!diary.startTime || !diary.endTime || diary.endTime < diary.startTime) {
+      return res.status(400).json({ message: '结束时间不能早于开始时间' });
     }
-    
-    // 如果日记从非待办状态改为待办状态，需要创建新的待办项
-    if (diary && isTodo && !diary.relatedTodo && todoDueDate) {
-      const todo = new Todo({
-        user: req.user.id,
-        content: content,
-        priority: workPriority || '中',
-        dueDate: new Date(todoDueDate),
-        relatedDiary: diary._id
-      });
-      
-      await todo.save();
-      diary.relatedTodo = todo._id;
-      await diary.save();
-      logger.info(`日记编辑时创建了新的待办项: ${todo._id}`);
-    }
-    
-    // 如果是待办日记且已有关联待办项，更新待办项内容
-    if (diary && isTodo && diary.relatedTodo && todoDueDate) {
-      const todoUpdateData = {
-        content: content,
-        priority: workPriority || '中',
-        dueDate: new Date(todoDueDate)
-      };
-      
-      await Todo.findByIdAndUpdate(diary.relatedTodo, todoUpdateData);
-      logger.info(`日记编辑时更新了关联的待办项: ${diary.relatedTodo}`);
-    }
-
-    if (!diary) {
-      return res.status(404).json({ message: '日记未找到' });
-    }
-
+    diary.updatedAt = new Date();
+    await diary.save();
+    await syncDiaryToDify(req, diary);
     res.json(diary);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -516,8 +456,8 @@ exports.exportDiaries = async (req, res) => {
     
     // 应用筛选条件
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(/^\d{4}-\d{2}-\d{2}$/.test(startDate) ? `${startDate}T00:00:00` : startDate);
+      const end = new Date(/^\d{4}-\d{2}-\d{2}$/.test(endDate) ? `${endDate}T00:00:00` : endDate);
       end.setHours(23, 59, 59, 999);
       
       query.startTime = {

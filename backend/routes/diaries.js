@@ -24,6 +24,7 @@ router.route('/')
 
 // 获取可用标签 - 必须在 /:id 路由之前
 router.get('/tags', protect, getAvailableTags);
+router.get('/dashboard', protect, require('../controllers/dashboardController').getDashboard);
 
 // 导入导出功能 - 必须在 /:id 路由之前
 router.get('/export', protect, exportDiaries);

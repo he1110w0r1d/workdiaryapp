@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Typography, Spin, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
@@ -17,6 +17,7 @@ moment.updateLocale('zh-cn', {
 const { Title } = Typography;
 
 const Calendar = () => {
+  const requestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(moment());
   const [diariesData, setDiariesData] = useState({});
@@ -33,26 +34,33 @@ const Calendar = () => {
     handleResize();
     window.addEventListener('resize', handleResize);
     fetchMonthlyDiaries();
-    return () => window.removeEventListener('resize', handleResize);
+    return () => { requestId.current++; window.removeEventListener('resize', handleResize); };
   }, [currentDate]);
 
   const fetchMonthlyDiaries = async () => {
+    const request = ++requestId.current;
     setLoading(true);
     try {
       const startOfMonth = currentDate.clone().startOf('month');
       const endOfMonth = currentDate.clone().endOf('month');
 
-      const response = await api.get('/diaries', {
-        params: {
-          startDate: startOfMonth.format('YYYY-MM-DD'),
-          endDate: endOfMonth.format('YYYY-MM-DD'),
-          limit: 1000
-        }
-      });
+      const diaries = [];
+      let page = 1, totalPages = 1;
+      do {
+        const response = await api.get('/diaries', { params: {
+          startDate: startOfMonth.clone().startOf('week').format('YYYY-MM-DD'),
+          endDate: endOfMonth.clone().endOf('week').format('YYYY-MM-DD'),
+          page, limit: 100
+        } });
+        if (request !== requestId.current) return;
+        diaries.push(...response.data.diaries);
+        totalPages = response.data.totalPages;
+        page++;
+      } while (page <= totalPages);
 
       // 按日期分组工作日记
       const groupedDiaries = {};
-      response.data.diaries.forEach(diary => {
+      diaries.forEach(diary => {
         const date = moment(diary.startTime).format('YYYY-MM-DD');
         if (!groupedDiaries[date]) {
           groupedDiaries[date] = [];
@@ -64,7 +72,7 @@ const Calendar = () => {
     } catch (error) {
       message.error('获取日历数据失败');
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
   };
 
