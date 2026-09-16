@@ -160,7 +160,7 @@ exports.query = async (req, res) => {
 
     if (externalLLM) {
       try {
-        answer = await externalLLM.generateText(llmPrompt, { temperature: 0.2, maxTokens: 3000 });
+        answer = await externalLLM.generateText(llmPrompt, { temperature: 0.2, maxTokens: 3000, requireComplete: true });
         try { logger.llm('外部LLM生成成功', { length: (answer || '').length, preview: (answer || '').substring(0, 200) }); } catch (_) { }
       } catch (e) {
         try { logger.error('外部LLM生成失败', { message: e.message }); } catch (_) { }

@@ -110,7 +110,7 @@ class ExternalLLM {
     try {
       return await this._callExternalLLM(prompt, options);
     } catch (error) {
-      logger.error('外部LLM生成文本失败:', error);
+      logger.error('外部LLM生成文本失败:', { message: error.message, code: error.code, status: error.response?.status });
       throw error;
     }
   }
@@ -344,7 +344,7 @@ class ExternalLLM {
           const half = Math.max(512, Math.floor(maxTokens / 2));
           const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
           requestData.max_tokens = reducedTokens;
-          if (typeof promptToSend === 'string' && promptToSend.length > 12000) {
+          if (!options.requireComplete && typeof promptToSend === 'string' && promptToSend.length > 12000) {
             promptToSend = promptToSend.slice(0, 12000);
             requestData.messages = [{ role: 'user', content: promptToSend }];
           }
@@ -389,6 +389,26 @@ class ExternalLLM {
       }
     }
 
+    // A successful HTTP response can still contain a report cut off by the token limit.
+    const truncated = data => {
+      const choice = data?.choices?.[0] || data?.data?.choices?.[0] || data?.result?.choices?.[0];
+      return [choice?.finish_reason, choice?.native_finish_reason, data?.stop_reason]
+        .some(reason => ['length', 'max_tokens', 'MAX_TOKENS'].includes(reason));
+    };
+    if (options.requireComplete && truncated(response.data)) {
+      const expanded = this._getSafeMaxTokens(effectiveProvider, requestData.max_tokens * 2);
+      if (expanded > requestData.max_tokens) {
+        requestData.max_tokens = expanded;
+        response = await this.client.post(apiUrl, requestData, requestConfig);
+      }
+      if (truncated(response.data)) {
+        const error = new Error('模型输出达到长度上限，未保存不完整报告');
+        error.code = 'LLM_OUTPUT_TRUNCATED';
+        error.publicMessage = '模型输出被截断，请缩短统计周期或调整模型输出限制后重试；已有报告保留';
+        error.permanent = true;
+        throw error;
+      }
+    }
     // 解析响应
     return this._parseResponse(response.data, effectiveProvider);
   }

@@ -57,7 +57,7 @@ async function generate(job, checkpoint, dependencies = {}) {
   const model = dependencies.model || await modelFor(job.user);
   const ask = async (prompt) => {
     if (prompt.length > 19500) throw invalid('提示词过长，请缩短个人提示词后重试');
-    const text = await model.generateText(prompt, { maxTokens: 4000 });
+    const text = await model.generateText(prompt, { maxTokens: 4000, requireComplete: true });
     if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回内容');
     return text.trim();
   };
