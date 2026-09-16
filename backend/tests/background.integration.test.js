@@ -60,6 +60,19 @@ test('durable background workflows in an isolated Mongo database', { skip: !proc
     assert.equal(res.data.sourceStatus, 'changed');
     assert.equal((await Summary.findById(summaryJob._id)).content, 'new report');
   });
+  await t.test('job list hides report links removed by restore or owned by another user', async () => {
+    const foreign = await Summary.create({ user: other, type: 'daily', date: new Date(), content: 'foreign' });
+    const missingId = new mongoose.Types.ObjectId();
+    for (const summaryId of [foreign._id, missingId]) await Job.create({ user: user._id, kind: 'summary', payload: { type: 'daily' }, status: 'succeeded', result: { summaryId: String(summaryId) } });
+    const res = response(); await controller.list({ user, query: {} }, res);
+    assert.equal(res.data.data.find(j => String(j._id) === summaryJob.id).result.summaryId, summaryJob.id);
+    const unavailable = res.data.data.filter(j => String(j._id) !== summaryJob.id);
+    assert.equal(unavailable.length, 2);
+    for (const job of unavailable) {
+      assert.equal(job.result.summaryId, undefined);
+      assert.match(job.stage, /备份恢复替换/);
+    }
+  });
   await t.test('expired lease is recovered and late completion cannot overwrite owner', async () => {
     const stale = await Job.create({ user: user._id, kind: 'index', payload: { key: 'expired' }, status: 'running', leaseUntil: new Date(0), token: 'old' });
     await queue.runOne('index', async (j, cp) => { assert.equal(j.id, stale.id); await cp('resumed'); return { recovered: true }; });

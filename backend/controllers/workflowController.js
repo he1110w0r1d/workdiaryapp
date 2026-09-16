@@ -17,7 +17,18 @@ const publicJob = job => ({ _id: job._id, kind: job.kind, status: job.status, st
 exports.list = wrap(async (req, res) => {
   const kind = req.query.kind === 'index' ? 'index' : 'summary';
   const jobs = await Job.find({ user: req.user.id, kind }).select('-payload.snapshot -payload.generatedContent').sort({ createdAt: -1 }).limit(30).lean();
-  res.json({ success: true, data: jobs.map(publicJob) });
+  const reportIds = jobs.map(job => job.result?.summaryId).filter(id => mongoose.isValidObjectId(id));
+  const reports = await Summary.find({ _id: { $in: reportIds }, user: req.user.id }).select('_id').lean();
+  const available = new Set(reports.map(report => String(report._id)));
+  res.json({ success: true, data: jobs.map(job => {
+    const item = publicJob(job);
+    if (item.result?.summaryId && !available.has(String(item.result.summaryId))) {
+      item.result = { ...item.result };
+      delete item.result.summaryId;
+      item.stage = '原报告已删除或被备份恢复替换，请在总结列表查看';
+    }
+    return item;
+  }) });
 });
 exports.retry = wrap(async (req, res) => {
   const job = await queue.retry(req.user.id, req.params.jobId);
