@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 
 const todoSchema = new mongoose.Schema({
+  sourceSuggestion: { type: mongoose.Schema.Types.ObjectId, ref: 'TodoSuggestion' },
+  sourceDiaryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Diary' }],
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

@@ -83,6 +83,18 @@ class DifyClient {
   }
 
   /** 删除文档 */
+  async findDocuments(name) {
+    this.ensureBaseAuth();
+    this.ensureDataset();
+    const found = [];
+    for (let page = 1; ; page++) {
+      const response = await this.client.get(`/v1/datasets/${this.datasetId}/documents`, { params: { keyword: name, page, limit: 100 } });
+      found.push(...(response.data.data || []).filter(d => d.name === name));
+      if (!response.data.has_more) break;
+    }
+    return found;
+  }
+
   async deleteDocument(documentId) {
     this.ensureBaseAuth();
     this.ensureDataset();

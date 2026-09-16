@@ -165,7 +165,7 @@ exports.deleteTodo = async (req, res) => {
     const userId = req.user.id;
     
     // 查找并删除待办项
-    const todo = await Todo.findOneAndDelete({ _id: id, user: userId, isDeleted: false });
+    const todo = await Todo.findOneAndUpdate({ _id: id, user: userId, isDeleted: false }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: userId } }, { new: true });
     if (!todo) {
       return res.status(404).json({ success: false, message: '待办项不存在' });
     }

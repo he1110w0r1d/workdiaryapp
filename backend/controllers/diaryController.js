@@ -5,68 +5,7 @@ const path = require('path');
 const fs = require('fs');
 
 const logger = require('../utils/logger');
-const DifyClient = require('../utils/dify');
-
-// 同步到 Dify 的辅助方法
-function buildDiaryText(d) {
-  const start = d.startTime ? new Date(d.startTime) : null;
-  const end = d.endTime ? new Date(d.endTime) : null;
-  const dateStr = start ? `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}` : '';
-  const timeRange = start && end ? `${start.toLocaleString()} - ${end.toLocaleString()}` : '';
-  return [
-    d.content || '',
-    d.location ? `地点: ${d.location}` : '',
-    Array.isArray(d.tags) && d.tags.length ? `标签: ${d.tags.join(' ')}` : '',
-    (dateStr || timeRange) ? `时间: ${dateStr} ${timeRange}` : ''
-  ].filter(Boolean).join('\n');
-}
-
-function buildDiaryName(d) {
-  const start = d.startTime ? new Date(d.startTime) : null;
-  const dateStr = start ? `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}` : '未设日期';
-  return `工作日记 ${dateStr} ${String(d._id)}`;
-}
-
-async function ensureDifyDataset(dify, req) {
-  dify.ensureBaseAuth();
-  if (!dify.datasetId) {
-    const datasetName = req.query?.datasetName || process.env.DIFY_DATASET_NAME || '工作日记记录';
-    await dify.resolveDatasetIdByName(datasetName);
-  }
-  dify.ensureDataset();
-}
-
-async function syncDiaryToDify(req, diary) {
-  try {
-    const dify = new DifyClient();
-    await ensureDifyDataset(dify, req);
-    const name = buildDiaryName(diary);
-    const text = buildDiaryText(diary);
-    if (diary.difyDocId) {
-      await dify.updateByText(diary.difyDocId, name, text, { indexing_technique: 'high_quality' });
-      try { logger.llm('Dify更新成功', { diaryId: String(diary._id) }); } catch (_) {}
-    } else {
-      const created = await dify.createByText(name, text, { indexing_technique: 'high_quality' });
-      diary.difyDocId = created.id;
-      await diary.save();
-      try { logger.llm('Dify创建成功', { diaryId: String(diary._id), docId: created.id }); } catch (_) {}
-    }
-  } catch (err) {
-    try { logger.warn('同步到Dify失败', { diaryId: String(diary._id), message: err.message }); } catch (_) {}
-  }
-}
-
-async function deleteDiaryFromDify(req, diary) {
-  try {
-    if (!diary.difyDocId) return;
-    const dify = new DifyClient();
-    await ensureDifyDataset(dify, req);
-    await dify.deleteDocument(diary.difyDocId);
-    try { logger.llm('Dify删除成功', { diaryId: String(diary._id) }); } catch (_) {}
-  } catch (err) {
-    try { logger.warn('从Dify删除失败', { diaryId: String(diary._id), message: err.message }); } catch (_) {}
-  }
-}
+const { beforeDiaryRemoval } = require('../services/indexWorkflow');
 
 // 配置multer用于文件上传
 const storage = multer.memoryStorage();
@@ -122,7 +61,7 @@ exports.createDiary = async (req, res) => {
     }
     
     // 自动同步到 Dify
-    await syncDiaryToDify(req, diary);
+    // The durable reconciler notices this saved version without blocking the request.
     
     res.status(201).json(diary);
   } catch (error) {
@@ -223,7 +162,7 @@ exports.updateDiary = async (req, res) => {
     }
     diary.updatedAt = new Date();
     await diary.save();
-    await syncDiaryToDify(req, diary);
+    // The durable reconciler notices this saved version without blocking the request.
     res.json(diary);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -329,7 +268,7 @@ exports.restoreDiary = async (req, res) => {
     }
 
     // 自动同步到 Dify（恢复后更新文档内容）
-    await syncDiaryToDify(req, diary);
+    // The durable reconciler notices this saved version without blocking the request.
 
     logger.info(`用户 ${req.user.id} 恢复了日记: ${diary._id}`);
     res.json({ message: '日记恢复成功', diary });
@@ -354,12 +293,12 @@ exports.permanentDeleteDiary = async (req, res) => {
 
     // 如果日记有关联的待办项，永久删除待办项
     if (diary.relatedTodo) {
-      await Todo.findByIdAndDelete(diary.relatedTodo);
+      await Todo.findOneAndDelete({ _id: diary.relatedTodo, user: req.user.id });
       logger.info(`永久删除日记时同时永久删除了关联的待办项: ${diary.relatedTodo}`);
     }
 
     // 同步删除 Dify 文档（若存在映射）
-    await deleteDiaryFromDify(req, diary);
+    await beforeDiaryRemoval(diary);
 
     // 永久删除日记
     await Diary.findByIdAndDelete(diary._id);
@@ -420,7 +359,7 @@ exports.updateTodoStatus = async (req, res) => {
     }
 
     // 自动同步到 Dify（待办状态更新后保持文档最新）
-    await syncDiaryToDify(req, diary);
+    // The durable reconciler notices this saved version without blocking the request.
 
     logger.info(`用户 ${req.user.id} 更新了日记待办状态: ${diary._id} -> ${todoStatus}`);
     res.json({ success: true, diary });

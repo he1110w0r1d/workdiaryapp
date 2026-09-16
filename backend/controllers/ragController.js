@@ -1,147 +1,22 @@
 const Diary = require('../models/Diary');
 const pg = require('../utils/pgClient');
-const Embeddings = require('../utils/embeddings');
-const { getUserDefaultEmbeddingConfig } = require('./settingsController');
-const ExternalLLM = require('../utils/externalLLM');
 const { createLLMInstances } = require('./userController');
 const logger = require('../utils/logger');
-
-// 简易分片：按段落长度切分
-const chunkDiary = (text, maxLen = 800) => {
-  const t = String(text || '');
-  const parts = t.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
-  const chunks = [];
-  for (const p of parts) {
-    if (p.length <= maxLen) {
-      chunks.push(p);
-    } else {
-      for (let i = 0; i < p.length; i += maxLen) {
-        chunks.push(p.slice(i, i + maxLen));
-      }
-    }
-  }
-  return chunks.length ? chunks : [t.slice(0, maxLen)];
-};
-
-// 格式化日期时间：加入 YYYY-MM-DD 以及具体时间段，提升按日期检索命中率
-const formatDateTimeForIndex = (d) => {
-  const start = d.startTime ? new Date(d.startTime) : null;
-  const end = d.endTime ? new Date(d.endTime) : null;
-  const dateStr = start
-    ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
-    : '';
-  const fmt = (dt) => dt ? dt.toLocaleString('zh-CN', { hour12: false }) : '';
-  const timeRange = start && end ? `${fmt(start)} - ${fmt(end)}` : (start ? fmt(start) : '');
-  return (dateStr || timeRange) ? `时间:${dateStr}${timeRange ? ` ${timeRange}` : ''}` : '';
-};
-
-// 构建单条日记的索引文本：标题 + 正文 + 地点 + 标签 + 时间
-const buildIndexText = (d) => [
-  d.title || '',
-  d.content || d.text || '',
-  d.location ? `地点:${d.location}` : '',
-  Array.isArray(d.tags) && d.tags.length ? `标签:${d.tags.join(' ')}` : '',
-  formatDateTimeForIndex(d)
-].filter(Boolean).join('\n');
 
 // 将向量数组转为 PostgreSQL vector 格式
 const vectorToSql = (vec) => `[${vec.join(',')}]`;
 
-// 重新索引当前用户的所有日记
+const indexWorkflow = require('../services/indexWorkflow');
+const Sync = require('../models/DiarySync');
+const sourceVersion = require('../services/sourceVersion');
 exports.reindex = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const diaries = await Diary.find({ user: userId }).sort({ date: -1 }).lean();
-
-    // 优先使用用户默认嵌入配置
-    let embedder;
-    try {
-      const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
-      embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
-      try { logger.llm('RAG索引使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) { }
-    } catch (_) {
-      embedder = new Embeddings();
-    }
-
-    let totalChunks = 0;
-    const strategy = String((req.query.strategy || req.body?.strategy || 'paragraph')).toLowerCase();
-
-    try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length, strategy }); } catch (_) { }
-
-    for (const d of diaries) {
-      const baseText = buildIndexText(d);
-      const chunks = strategy === 'perdiary' ? [baseText] : chunkDiary(baseText);
-      let idx = 0;
-
-      for (const c of chunks) {
-        const vec = await embedder.embed(c);
-        const chunkId = `${d._id}:${idx++}`;
-
-        // 使用 PostgreSQL upsert
-        await pg.query(`
-          INSERT INTO diary_embeddings (user_id, diary_id, chunk_id, text, embedding, updated_at)
-          VALUES ($1, $2, $3, $4, $5::vector, NOW())
-          ON CONFLICT (user_id, diary_id, chunk_id) 
-          DO UPDATE SET text = EXCLUDED.text, embedding = EXCLUDED.embedding, updated_at = NOW()
-        `, [userId, String(d._id), chunkId, c, vectorToSql(vec)]);
-
-        totalChunks++;
-      }
-    }
-
-    try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy }); } catch (_) { }
-
-    return res.json({ success: true, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy });
-  } catch (error) {
-    try { logger.error('RAG索引失败', { message: error.message }); } catch (_) { }
-    return res.status(500).json({ success: false, message: 'RAG索引失败', error: error.message });
-  }
+    const job = await indexWorkflow.enqueue(req.user.id, 'pg', true);
+    res.status(202).json({ success: true, jobId: job._id, message: '已加入索引重建队列，请在同步任务中查看进度' });
+  } catch (_) { res.status(500).json({ success: false, message: '索引任务入队失败' }); }
 };
+exports.reindexForUser = user => indexWorkflow.enqueue(user, 'pg', true);
 
-// 新增：为指定用户重建索引（供内部调用，无HTTP响应）
-exports.reindexForUser = async (userId, options = {}) => {
-  const diaries = await Diary.find({ user: userId }).sort({ date: -1 }).lean();
-
-  let embedder;
-  try {
-    const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
-    embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
-    try { logger.llm('RAG索引使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) { }
-  } catch (_) {
-    embedder = new Embeddings();
-  }
-
-  let totalChunks = 0;
-  const strategy = String((options.strategy || 'paragraph')).toLowerCase();
-
-  try { logger.llm('RAG重建索引开始', { userId, diaryCount: diaries.length, strategy }); } catch (_) { }
-
-  for (const d of diaries) {
-    const baseText = buildIndexText(d);
-    const chunks = strategy === 'perdiary' ? [baseText] : chunkDiary(baseText);
-    let idx = 0;
-
-    for (const c of chunks) {
-      const vec = await embedder.embed(c);
-      const chunkId = `${d._id}:${idx++}`;
-
-      await pg.query(`
-        INSERT INTO diary_embeddings (user_id, diary_id, chunk_id, text, embedding, updated_at)
-        VALUES ($1, $2, $3, $4, $5::vector, NOW())
-        ON CONFLICT (user_id, diary_id, chunk_id) 
-        DO UPDATE SET text = EXCLUDED.text, embedding = EXCLUDED.embedding, updated_at = NOW()
-      `, [userId, String(d._id), chunkId, c, vectorToSql(vec)]);
-
-      totalChunks++;
-    }
-  }
-
-  try { logger.llm('RAG重建索引完成', { userId, indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy }); } catch (_) { }
-
-  return { indexedDiaries: diaries.length, indexedChunks: totalChunks, strategy };
-};
-
-// 查询RAG：返回LLM答案与命中片段
 exports.query = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -225,72 +100,28 @@ exports.query = async (req, res) => {
 
     const dateRange = parseRelativeDateRange(question) || parseAbsoluteDateRange(question);
 
-    // 生成问题向量
-    let embedder;
-    try {
-      const userEmbConfig = await getUserDefaultEmbeddingConfig(userId);
-      embedder = userEmbConfig ? new Embeddings(userEmbConfig) : new Embeddings();
-      try { logger.llm('RAG查询使用嵌入配置', { userId, provider: userEmbConfig?.provider || process.env.EXTERNAL_EMBEDDINGS_PROVIDER, model: userEmbConfig?.model || process.env.EXTERNAL_EMBEDDINGS_MODEL }); } catch (_) { }
-    } catch (_) {
-      embedder = new Embeddings();
-    }
-
+    const embedder = await indexWorkflow.configFor(userId);
     const qvec = await embedder.embed(question);
-    try { logger.llm('查询向量生成', { dim: qvec.length }); } catch (_) { }
-
-    // 使用 PostgreSQL 向量检索
-    let scored = [];
-    if (dateRange) {
-      // 按日期过滤
-      const diariesInRange = await Diary.find({
-        user: userId,
-        startTime: { $gte: dateRange.start, $lt: dateRange.end }
-      }).select('_id').lean();
-      const diaryIds = diariesInRange.map(d => String(d._id));
-
-      if (diaryIds.length > 0) {
-        const result = await pg.query(`
-          SELECT text, diary_id, chunk_id, 1 - (embedding <=> $1::vector) AS score
-          FROM diary_embeddings
-          WHERE user_id = $2 AND diary_id = ANY($3)
-          ORDER BY embedding <=> $1::vector
-          LIMIT $4
-        `, [vectorToSql(qvec), userId, diaryIds, topK]);
-        scored = result.rows;
-      }
-
-      try { logger.llm('候选片段加载完成(按日期过滤)', { count: scored.length, label: dateRange.label }); } catch (_) { }
-
-      // 若过滤后为空，回退到全量
-      if (scored.length === 0) {
-        const result = await pg.query(`
-          SELECT text, diary_id, chunk_id, 1 - (embedding <=> $1::vector) AS score
-          FROM diary_embeddings
-          WHERE user_id = $2
-          ORDER BY embedding <=> $1::vector
-          LIMIT $3
-        `, [vectorToSql(qvec), userId, topK]);
-        scored = result.rows;
-        try { logger.llm('日期过滤无结果，回退全量', { count: scored.length }); } catch (_) { }
-      }
-    } else {
-      const result = await pg.query(`
-        SELECT text, diary_id, chunk_id, 1 - (embedding <=> $1::vector) AS score
-        FROM diary_embeddings
-        WHERE user_id = $2
-        ORDER BY embedding <=> $1::vector
-        LIMIT $3
-      `, [vectorToSql(qvec), userId, topK]);
-      scored = result.rows;
-      try { logger.llm('候选片段加载完成', { count: scored.length }); } catch (_) { }
-    }
-
-    try { logger.llm('TopK命中分数', { scores: scored.map(s => Number(Number(s.score).toFixed(3))) }); } catch (_) { }
-
-    // 取命中片段对应的日记时间信息
-    const diaryIds = Array.from(new Set(scored.map(s => s.diary_id)));
-    const diaryMetas = await Diary.find({ _id: { $in: diaryIds } }).select('startTime endTime').lean();
+    const embeddingVersion = indexWorkflow.embeddingVersion(embedder);
+    const live = await Diary.find({ user: userId, isDeleted: false,
+      ...(dateRange ? { startTime: { $gte: dateRange.start, $lt: dateRange.end } } : {}) }).lean();
+    const states = await Sync.find({ user: userId }).lean();
+    const versions = new Map(states.map(d => [String(d._id), d.pgVersion]));
+    const eligible = live.filter(d => versions.get(String(d._id)) === sourceVersion(d) + embeddingVersion);
+    if (!eligible.length) return res.json({ success: true, answer: '该范围内没有已同步的有效日记。请查看同步状态，完成后再查询。', snippets: [] });
+    const result = await pg.query(`
+      SELECT text, diary_id, chunk_id, 1 - (embedding <=> $1::vector) AS score
+      FROM diary_embeddings WHERE user_id=$2 AND diary_id=ANY($3)
+      ORDER BY embedding <=> $1::vector LIMIT $4
+    `, [vectorToSql(qvec), userId, eligible.map(d => String(d._id)), topK]);
+    // Re-read immediately before assembling the prompt to reject edits/deletions during retrieval.
+    const diaryMetas = await Diary.find({ _id: { $in: eligible.map(d => d._id) }, user: userId, isDeleted: false }).lean();
     const diaryMap = new Map(diaryMetas.map(d => [String(d._id), d]));
+    const scored = result.rows.filter(s => {
+      const d = diaryMap.get(s.diary_id);
+      return d && s.chunk_id.startsWith(indexWorkflow.chunkPrefix(sourceVersion(d) + embeddingVersion));
+    });
+    if (!scored.length) return res.json({ success: true, answer: '资料正在更新，请同步完成后重试。', snippets: [] });
 
     // 为片段附加时间元信息，并按开始时间进行线性排序
     const scoredWithMeta = scored.map((s) => {

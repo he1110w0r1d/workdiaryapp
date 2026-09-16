@@ -1,3 +1,4 @@
+import BackgroundJobs from '../components/BackgroundJobs';
 import React, { useState } from 'react';
 import { Button, Input, Typography, Card, Space, message } from 'antd';
 import api from '../utils/api';
@@ -58,7 +59,7 @@ export default function RagQA() {
       // 将重建索引改为“整篇日记作为一个切片”模式
       const resp = await api.post('/rag/reindex?strategy=perDiary');
       if (resp.data?.success) {
-        message.success(`已重建索引：日记${resp.data.indexedDiaries}，片段${resp.data.indexedChunks}（策略：${resp.data.strategy}）`);
+        message.success(resp.data.message);
       } else {
         message.error(resp.data?.message || '重建索引失败');
       }
@@ -111,6 +112,7 @@ export default function RagQA() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <BackgroundJobs kind="index" />
       {/* 移除原“RAG知识库问答”卡片 */}
       {/* <Card title="RAG知识库问答">
         <Space>

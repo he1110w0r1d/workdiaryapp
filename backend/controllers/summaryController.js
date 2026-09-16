@@ -1995,7 +1995,7 @@ exports.getSummaries = async (req, res) => {
     }
 
     const summariesDocs = await Summary.find(query)
-      .sort({ date: -1 })
+      .sort({ date: -1, createdAt: -1, _id: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
@@ -2098,6 +2098,7 @@ exports.deleteSummary = async (req, res) => {
       return res.status(404).json({ message: '总结未找到' });
     }
 
+    await require('../models/TodoSuggestion').deleteMany({ summary: summary._id, user: req.user.id });
     await Summary.deleteOne({ _id: req.params.id });
     logger.info('总结删除成功:', req.params.id);
     res.json({ message: '总结删除成功' });
@@ -3685,6 +3686,13 @@ exports.ensureSummaryHTML = async (req, res) => {
     const htmlUrl = `/api/summaries/${summary._id}/html`;
     const actualPath = resolveHTMLFile(summary.htmlFilePath);
     if (actualPath && fs.existsSync(actualPath)) {
+      return res.json({ success: true, url: htmlUrl });
+    }
+
+    if (summary.meta?.jobId || summary.meta?.restored) {
+      const escape = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      summary.htmlFilePath = await saveHTMLFile(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工作总结</title><body><h1>${escape(summary.meta.rangeLabel)}</h1><pre style="white-space:pre-wrap;font:16px/1.8 sans-serif">${escape(summary.content)}</pre></body></html>`);
+      await summary.save();
       return res.json({ success: true, url: htmlUrl });
     }
 

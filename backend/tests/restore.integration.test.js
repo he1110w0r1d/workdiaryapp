@@ -60,4 +60,21 @@ test('real replica set: failed restore rolls back records/settings; success pres
   assert.equal(await Diary.countDocuments({ user: other }), 1);
   const snapshot = JSON.parse(await fs.readFile(path.join(__dirname, '../backup', result.snapshotFileName), 'utf8'));
   assert.deepEqual(snapshot.data.diaries, original.diaries);
+
+  const Suggestion = require('../models/TodoSuggestion');
+  const summary = await Summary.findOne({ user: uid });
+  const currentDiary = await Diary.findOne({ user: uid });
+  const candidate = await Suggestion.create({ user: uid, summary: summary._id, ordinal: 0, content: 'pending action', priority: '中', sourceDiaryIds: [currentDiary._id], dataGeneration: 1 });
+  const pendingJob = await require('../services/summaryWorkflow').enqueue(uid, { type: 'daily', anchor: require('../services/summaryPeriods').label(currentDiary.startTime) });
+  const packageWithSuggestions = JSON.parse(JSON.stringify({ metadata: { userId: String(uid) }, data: { ...(await read()), suggestions: await Suggestion.find({ user: uid }).lean() } }));
+  await restoreBackupData(packageWithSuggestions, String(uid));
+  const restoredCandidate = await Suggestion.findOne({ user: uid });
+  assert.notEqual(restoredCandidate.id, candidate.id);
+  assert.equal(restoredCandidate.dataGeneration, 2);
+  assert.ok(await Summary.exists({ _id: restoredCandidate.summary, user: uid }));
+  assert.ok(await Diary.exists({ _id: restoredCandidate.sourceDiaryIds[0], user: uid }));
+  const created = await require('../services/summaryWorkflow').accept(uid, restoredCandidate._id, { dueDate: '2026-10-01' });
+  assert.equal(created.content, 'pending action');
+  assert.equal(String(created.sourceDiaryIds[0]), String(restoredCandidate.sourceDiaryIds[0]));
+  await assert.rejects(require('../services/workflowWrite')(uid, pendingJob.payload.dataGeneration, async () => {}), /旧任务已失效/);
 });

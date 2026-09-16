@@ -141,7 +141,8 @@ test('transaction failure propagates, all mutations use session, snapshot preced
   const user = new User({ _id: uid, username: 'test', email: 'test@example.test', password: 'hash' });
   t.mock.method(User, 'findById', () => ({ session: s => { assert.equal(s, session); return user; } }));
   t.mock.method(fs, 'writeFile', async (filename, content) => { snapshot = JSON.parse(content); });
-  for (const Model of [Diary, Todo, Summary]) {
+  t.mock.method(require('../models/DiarySync'), 'updateOne', async () => ({}));
+  for (const Model of [Diary, Todo, Summary, require('../models/TodoSuggestion')]) {
     t.mock.method(Model, 'find', () => ({ session: s => { assert.equal(s, session); return { lean: async () => [{ original: true }] }; } }));
     t.mock.method(Model, 'deleteMany', async (filter, options) => { assert.equal(options.session, session); assert.ok(snapshot); deleted++; });
     t.mock.method(Model, 'insertMany', async (docs, options) => {

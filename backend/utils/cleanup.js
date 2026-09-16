@@ -29,6 +29,7 @@ const scheduleCleanup = () => {
       
       // 永久删除日记
       if (diariesToDelete.length > 0) {
+        for (const diary of diariesToDelete) await require('../services/indexWorkflow').beforeDiaryRemoval(diary);
         const diaryIds = diariesToDelete.map(diary => diary._id);
         await Diary.deleteMany({ _id: { $in: diaryIds } });
         logger.info(`永久删除了 ${diariesToDelete.length} 条日记记录`);
@@ -37,6 +38,7 @@ const scheduleCleanup = () => {
       // 永久删除待办项
       if (todosToDelete.length > 0) {
         const todoIds = todosToDelete.map(todo => todo._id);
+        await require('../models/TodoSuggestion').updateMany({ todoId: { $in: todoIds }, status: 'accepted' }, { $set: { status: 'dismissed' } });
         await Todo.deleteMany({ _id: { $in: todoIds } });
         logger.info(`永久删除了 ${todosToDelete.length} 条待办记录`);
       }
@@ -76,6 +78,7 @@ const manualCleanup = async () => {
     });
     
     if (diariesToDelete.length > 0) {
+      for (const diary of diariesToDelete) await require('../services/indexWorkflow').beforeDiaryRemoval(diary);
       const diaryIds = diariesToDelete.map(diary => diary._id);
       await Diary.deleteMany({ _id: { $in: diaryIds } });
       logger.info(`手动清理：永久删除了 ${diariesToDelete.length} 条日记记录`);
@@ -83,6 +86,7 @@ const manualCleanup = async () => {
     
     if (todosToDelete.length > 0) {
       const todoIds = todosToDelete.map(todo => todo._id);
+      await require('../models/TodoSuggestion').updateMany({ todoId: { $in: todoIds }, status: 'accepted' }, { $set: { status: 'dismissed' } });
       await Todo.deleteMany({ _id: { $in: todoIds } });
       logger.info(`手动清理：永久删除了 ${todosToDelete.length} 条待办记录`);
     }

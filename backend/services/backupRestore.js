@@ -10,7 +10,7 @@ const User = require('../models/User');
 const invalid = (message) => Object.assign(new Error(message), { status: 400 });
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const id = value => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
-const models = { diaries: Diary, todos: Todo, summaries: Summary };
+const models = { diaries: Diary, todos: Todo, summaries: Summary, suggestions: require('../models/TodoSuggestion') };
 
 async function prepareBackup(backup, userId) {
   if (!object(backup) || !object(backup.metadata) || !object(backup.data)) throw invalid('无效的备份格式');
@@ -18,7 +18,7 @@ async function prepareBackup(backup, userId) {
   const maps = {};
   const prepared = {};
   for (const key of Object.keys(models)) {
-    const records = backup.data[key];
+    const records = key === 'suggestions' && backup.data[key] === undefined ? [] : backup.data[key];
     if (!Array.isArray(records)) throw invalid(`${key} 必须是数组，空集合请明确提供 []`);
     maps[key] = new Map();
     for (const record of records) {
@@ -30,7 +30,7 @@ async function prepareBackup(backup, userId) {
   }
   for (const [key, Model] of Object.entries(models)) {
     prepared[key] = [];
-    for (const record of backup.data[key]) {
+    for (const record of backup.data[key] || []) {
       const copy = { ...record, _id: maps[key].get(record._id.toLowerCase()), user: userId };
       for (const [field, target] of [['relatedTodo', 'todos'], ['relatedDiary', 'diaries']]) {
         if (copy[field] != null) {
@@ -39,9 +39,30 @@ async function prepareBackup(backup, userId) {
           copy[field] = mapped;
         }
       }
+      if (key === 'diaries') copy.difyDocId = null;
+      if (copy.sourceDiaryIds) {
+        if (!Array.isArray(copy.sourceDiaryIds)) throw invalid('sourceDiaryIds 必须是数组');
+        copy.sourceDiaryIds = copy.sourceDiaryIds.map(old => {
+          const mapped = id(old) && maps.diaries.get(old.toLowerCase());
+          if (!mapped) throw invalid('sourceDiaryIds 引用了备份之外的日记');
+          return mapped;
+        });
+      }
+      if (key === 'todos') copy.sourceSuggestion = copy.sourceSuggestion ? maps.suggestions.get(String(copy.sourceSuggestion).toLowerCase()) : undefined;
+      if (key === 'suggestions') {
+        copy.summary = maps.summaries.get(String(copy.summary).toLowerCase());
+        if (!copy.summary) throw invalid('建议引用的总结不在备份中');
+        copy.todoId = maps.todos.get(String(copy.todoId).toLowerCase()) || new mongoose.Types.ObjectId();
+        if (copy.status === 'accepted') {
+          const restoredTodo = prepared.todos.find(t => String(t._id) === String(copy.todoId));
+          // An accepted suggestion whose task was permanently removed must never recreate it.
+          if (!restoredTodo) { copy.status = 'dismissed'; copy.decision = undefined; }
+          else copy.decision = { content: restoredTodo.content, priority: restoredTodo.priority, dueDate: restoredTodo.dueDate, relatedDiary: restoredTodo.relatedDiary, sourceDiaryIds: restoredTodo.sourceDiaryIds };
+        } else copy.decision = undefined;
+      }
       if (copy.deletedBy != null && String(copy.deletedBy) !== String(userId)) throw invalid('删除者不属于当前用户');
       // HTML 是可重新生成的缓存，不信任备份中的文件路径。
-      if (key === 'summaries') copy.htmlFilePath = null;
+      if (key === 'summaries') { copy.htmlFilePath = null; if (copy.meta) copy.meta = { ...copy.meta, sources: null, jobId: null, restored: true }; }
       const doc = new Model(copy);
       await doc.validate();
       prepared[key].push(doc.toObject());
@@ -101,6 +122,9 @@ async function restoreBackupData(backup, userId, strategy = 'merge') {
         snapshot.data[key] = await Model.find({ user: userId }).session(session).lean();
       }
       snapshot.data.user = { profile: Object.fromEntries(['nickname', 'bio', 'avatar', 'workProfile', 'customPrompts'].map(k => [k, oldUser[k]])), llmConfigs: oldUser.llmConfigs, embeddingConfigs: oldUser.embeddingConfigs };
+      for (const diary of snapshot.data.diaries) {
+        await require('../models/DiarySync').updateOne({ _id: diary._id }, { $setOnInsert: { user: userId, difyDocId: diary.difyDocId || undefined } }, { upsert: true, session });
+      }
       const dir = path.join(__dirname, '../backup');
       await fs.mkdir(dir, { recursive: true });
       const snapshotName = `backup-${userId}-pre-restore-${crypto.randomUUID()}.json`;
@@ -109,7 +133,9 @@ async function restoreBackupData(backup, userId, strategy = 'merge') {
         await Model.deleteMany({ user: userId }, { session });
         if (prepared[key].length) await Model.insertMany(prepared[key], { session });
       }
-      if (backup.data.user && strategy !== 'skip') await userDoc.save({ session });
+      userDoc.dataGeneration = (userDoc.dataGeneration || 0) + 1;
+      await userDoc.save({ session });
+      await models.suggestions.updateMany({ user: userId }, { $set: { dataGeneration: userDoc.dataGeneration } }, { session });
       restored.snapshotFileName = snapshotName;
     }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } });
   } finally {

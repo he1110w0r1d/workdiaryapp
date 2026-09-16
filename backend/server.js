@@ -81,9 +81,6 @@ const backupRoutes = require('./routes/backup');
 const apiKeyRoutes = require('./routes/apiKeys');
 const publicApiRoutes = require('./routes/publicApi');
 
-// 导入定时任务
-const { generateDailySummary, generateMonthlySummary, generateYearlySummary, batchGenerateWeeklySummary } = require('./controllers/summaryController');
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
@@ -181,66 +178,20 @@ app.get('/api/docs/api-documentation', (req, res) => {
   }
 });
 
-// 定时任务
-const cronTimeZone = 'Asia/Shanghai';
-
-// 每天凌晨1点生成昨日总结
-cron.schedule('0 1 * * *', generateDailySummary, {
-  timezone: cronTimeZone
+// Durable jobs are shared by manual generation and schedules. Start once after Mongo is ready.
+const summaryWorkflow = require('./services/summaryWorkflow');
+const jobQueue = require('./services/jobQueue');
+const safeSchedule = type => () => summaryWorkflow.enqueueScheduled(type).catch(() => logger.error('总结入队失败'));
+for (const [schedule, type] of [['0 1 * * *', 'daily'], ['30 1 * * 1', 'weekly'], ['0 2 1 * *', 'monthly'], ['0 3 1 1 *', 'yearly']]) {
+  cron.schedule(schedule, safeSchedule(type), { timezone: 'Asia/Shanghai' });
+}
+mongoose.connection.once('connected', async () => {
+  await require('./models/BackgroundJob').init();
+  await require('./models/TodoSuggestion').init();
+  jobQueue.startWorker('summary', summaryWorkflow.generate);
+  require('./services/indexWorkflow').start();
+  safeSchedule('daily')();
 });
-logger.info(`每日总结定时任务已设置，将在每天凌晨1点（${cronTimeZone}）运行`);
-
-// 服务器启动时检查是否需要生成昨日总结
-const checkAndGenerateYesterdaySummary = async () => {
-  try {
-    const now = new Date();
-    const currentHour = now.getHours();
-
-    // 如果当前时间在凌晨1点之后启动，检查昨日总结是否已生成
-    if (currentHour >= 1) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(0, 0, 0, 0);
-
-      const Summary = require('./models/Summary');
-      const existingSummary = await Summary.findOne({
-        type: 'daily',
-        date: yesterday
-      });
-
-      if (!existingSummary) {
-        logger.info('检测到昨日总结未生成，正在补生成...');
-        await generateDailySummary();
-        logger.info('昨日总结补生成完成');
-      }
-    }
-  } catch (error) {
-    logger.error('检查昨日总结时出错:', error);
-  }
-};
-
-// 在数据库连接建立后执行检查
-mongoose.connection.on('connected', () => {
-  setTimeout(checkAndGenerateYesterdaySummary, 3000);
-});
-
-// 每周一凌晨1点30分生成上周总结
-cron.schedule('30 1 * * 1', batchGenerateWeeklySummary, {
-  timezone: cronTimeZone
-});
-logger.info(`每周总结定时任务已设置，将在每周一凌晨1点30分（${cronTimeZone}）运行`);
-
-// 每月1日凌晨2点生成上月总结
-cron.schedule('0 2 1 * *', require('./controllers/summaryController').batchGenerateMonthlySummary, {
-  timezone: cronTimeZone
-});
-logger.info(`每月总结定时任务已设置，将在每月1凌晨2点（${cronTimeZone}）运行`);
-
-// 每年1月1凌晨3点生成上年总结
-cron.schedule('0 3 1 1 *', require('./controllers/summaryController').batchGenerateYearlySummary, {
-  timezone: cronTimeZone
-});
-logger.info(`每年总结定时任务已设置，将在每年1月1凌晨3点（${cronTimeZone}）运行`);
 
 // 启动定时清理任务
 const { scheduleCleanup } = require('./utils/cleanup');

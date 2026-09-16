@@ -179,7 +179,7 @@ const BackupRestore = () => {
           {capability?.restoreReason && <Alert type="warning" showIcon message={capability.restoreReason} />}
           <Text strong>恢复数据</Text>
           <br />
-          <Text type="secondary">日记、待办、总结将完整替换；下面的策略仅控制用户资料与配置。目前此入口支持 JSON 备份。</Text>
+          <Text type="secondary">日记、待办、总结及 AI 建议将完整替换；下面的策略仅控制用户资料与配置。目前此入口支持 JSON 备份。</Text>
           <br />
           <Space style={{ marginTop: 8, marginBottom: 8 }}>
             <Text>用户资料与配置：</Text>
@@ -219,8 +219,8 @@ const BackupRestore = () => {
 
           <Modal title="确认完整替换当前数据" open={!!restorePreview} confirmLoading={restoreLoading}
             onCancel={() => !restoreLoading && setRestorePreview(null)} onOk={confirmRestore} okText="保存快照并替换" okButtonProps={{ danger: true }} maskClosable={!restoreLoading}>
-            <Alert type="warning" message="这不是日记数据合并。系统会先保存恢复前快照，再完整替换当前日记、待办和总结。" />
-            {restorePreview && Object.entries(restorePreview.counts).map(([key, count]) => <p key={key}>{({ diaries: '日记', todos: '待办', summaries: '总结' })[key]}：当前 {count.current} 条 → 导入 {count.incoming} 条</p>)}
+            <Alert type="warning" message="这不是日记数据合并。系统会先保存恢复前快照，再完整替换当前日记、待办、总结及 AI 建议。" />
+            {restorePreview && Object.entries(restorePreview.counts).map(([key, count]) => <p key={key}>{({ diaries: '日记', todos: '待办', summaries: '总结', suggestions: 'AI 建议' })[key]}：当前 {count.current} 条 → 导入 {count.incoming} 条</p>)}
             <p>配置策略：{restoreStrategy === 'merge' ? '补充缺失配置' : restoreStrategy === 'skip' ? '保留现有配置' : '使用备份配置'}</p>
             {restoreLoading && <p>{restoreStage}</p>}
           </Modal>

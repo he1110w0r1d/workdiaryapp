@@ -1,0 +1,45 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const mongoose = require('mongoose');
+const { Pool } = require('pg');
+const { randomUUID } = require('crypto');
+const Diary = require('../models/Diary');
+const Sync = require('../models/DiarySync');
+const Job = require('../models/BackgroundJob');
+const workflow = require('../services/indexWorkflow');
+const queue = require('../services/jobQueue');
+
+test('real pgvector: replace, rollback and hard deletion', { skip: !process.env.TEST_PG_URI || !process.env.TEST_MONGODB_URI, timeout: 60000 }, async t => {
+  const suffix = randomUUID().replaceAll('-', '');
+  const dbName = `workdiary_pg_test_${suffix}`;
+  const pool = new Pool({ connectionString: process.env.TEST_PG_URI });
+  const schema = `test_${suffix}`;
+  await mongoose.connect(process.env.TEST_MONGODB_URI, { dbName });
+  await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+  await pool.query(`CREATE SCHEMA ${schema}`);
+  await pool.query(`CREATE TABLE ${schema}.diary_embeddings (user_id varchar(24),diary_id varchar(24),chunk_id varchar(50),text text,embedding vector(2),updated_at timestamptz,UNIQUE(user_id,diary_id,chunk_id))`);
+  const pg = { getClient: async () => { const c = await pool.connect(); await c.query(`SET search_path TO ${schema},public`); return c; } };
+  t.after(async () => { await pool.query(`DROP SCHEMA ${schema} CASCADE`); await pool.end(); assert.equal(mongoose.connection.name, dbName); await mongoose.connection.dropDatabase(); await mongoose.disconnect(); });
+  await Job.init();
+  const user = new mongoose.Types.ObjectId();
+  const d = await Diary.create({ user, content: 'A'.repeat(1800), startTime: new Date(), endTime: new Date() });
+  const embedder = { config: { model: 'synthetic' }, embed: async () => [0.5, 0.5] };
+  const execute = async (engine = embedder) => {
+    await workflow.enqueue(user, 'pg', true);
+    await queue.runOne('index', (j, cp) => workflow.run(j, cp, { pg, embedder: engine }));
+  };
+  await execute();
+  assert.equal((await pool.query(`SELECT * FROM ${schema}.diary_embeddings`)).rows.length, 3);
+  d.content = 'short'; await d.save(); await execute();
+  const original = (await pool.query(`SELECT * FROM ${schema}.diary_embeddings`)).rows;
+  assert.equal(original.length, 1);
+  assert.ok(original[0].text.startsWith('short'));
+  d.content = 'failure should rollback'; await d.save();
+  await execute({ config: { model: 'synthetic' }, embed: async () => [1, 0, 0] });
+  assert.deepEqual((await pool.query(`SELECT * FROM ${schema}.diary_embeddings`)).rows, original);
+  await Job.updateMany({ status: 'queued' }, { $set: { runAfter: new Date(0) } });
+  await Diary.deleteOne({ _id: d._id });
+  await queue.runOne('index', (j, cp) => workflow.run(j, cp, { pg, embedder }));
+  assert.equal((await pool.query(`SELECT * FROM ${schema}.diary_embeddings`)).rows.length, 0);
+  assert.equal((await Sync.findById(d._id)).pgVersion, 'deleted');
+});

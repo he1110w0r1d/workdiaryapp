@@ -1,3 +1,6 @@
+import BackgroundJobs from './BackgroundJobs';
+import SummarySuggestions from './SummarySuggestions';
+import rehypeSanitize from 'rehype-sanitize';
 import React, { useState, useEffect } from 'react';
 import { 
   Table, 
@@ -452,7 +455,7 @@ const SummaryList = () => {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      render: (text) => moment(text).format('YYYY-MM-DD HH:mm'),
+      render: (text) => moment(text).format('YYYY-MM-DD HH:mm:ss'),
       sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
     },
     {
@@ -529,7 +532,7 @@ const SummaryList = () => {
       render: (_, record) => {
         if (record.type !== 'weekly') return '';
         const rangeLabel = record.meta?.rangeLabel || getWeeklyRangeLabel(record.date);
-        const gen = record.meta?.generatedBy === 'auto' ? '自动（上一周）' : record.meta?.generatedBy === 'manual' ? '手动（本周）' : '未知';
+        const gen = record.meta?.generatedBy === 'auto' ? '自动生成' : record.meta?.generatedBy === 'manual' ? '手动生成' : '未知';
         const llmText = record.meta?.llmUsed === 'none' ? '未使用LLM' : (record.meta?.llmName || '未知LLM');
         return (
           <span>
@@ -551,7 +554,7 @@ const SummaryList = () => {
         const typeText = getTypeText(summary.type);
         const dateText = getTitleDateText(summary);
         const isRead = summary.isRead;
-        const createdAtText = moment(summary.createdAt).format('YYYY-MM-DD HH:mm');
+        const createdAtText = moment(summary.createdAt).format('YYYY-MM-DD HH:mm:ss');
         const contentRaw = summary.content || '';
         const contentSnippet = contentRaw
           .replace(/\s+/g, ' ')
@@ -682,6 +685,9 @@ const SummaryList = () => {
         />
       </div>
       
+      <BackgroundJobs onComplete={() => ['daily', 'weekly', 'monthly', 'yearly'].forEach(type => fetchSummaries(type))} onOpen={async id => {
+        try { setSelectedSummary((await api.get(`/summaries/${id}`)).data); } catch (_) { message.error('报告不存在或无法读取'); }
+      }} />
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab}
@@ -911,6 +917,7 @@ const SummaryList = () => {
             lineHeight: '1.6',
             color: '#333'
           }}>
+            <SummarySuggestions summaryId={selectedSummary._id} />
             {selectedSummary.type === 'weekly' && (
               <div style={{
                 marginBottom: '12px',
@@ -924,15 +931,15 @@ const SummaryList = () => {
                 {selectedSummary.meta?.rangeLabel || getWeeklyRangeLabel(selectedSummary.date)}
                 <span style={{ margin: '0 8px' }}>|</span>
                 <strong style={{ color: '#1890ff' }}>生成方式：</strong>
-                {selectedSummary.meta?.generatedBy === 'auto' ? '自动（上一周）' : selectedSummary.meta?.generatedBy === 'manual' ? '手动（本周）' : '未知'}
+                {selectedSummary.meta?.generatedBy === 'auto' ? '自动生成' : selectedSummary.meta?.generatedBy === 'manual' ? '手动生成' : '未知'}
                 <span style={{ margin: '0 8px' }}>|</span>
                 <strong style={{ color: '#1890ff' }}>LLM：</strong>
-                {selectedSummary.meta?.llmUsed === 'external' ? '外部LLM' : selectedSummary.meta?.llmUsed === 'local' ? '本地LLM' : '未使用LLM'}
+                {selectedSummary.meta?.model || (selectedSummary.meta?.llmUsed === 'external' ? '外部LLM' : selectedSummary.meta?.llmUsed === 'local' ? '本地LLM' : '未记录')}
               </div>
             )}
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
+              rehypePlugins={[rehypeRaw, rehypeSanitize]}
               components={{
                 h1: ({children}) => <h2 style={{color: '#1890ff', borderBottom: '2px solid #1890ff', paddingBottom: '8px'}}>{children}</h2>,
                 h2: ({children}) => <h3 style={{color: '#1890ff', marginTop: '24px', marginBottom: '12px'}}>{children}</h3>,

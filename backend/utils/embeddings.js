@@ -66,6 +66,8 @@ class Embeddings {
       if (Array.isArray(vec)) return vec;
       throw new Error('Embedding响应不含向量');
     } catch (err) {
+      // Configured external failures must remain visible; mixing vector models corrupts retrieval.
+      if (this.config.strict && this.config.apiKey) throw err;
       logger.warn('外部Embedding失败，回退到本地哈希嵌入', { message: err.message });
       return this._hashEmbed(t);
     }

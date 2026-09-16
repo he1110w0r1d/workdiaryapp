@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 
 const logger = require('../utils/logger');
 const userSchema = new mongoose.Schema({
+  dataGeneration: { type: Number, default: 0 },
+  workflowWriteVersion: { type: Number, default: 0 },
   username: {
     type: String,
     required: true,

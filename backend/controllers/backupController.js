@@ -82,6 +82,7 @@ const Diary = require('../models/Diary');
 const Todo = require('../models/Todo');
 const Summary = require('../models/Summary');
 const User = require('../models/User');
+const Suggestion = require('../models/TodoSuggestion');
 
 // 创建备份
 const createBackup = async (req, res) => {
@@ -90,11 +91,12 @@ const createBackup = async (req, res) => {
     logger.info('开始创建备份', { userId, query: req.query });
 
     // 获取用户的所有数据
-    const [diaries, todos, summaries, userDoc] = await Promise.all([
+    const [diaries, todos, summaries, userDoc, suggestions] = await Promise.all([
       Diary.find({ user: userId }).lean(),
       Todo.find({ user: userId }).lean(),
       Summary.find({ user: userId }).lean(),
-      User.findById(userId).lean()
+      User.findById(userId).lean(),
+      Suggestion.find({ user: userId }).lean()
     ]);
 
     // 组装用户设置（剔除敏感字段）
@@ -124,6 +126,7 @@ const createBackup = async (req, res) => {
         diaries,
         todos,
         summaries,
+        suggestions,
         user: {
           profile: userProfile,
           llmConfigs,
@@ -197,8 +200,8 @@ const restoreBackup = async (req, res) => {
     if (req.body?.dryRun === 'true') {
       const prepared = await prepareBackup(backup, req.user.id);
       const counts = {};
-      for (const key of ['diaries', 'todos', 'summaries']) {
-        const Model = require(`../models/${{ diaries: 'Diary', todos: 'Todo', summaries: 'Summary' }[key]}`);
+      for (const key of ['diaries', 'todos', 'summaries', 'suggestions']) {
+        const Model = require(`../models/${{ diaries: 'Diary', todos: 'Todo', summaries: 'Summary', suggestions: 'TodoSuggestion' }[key]}`);
         counts[key] = { current: await Model.countDocuments({ user: req.user.id }), incoming: prepared[key].length };
       }
       return res.json({ success: true, counts });
@@ -374,13 +377,14 @@ const exportBackup = async (req, res) => {
 
     // 采集用户数据并写入 data.json
     setProgress(progressId, { stage: 'collect', percent: 45, logs: ['采集用户数据'] });
-    const [diaries, todos, summaries] = await Promise.all([
+    const [diaries, todos, summaries, suggestions] = await Promise.all([
       Diary.find({ user: userId }).lean(),
       Todo.find({ user: userId }).lean(),
-      Summary.find({ user: userId }).lean()
+      Summary.find({ user: userId }).lean(),
+      Suggestion.find({ user: userId }).lean()
     ]);
     meta.stats = { diaries: diaries.length, todos: todos.length, summaries: summaries.length };
-    archive.append(JSON.stringify({ diaries, todos, summaries }, null, 2), { name: 'data.json' });
+    archive.append(JSON.stringify({ diaries, todos, summaries, suggestions }, null, 2), { name: 'data.json' });
     setProgress(progressId, { stage: 'pack', percent: 60, logs: [`写入 data.json（${diaries.length}/${todos.length}/${summaries.length}）`] });
     await archive.finalize();
     await finalizeArchive();

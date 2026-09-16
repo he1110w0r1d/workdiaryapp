@@ -6,13 +6,6 @@ const {
   getSummaries,
   getSummaryById,
   deleteSummary,
-  regenerateDailySummary,
-  regenerateLastWeeklySummary,
-  generateTodaySummary,
-  generateWeeklySummary,
-  generateMonthlySummary,
-  generateCurrentMonthlySummary,
-  generateYearlySummary,
   getPromptTemplate,
   updatePromptTemplate,
   markSummaryAsRead,
@@ -20,6 +13,15 @@ const {
   markAllSummariesAsRead,
   ensureSummaryHTML
 } = require('../controllers/summaryController');
+
+const workflow = require('../controllers/workflowController');
+router.get('/jobs', protect, workflow.list);
+router.post('/jobs', protect, workflow.create);
+router.post('/jobs/preview', protect, workflow.preview);
+router.post('/jobs/:jobId/retry', protect, workflow.retry);
+router.get('/:id/suggestions', protect, workflow.suggestions);
+router.post('/suggestions/:suggestionId/accept', protect, workflow.accept);
+router.post('/suggestions/:suggestionId/dismiss', protect, workflow.dismiss);
 
 router.get('/:id/html', protect, require('../controllers/summaryFileController').getSummaryHTML);
 
@@ -35,26 +37,26 @@ router.route('/:id/ensure-html')
   .get(protect, ensureSummaryHTML);
 
 router.route('/regenerate/daily')
-  .post(protect, regenerateDailySummary);
+  .post(protect, workflow.legacy('daily', true));
 
 // 重新生成上周每周总结
 router.route('/regenerate/weekly/last')
-  .post(protect, regenerateLastWeeklySummary);
+  .post(protect, workflow.legacy('weekly', true));
 
 router.route('/generate/today')
-  .post(protect, generateTodaySummary);
+  .post(protect, workflow.legacy('daily'));
 
 router.route('/generate/weekly')
-  .post(protect, generateWeeklySummary);
+  .post(protect, workflow.legacy('weekly'));
 
 router.route('/generate/monthly')
-  .post(protect, generateMonthlySummary);
+  .post(protect, workflow.legacy('monthly', true));
 
 router.route('/generate/current-monthly')
-  .post(protect, generateCurrentMonthlySummary);
+  .post(protect, workflow.legacy('monthly'));
 
 router.route('/generate/yearly')
-  .post(protect, generateYearlySummary);
+  .post(protect, workflow.legacy('yearly'));
 
 router.route('/prompt/:type')
   .get(protect, getPromptTemplate)
