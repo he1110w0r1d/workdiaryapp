@@ -78,3 +78,10 @@ test('configured timeout is respected and queue-owned retry makes only one reque
  t.mock.method(llm.client,'post',async()=>{calls++;const e=new Error('timeout');e.code='ECONNABORTED';throw e});
  await assert.rejects(llm.generateText('synthetic',{retryTransient:false}),{code:'ECONNABORTED'});assert.equal(calls,1);
 });
+
+test('truncation expansion never exceeds user output ceiling', async t => {
+ const llm=model();const budgets=[];
+ t.mock.method(llm.client,'post',async(_,body)=>{budgets.push(body.max_tokens);return response('length','partial')});
+ await assert.rejects(llm.generateText('synthetic',{maxTokens:8192,maxOutputBudget:12000,requireComplete:true}),e=>e.code==='LLM_OUTPUT_TRUNCATED'&&e.usedMaxTokens===12000);
+ assert.deepEqual(budgets,[8192,12000]);
+});

@@ -357,7 +357,7 @@ class ExternalLLM {
         .some(reason => ['length', 'max_tokens', 'MAX_TOKENS'].includes(reason));
     };
     if (options.requireComplete && truncated(response.data)) {
-      const expanded = this._getSafeMaxTokens(effectiveProvider, requestData.max_tokens * 2);
+      const expanded = this._getSafeMaxTokens(effectiveProvider, Math.min(requestData.max_tokens * 2, options.maxOutputBudget || Number.MAX_SAFE_INTEGER));
       if (options.retryTruncated !== false && expanded > requestData.max_tokens) {
         requestData.max_tokens = expanded;
         response = await this.client.post(apiUrl, requestData, requestConfig);
@@ -365,6 +365,7 @@ class ExternalLLM {
       if (truncated(response.data)) {
         const error = new Error('模型输出达到长度上限，未保存不完整报告');
         error.code = 'LLM_OUTPUT_TRUNCATED';
+        error.usedMaxTokens = requestData.max_tokens;
         error.publicMessage = '模型输出被截断，请缩短统计周期或调整模型输出限制后重试；已有报告保留';
         error.permanent = true;
         throw error;

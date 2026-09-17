@@ -61,9 +61,18 @@ async function generate(job, checkpoint, dependencies = {}) {
     const key = require('crypto').createHash('sha256').update(prompt).digest('hex');
     if (typeof cache[key] === 'string') return cache[key];
     let text;
+    const ceiling = Number(model.config?.maxTokens) || 16000;
+    const requestedBudget = Math.min(ceiling, Number(p.callBudgets?.[key]) || budget);
     try {
-      text = await model.generateText(prompt, { maxTokens: Math.min(Number(model.config?.maxTokens) || 16000, budget), requireComplete: true, retryTransient: false, retryTruncated: false });
+      text = await model.generateText(prompt, { maxTokens: requestedBudget, requireComplete: true, retryTransient: false, retryTruncated: true, maxOutputBudget: ceiling });
     } catch (error) {
+      if (error.code === 'LLM_OUTPUT_TRUNCATED') {
+        const used = error.usedMaxTokens || requestedBudget;
+        const nextBudget = Math.min(ceiling, used * 2);
+        const saved = await Job.updateOne({ _id: job._id, token: job.token, status: 'running' }, { $set: { [`payload.callBudgets.${key}`]: nextBudget } });
+        if (!saved.matchedCount) throw new Error('任务租约已失效');
+        throw invalid(nextBudget > used ? `当前分段输出达到 ${used} Token（含推理过程）；已保存此前分段，下次重试将使用 ${nextBudget} Token 从断点继续。` : `当前分段达到配置的输出上限 ${ceiling} Token（含推理过程），请提高模型最大输出或更换模型；已完成分段保留。`);
+      }
       const status = error.response?.status;
       if (['ECONNABORTED', 'ETIMEDOUT'].includes(error.code) || /timeout/i.test(error.message || '')) {
         throw invalid(`模型请求超时（${Math.round((model.config?.timeout || 30000) / 1000)}秒）。已保存完成的分段；请调整模型超时或切换模型后重试，将从断点继续。`);
