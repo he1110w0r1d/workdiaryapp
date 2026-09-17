@@ -56,15 +56,16 @@ async function generate(job, checkpoint, dependencies = {}) {
   }
   const user = await User.findById(job.user).select('customPrompts nickname username workProfile').lean();
   const model = dependencies.model || await modelFor(job.user);
+  const policy = require('./summaryModelPolicy').summaryModelPolicy(model.config);
   const cache = { ...(p.completedCalls || {}) };
   const ask = async (prompt, budget = 65536) => {
     const key = require('crypto').createHash('sha256').update(prompt).digest('hex');
     if (typeof cache[key] === 'string') return cache[key];
     let text;
-    const ceiling = Number(model.config?.maxTokens) || 16000;
+    const ceiling = Math.min(Number(model.config?.maxTokens) || 16000, policy.maxOutput);
     const requestedBudget = Math.min(ceiling, Number(p.callBudgets?.[key]) || budget);
     try {
-      text = await model.generateText(prompt, { maxTokens: requestedBudget, requireComplete: true, retryTransient: false, retryTruncated: true, maxOutputBudget: ceiling });
+      text = await model.generateText(prompt, { maxTokens: requestedBudget, requireComplete: true, retryTransient: false, retryTruncated: true, maxOutputBudget: ceiling, reasoningEffort: policy.large ? (budget < 65536 ? 'low' : 'high') : undefined });
     } catch (error) {
       if (error.code === 'LLM_OUTPUT_TRUNCATED') {
         const used = error.usedMaxTokens || requestedBudget;
@@ -90,16 +91,16 @@ async function generate(job, checkpoint, dependencies = {}) {
   };
   const editorial = ['weekly', 'monthly'].includes(p.type);
   // Preserve the established chunk plan for jobs that already have checkpoints.
-  const legacyChunks = Object.keys(p.completedCalls || {}).length > 0 && !p.chunkPlan;
-  const inputTarget = legacyChunks ? 12000 : 64000;
-  let chunks = diaryChunks(diaries, legacyChunks ? 9000 : 48000);
+  const legacyChunks = !policy.large && Object.keys(p.completedCalls || {}).length > 0 && !p.chunkPlan;
+  const inputTarget = policy.large ? policy.inputBytes : legacyChunks ? 12000 : 64000;
+  let chunks = diaryChunks(diaries, policy.large ? 200000 : legacyChunks ? 9000 : 48000);
   if (!legacyChunks && !p.chunkPlan) {
     const saved = await Job.updateOne({ _id: job._id, token: job.token, status: 'running' }, { $set: { 'payload.chunkPlan': 'large-v1' } });
     if (!saved.matchedCount) throw new Error('任务租约已失效');
   }
   let material = chunks.join('\n');
   // Every source is processed; chunks preserve diary boundaries and identity.
-  for (let level = 0; material.length > inputTarget; level++) {
+  for (let level = 0; (policy.large ? Buffer.byteLength(material, 'utf8') : material.length) > inputTarget; level++) {
     if (level > 5) throw invalid('模型未能压缩长周期资料，请缩短统计周期后重试');
     const parts = [];
     for (const chunk of chunks) {
@@ -116,7 +117,7 @@ async function generate(job, checkpoint, dependencies = {}) {
     }
     if (chunk) chunks.push(chunk);
   }
-  await checkpoint('生成总结正文');
+  await checkpoint(policy.large ? `读取完整周期资料并生成正文（${diaries.length}条日记）` : '生成总结正文');
   const template = user?.customPrompts?.[p.type] || (editorial ? '' : (model._getPromptTemplate ? await model._getPromptTemplate(p.type, job.user) : '按成果、问题和后续行动整理工作总结。'));
   const todoFilter = { user: job.user, isDeleted: false };
   const inPeriod = { $gte: new Date(p.start), $lt: new Date(p.end) };

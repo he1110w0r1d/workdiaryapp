@@ -85,3 +85,10 @@ test('truncation expansion never exceeds user output ceiling', async t => {
  await assert.rejects(llm.generateText('synthetic',{maxTokens:8192,maxOutputBudget:12000,requireComplete:true}),e=>e.code==='LLM_OUTPUT_TRUNCATED'&&e.usedMaxTokens===12000);
  assert.deepEqual(budgets,[8192,12000]);
 });
+
+test('GLM 5.3 report policy preserves whole-month input and explicitly controls reasoning', async t => {
+ const {summaryModelPolicy}=require('../services/summaryModelPolicy');const policy=summaryModelPolicy({provider:'zhipu',model:'glm-5.3-flash'});assert.equal(policy.contextTokens,1000000);assert.equal(policy.maxOutput,131072);assert.ok(policy.inputBytes>123179);
+ const llm=new ExternalLLM({provider:'zhipu',model:'glm-5.3-flash',enabled:true,apiKey:'synthetic'});const prompt='资料'.repeat(40000);
+ t.mock.method(llm.client,'post',async(_,body)=>{assert.equal(body.messages[0].content,prompt);assert.equal(body.reasoning_effort,'high');assert.deepEqual(body.thinking,{type:'enabled'});return response('stop','complete')});
+ assert.equal(await llm.generateText(prompt,{maxTokens:65536,reasoningEffort:'high',requireComplete:true}),'complete');
+});

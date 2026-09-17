@@ -287,6 +287,10 @@ class ExternalLLM {
           temperature: temperature,
           max_tokens: maxTokens
         };
+        if (/^glm-5\.3-flash$/i.test(this.config.model) && ['low', 'high', 'max'].includes(options.reasoningEffort)) {
+          requestData.reasoning_effort = options.reasoningEffort;
+          requestData.thinking = { type: 'enabled' };
+        }
         break;
 
       case 'custom':
