@@ -22,3 +22,11 @@
 ## 回滚
 
 先备份回滚时的新数据。恢复 backup/compose.before.json 到现用 compose 配置，仅重建 backend 即可回到原镜像；不恢复旧数据库覆盖新写入。现用配置仍为 `/root/workdiary-release-20260917/compose.production.json`。使用 docker-compose v1 的 `up -d --no-deps --no-build backend`，无需服务器构建。
+
+## 局域网同步部署
+
+- 192.168.1.168 / shenchun-linux 已同步运行 `b72631f` 对应后端镜像，入口 `http://192.168.1.168:13000`；本地代码已快进到同一提交。
+- 保留本地模型配置、数据库连接及持久化卷，服务器上的模板已单独持久挂载。没有迁入云端用户或业务数据。
+- 部署前完整备份：`/home/shenchun/workdiary-report-lan-20260917/backup`；包含 Mongo 全库 oplog archive、PG dump、文件、运行环境与原 compose。离机副本已下载并校验 SHA256。
+- 切换和临时测试清理后，1 用户、627 日记、662 待办、359 总结的内容哈希均与部署前一致。
+- 本地入口返回 200；临时报告通过未登录拒绝、鉴权 Markdown 页面、CSP、缓存复用验证，测试用户及报告已清理。后台任务已恢复。
