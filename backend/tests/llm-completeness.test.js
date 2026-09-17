@@ -34,6 +34,18 @@ test('transient retries do not truncate complete-report input', async t => {
   const prompt = 'x'.repeat(15000);
   await llm.generateText(prompt, { maxTokens: 4000, requireComplete: true });
   assert.ok(calls.every(c => c.messages[0].content === prompt));
+  assert.deepEqual(calls.map(c => c.max_tokens), [4000, 4000]);
+});
+
+test('configured reasoning budget and long complete input are preserved', async t => {
+  const llm = model();
+  const prompt = 'x'.repeat(24000);
+  t.mock.method(llm.client, 'post', async (_, body) => {
+    assert.equal(body.max_tokens, 32000);
+    assert.equal(body.messages[0].content, prompt);
+    return response('stop', 'complete');
+  });
+  assert.equal(await llm.generateText(prompt, { maxTokens: 32000, requireComplete: true }), 'complete');
 });
 
 test('token cap and Anthropic max_tokens stop cannot bypass completeness checks', async t => {

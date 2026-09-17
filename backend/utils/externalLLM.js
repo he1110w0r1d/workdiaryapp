@@ -134,7 +134,7 @@ class ExternalLLM {
 
     // 对超长提示词进行适度截断（通用策略，避免长输入触发远端切断）
     let promptToSend = prompt;
-    if (typeof prompt === 'string' && prompt.length > 20000) {
+    if (!options.requireComplete && typeof prompt === 'string' && prompt.length > 20000) {
       logger.llm('提示词过长，进行截断以提升稳定性');
       promptToSend = prompt.slice(0, 20000);
     }
@@ -341,7 +341,7 @@ class ExternalLLM {
       if (isTransient) {
         try {
           logger.llm('出现瞬时错误，尝试以较小max_tokens重试一次');
-          const half = Math.max(512, Math.floor(maxTokens / 2));
+          const half = options.requireComplete ? maxTokens : Math.max(512, Math.floor(maxTokens / 2));
           const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
           requestData.max_tokens = reducedTokens;
           if (!options.requireComplete && typeof promptToSend === 'string' && promptToSend.length > 12000) {

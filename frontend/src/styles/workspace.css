@@ -37,3 +37,24 @@
 .answer-sources { border-top:1px solid var(--line); padding-top:18px; margin-top:25px; }.answer-sources h3 { font-size:14px; font-weight:500; }
 .task-open { color:#9cae90; font-size:12px; flex-shrink:0; padding-top:6px; }
 @media (min-width:769px) and (max-height:820px) { .workspace-sidebar { padding-top:22px; padding-bottom:10px; }.workspace-sidebar .sidebar-brand { margin-bottom:25px; }.workspace-sidebar .sidebar-search { margin-bottom:20px; }.workspace-sidebar .sidebar-bottom { padding-top:22px; }.workspace-sidebar .sidebar-account { padding-top:13px; margin-top:12px; }.workspace-sidebar .sidebar-collapse { margin-top:5px; }.workspace-sidebar .workspace-nav-link { min-height:39px; } }
+
+.diary-markdown { color: #29352f; font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; padding-bottom: 24px; }
+.diary-markdown h1, .diary-markdown h2, .diary-markdown h3 { line-height: 1.5; margin: 1.6em 0 .7em; font-weight: 600; }
+.diary-markdown h1 { font-size: 24px; } .diary-markdown h2 { font-size: 19px; } .diary-markdown h3 { font-size: 16px; }
+.diary-markdown > :first-child { margin-top: 0; }
+.diary-markdown p { white-space: pre-wrap; margin: .7em 0; }
+.diary-markdown ul, .diary-markdown ol { padding-left: 24px; }
+.diary-markdown li { margin: .4em 0; }
+.diary-markdown blockquote { border-left: 3px solid #b5c5ba; padding-left: 16px; color: #69766d; margin-left: 0; }
+.diary-markdown pre { overflow: auto; padding: 16px; background: #f4f6f2; border-radius: 8px; }
+.diary-markdown img { max-width: 100%; } .diary-markdown table { display: block; overflow-x: auto; border-collapse: collapse; }
+.diary-markdown td, .diary-markdown th { padding: 8px 12px; border: 1px solid #dfe5dc; }
+.diary-markdown hr { border: 0; border-top: 1px solid #e3e7df; margin: 24px 0; }
+.diary-metadata { margin: 0 0 20px; padding: 20px 0; border-top: 1px solid #e3e7df; border-bottom: 1px solid #e3e7df; font-size: 13px; }
+.diary-metadata > div { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 12px; margin: 12px 0; }
+.diary-metadata dt, .diary-meta-label { color: #778078; font-weight: 400; font-size: 13px; }
+.diary-metadata dd { margin: 0; color: #35443b; }
+.diary-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.diary-tag { display: inline-block; padding: 2px 9px; border-radius: 5px; background: #edf1eb; color: #526658; font-size: 12px; }
+.diary-tag-urgent { color: #a54435; background: #fbede8; }
+.diary-duration { display: block; color: #7a837b; margin-top: 4px; }

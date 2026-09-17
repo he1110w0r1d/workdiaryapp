@@ -36,6 +36,9 @@ import api from '../utils/api';
 import moment from 'moment';
 import dayjs from 'dayjs';
 import PageHeading from './PageHeading';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -629,87 +632,19 @@ const DiaryList = () => {
         width={720}
       >
         {viewingDiary && (
-          <div style={{ lineHeight: '1.8' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#315d4e', fontSize: '16px' }}> 工作内容：</strong>
-              <div style={{ 
-                marginTop: '8px', 
-                padding: '12px', 
-                backgroundColor: '#f9f9f9', 
-                borderRadius: '6px',
-                border: '1px solid #e8e8e8',
-                whiteSpace: 'pre-wrap',
-                fontSize: '14px',
-                lineHeight: '1.6'
-              }}>
-                {viewingDiary.content}
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#52c41a', fontSize: '14px' }}> 工作地点：</strong>
-              <span style={{ marginLeft: '8px', fontSize: '14px' }}>{viewingDiary.location || '未填写'}</span>
-            </div>
-            
-            <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#fa8c16', fontSize: '14px' }}>⏰ 工作时间：</strong>
-              <div style={{ marginLeft: '8px', fontSize: '14px' }}>
-                <div>开始：{moment(viewingDiary.startTime).format('YYYY-MM-DD HH:mm')}</div>
-                <div>结束：{moment(viewingDiary.endTime).format('YYYY-MM-DD HH:mm')}</div>
-                <div style={{ color: '#666', fontSize: '12px' }}>
-                  时长：{moment.duration(moment(viewingDiary.endTime).diff(moment(viewingDiary.startTime))).humanize()}
-                </div>
-              </div>
-            </div>
-            
-            {viewingDiary.tags && viewingDiary.tags.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#722ed1', fontSize: '14px' }}> 标签：</strong>
-                <div style={{ marginTop: '8px' }}>
-                  {viewingDiary.tags.map((tag) => {
-                    let color = tag.length > 5 ? 'geekblue' : 'green';
-                    if (tag === '紧急') {
-                      color = 'volcano';
-                    }
-                    return (
-                      <Tag color={color} key={tag} style={{ marginBottom: '4px' }}>
-                        {tag.toUpperCase()}
-                      </Tag>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#eb2f96', fontSize: '14px' }}> 优先级：</strong>
-              <div style={{ marginTop: '8px' }}>
-                {(() => {
-                  const priority = viewingDiary.workPriority || '中';
-                  let color = 'default';
-                  let emoji = '';
-                  if (priority === '高') {
-                    color = 'red';
-                    emoji = '';
-                  } else if (priority === '低') {
-                    color = 'green';
-                    emoji = '';
-                  } else {
-                    color = 'orange';
-                    emoji = '';
-                  }
-                  return (
-                    <Tag color={color}>
-                      {emoji} {priority}
-                    </Tag>
-                  );
-                })()}
-              </div>
-            </div>
-            
+          <div className="diary-detail">
+            <article className="diary-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{viewingDiary.content || ''}</ReactMarkdown>
+            </article>
+            <dl className="diary-metadata">
+              <div><dt>工作地点</dt><dd>{viewingDiary.location || '未填写'}</dd></div>
+              <div><dt>工作时间</dt><dd>{moment(viewingDiary.startTime).format('YYYY-MM-DD HH:mm')} — {moment(viewingDiary.endTime).format('YYYY-MM-DD HH:mm')}<span className="diary-duration">{moment.duration(moment(viewingDiary.endTime).diff(moment(viewingDiary.startTime))).humanize()}</span></dd></div>
+              {!!viewingDiary.tags?.length && <div><dt>标签</dt><dd className="diary-tags">{viewingDiary.tags.map(tag => <span className="diary-tag" key={tag}>{tag}</span>)}</dd></div>}
+              <div><dt>优先级</dt><dd><span className={`diary-tag ${viewingDiary.workPriority === '高' ? 'diary-tag-urgent' : ''}`}>{viewingDiary.workPriority || '中'}</span></dd></div>
+            </dl>
             {/* 待办状态显示与管理 */}
             <div style={{ marginBottom: '16px' }}>
-              <strong style={{ color: '#13c2c2', fontSize: '14px' }}> 待办状态：</strong>
+              <strong className="diary-meta-label">待办状态</strong>
               <div style={{ marginTop: '8px' }}>
                 {(() => {
                   // 判断是否为待办日记 - 使用isTodo字段
