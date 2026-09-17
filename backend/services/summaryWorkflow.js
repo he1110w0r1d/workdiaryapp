@@ -57,12 +57,12 @@ async function generate(job, checkpoint, dependencies = {}) {
   const user = await User.findById(job.user).select('customPrompts nickname username workProfile').lean();
   const model = dependencies.model || await modelFor(job.user);
   const cache = { ...(p.completedCalls || {}) };
-  const ask = async (prompt) => {
+  const ask = async (prompt, budget = 16384) => {
     const key = require('crypto').createHash('sha256').update(prompt).digest('hex');
     if (typeof cache[key] === 'string') return cache[key];
     let text;
     try {
-      text = await model.generateText(prompt, { maxTokens: Number(model.config?.maxTokens) || 16000, requireComplete: true, retryTransient: false, retryTruncated: false });
+      text = await model.generateText(prompt, { maxTokens: Math.min(Number(model.config?.maxTokens) || 16000, budget), requireComplete: true, retryTransient: false, retryTruncated: false });
     } catch (error) {
       const status = error.response?.status;
       if (['ECONNABORTED', 'ETIMEDOUT'].includes(error.code) || /timeout/i.test(error.message || '')) {
@@ -88,7 +88,7 @@ async function generate(job, checkpoint, dependencies = {}) {
     const parts = [];
     for (const chunk of chunks) {
       await checkpoint(`整理长周期资料（第 ${level + 1} 轮，第 ${parts.length + 1}/${chunks.length} 段，已完成分段自动复用）`);
-      parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`));
+      parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`, 8192));
     }
     material = parts.join('\n');
     chunks = [];
@@ -125,7 +125,7 @@ async function generate(job, checkpoint, dependencies = {}) {
     if (!saved.matchedCount) throw new Error('任务租约已失效');
   }
   await checkpoint('提取待确认建议');
-  const raw = await ask(`从工作资料中提取明确建议执行的未来事项，最多10条，不确定则返回空数组。只返回JSON数组，每条字段content、priority（高/中/低）、relatedDiaryIds（仅使用资料中的ID），不要生成截止日期。\n资料：\n${material}`);
+  const raw = await ask(`从工作资料中提取明确建议执行的未来事项，最多10条，不确定则返回空数组。只返回JSON数组，每条字段content、priority（高/中/低）、relatedDiaryIds（仅使用资料中的ID），不要生成截止日期。\n资料：\n${material}`, 4096);
   let items;
   try { items = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
   catch (_) { throw invalid('模型的待办建议格式无效，请重试；已有报告不会被删除'); }
