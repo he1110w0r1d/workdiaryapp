@@ -182,10 +182,12 @@ app.get('/api/docs/api-documentation', (req, res) => {
 const summaryWorkflow = require('./services/summaryWorkflow');
 const jobQueue = require('./services/jobQueue');
 const safeSchedule = type => () => summaryWorkflow.enqueueScheduled(type).catch(() => logger.error('总结入队失败'));
-for (const [schedule, type] of [['0 1 * * *', 'daily'], ['30 1 * * 1', 'weekly'], ['0 2 1 * *', 'monthly'], ['0 3 1 1 *', 'yearly']]) {
+for (const [schedule, type] of (process.env.BACKGROUND_JOBS_ENABLED === 'false' ? [] : [['0 1 * * *', 'daily'], ['30 1 * * 1', 'weekly'], ['0 2 1 * *', 'monthly'], ['0 3 1 1 *', 'yearly']])) {
   cron.schedule(schedule, safeSchedule(type), { timezone: 'Asia/Shanghai' });
 }
 mongoose.connection.once('connected', async () => {
+  // Deployment checks can validate data before any catch-up jobs write or call models.
+  if (process.env.BACKGROUND_JOBS_ENABLED === 'false') return;
   await require('./models/BackgroundJob').init();
   await require('./models/TodoSuggestion').init();
   jobQueue.startWorker('summary', summaryWorkflow.generate);
