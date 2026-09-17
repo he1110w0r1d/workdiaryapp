@@ -3681,15 +3681,16 @@ exports.ensureSummaryHTML = async (req, res) => {
 
     const htmlUrl = `/api/summaries/${summary._id}/html`;
     const actualPath = resolveHTMLFile(summary.htmlFilePath);
-    if (actualPath && fs.existsSync(actualPath)) {
+    const { renderReport, renderKey } = require('../services/reportRenderer');
+    const key = renderKey(summary);
+    if (actualPath && fs.existsSync(actualPath) && summary.htmlRenderKey === key) {
       return res.json({ success: true, url: htmlUrl });
     }
 
     // Historical reports are immutable snapshots too. Never regenerate their
     // HTML from today's diary data or reuse the old shared filenames.
-    const escape = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    const title = summary.meta?.rangeLabel || new Date(summary.date).toISOString().slice(0, 10);
-    summary.htmlFilePath = await saveHTMLFile(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工作总结</title><body><h1>${escape(title)}</h1><pre style="white-space:pre-wrap;font:16px/1.8 sans-serif">${escape(summary.content)}</pre></body></html>`);
+    summary.htmlFilePath = await saveHTMLFile(renderReport(summary));
+    summary.htmlRenderKey = key;
     await summary.save();
     return res.json({ success: true, url: htmlUrl });
   } catch (error) {

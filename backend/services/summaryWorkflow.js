@@ -6,6 +6,7 @@ const Suggestion = require('../models/TodoSuggestion');
 const Todo = require('../models/Todo');
 const queue = require('./jobQueue');
 const sourceVersion = require('./sourceVersion');
+const { reportInstructions, diaryChunks } = require('./reportEditorial');
 const { period, label } = require('./summaryPeriods');
 
 function invalid(message) { const e = new Error(message); e.publicMessage = message; e.permanent = true; return e; }
@@ -61,20 +62,29 @@ async function generate(job, checkpoint, dependencies = {}) {
     if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回内容');
     return text.trim();
   };
-  const input = diaries.map(d => JSON.stringify({ id: String(d._id), content: d.content, start: d.startTime, end: d.endTime, location: d.location, tags: d.tags, priority: d.workPriority })).join('\n');
-  let material = input;
-  // Read every part of a large period; never silently truncate at the provider's 20k limit.
+  const editorial = ['weekly', 'monthly'].includes(p.type);
+  let chunks = diaryChunks(diaries);
+  let material = chunks.join('\n');
+  // Every source is processed; chunks preserve diary boundaries and identity.
   for (let level = 0; material.length > 12000; level++) {
     if (level > 5) throw invalid('模型未能压缩长周期资料，请缩短统计周期后重试');
     const parts = [];
-    for (let offset = 0; offset < material.length; offset += 10000) {
+    for (const chunk of chunks) {
       await checkpoint(`整理长周期资料（第 ${level + 1} 轮，第 ${parts.length + 1} 段）`);
-      parts.push(await ask(`压缩以下工作记录，保留事实、日期、成果、未完成事项及来源ID；不要新增事实。输出不超过1500字。\n${material.slice(offset, offset + 10000)}`));
+      parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`));
     }
     material = parts.join('\n');
+    chunks = [];
+    let chunk = '';
+    for (const part of parts) {
+      if (part.length > 10000) throw invalid('模型未能压缩资料，请重试');
+      if (chunk && chunk.length + part.length > 10000) { chunks.push(chunk); chunk = ''; }
+      chunk += part + '\n';
+    }
+    if (chunk) chunks.push(chunk);
   }
   await checkpoint('生成总结正文');
-  const template = user?.customPrompts?.[p.type] || (model._getPromptTemplate ? await model._getPromptTemplate(p.type, job.user) : '按成果、问题和后续行动整理工作总结。');
+  const template = user?.customPrompts?.[p.type] || (editorial ? '' : (model._getPromptTemplate ? await model._getPromptTemplate(p.type, job.user) : '按成果、问题和后续行动整理工作总结。'));
   const todoFilter = { user: job.user, isDeleted: false };
   const inPeriod = { $gte: new Date(p.start), $lt: new Date(p.end) };
   const [created, completed, pending, allPending] = await Promise.all([
@@ -88,9 +98,11 @@ async function generate(job, checkpoint, dependencies = {}) {
     userName: user?.nickname || user?.username, userPosition: user?.workProfile?.position, userDepartment: user?.workProfile?.department,
     userLevel: user?.workProfile?.level, userIndustry: user?.workProfile?.industry, userResponsibilities: user?.workProfile?.responsibilities?.join('、'),
     todayTodosCreated: created, todayTodosCompleted: completed, todayTodosPending: pending, totalPendingTodos: allPending,
+    weeklyTodosCreated: created, weeklyTodosCompleted: completed, weeklyTodosPending: pending,
+    monthlyTodosCreated: created, monthlyTodosCompleted: completed, monthlyTodosPending: pending,
     score: '根据资料评估', suggestion: '根据资料提出' };
   const custom = template.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? '未提供');
-  const content = p.generatedContent || await ask(`统计周期：${p.rangeLabel}（北京时间），类型：${p.type}。\n仅依据下列资料，总结中区分已完成工作与建议，不能把建议写成已完成事实。待办新增和完成次数按所选周期统计，待完成数量反映生成时状态，不代表历史期末状态。个人格式要求：\n${custom}\n\n工作资料：\n${material}`);
+  const content = p.generatedContent || await ask(`${editorial ? reportInstructions(p.type) : ''}\n统计周期：${p.rangeLabel}（北京时间），类型：${p.type}。\n仅依据下列资料，总结中区分已完成工作与建议，不能把建议写成已完成事实。待办新增和完成次数按所选周期统计，待完成数量反映生成时状态，不代表历史期末状态。个人格式要求：\n${custom}\n\n工作资料：\n${material}`);
   if (!p.generatedContent) {
     const saved = await Job.updateOne({ _id: job._id, token: job.token }, { $set: { 'payload.generatedContent': content } });
     if (!saved.matchedCount) throw new Error('任务租约已失效');
@@ -122,6 +134,7 @@ async function generate(job, checkpoint, dependencies = {}) {
       statistics: { totalEntries: diaries.length, totalTime: diaries.reduce((n, d) => n + Math.max(0, Math.floor((new Date(d.endTime) - new Date(d.startTime)) / 60000)), 0), tagDistribution },
       meta: { rangeStart: p.start, rangeEnd: p.end, rangeLabel: p.rangeLabel, timezone: p.timezone,
         generatedBy: p.generatedBy, jobId: String(job._id), model: model.config?.model,
+        ...(editorial ? { editorialVersion: 1, sourceSnapshots: diaries.map(d => ({ id: String(d._id), date: new Date(d.startTime).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }), excerpt: String(d.content || '').slice(0, 400) + (String(d.content || '').length > 400 ? '…（摘录）' : '') })) } : {}),
         sources: diaries.map(d => ({ id: String(d._id), version: sourceVersion(d) })) }
     } }, { upsert: true, runValidators: true, session });
   });

@@ -30,6 +30,7 @@ const summarySchema = new mongoose.Schema({
     type: Object,
     default: null
   },
+  htmlRenderKey: { type: String, default: null },
   htmlFilePath: {
     type: String,
     default: null // 存储生成的HTML文件路径
