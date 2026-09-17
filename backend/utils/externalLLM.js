@@ -20,7 +20,7 @@ class ExternalLLM {
       apiUrl: process.env.EXTERNAL_LLM_API_URL || '',
       // 模型名称
       model: process.env.EXTERNAL_LLM_MODEL || 'deepseek-ai/DeepSeek-V3',
-      // 请求超时时间（毫秒），允许用户配置覆盖，但至少5分钟（300000ms）
+      // 请求超时时间（毫秒），允许用户配置覆盖，最小1秒
       timeout: parseInt(process.env.EXTERNAL_LLM_TIMEOUT || '600000'),
       // 温度参数，控制输出的随机性
       temperature: parseFloat(process.env.EXTERNAL_LLM_TEMPERATURE || '0.7'),
@@ -31,9 +31,9 @@ class ExternalLLM {
       ...config
     };
 
-    // 规范化与下限保护：将超时至少提升到5分钟，避免30秒配置导致频繁超时
+    // 规范化与下限保护：尊重用户超时配置，不偷偷扩大等待时间
     const inputTimeout = Number(baseConfig.timeout);
-    const resolvedTimeout = Number.isFinite(inputTimeout) ? Math.max(inputTimeout, 300000) : 300000;
+    const resolvedTimeout = Number.isFinite(inputTimeout) ? Math.max(inputTimeout, 1000) : 300000;
 
     this.config = {
       ...baseConfig,
@@ -333,7 +333,7 @@ class ExternalLLM {
         status: error.response?.status,
       });
       const isTransient = /ECONNABORTED|ETIMEDOUT|ECONNRESET|timeout|aborted/i.test(error.message || '') || error.code === 'ECONNABORTED';
-      if (isTransient) {
+      if (isTransient && options.retryTransient !== false) {
         try {
           logger.llm('出现瞬时错误，保留完整输入和输出预算重试一次');
           response = await this.client.post(apiUrl, requestData, requestConfig);
@@ -358,7 +358,7 @@ class ExternalLLM {
     };
     if (options.requireComplete && truncated(response.data)) {
       const expanded = this._getSafeMaxTokens(effectiveProvider, requestData.max_tokens * 2);
-      if (expanded > requestData.max_tokens) {
+      if (options.retryTruncated !== false && expanded > requestData.max_tokens) {
         requestData.max_tokens = expanded;
         response = await this.client.post(apiUrl, requestData, requestConfig);
       }

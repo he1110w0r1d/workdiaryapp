@@ -71,3 +71,10 @@ test('large output budgets and long ordinary input reach provider unchanged', as
   assert.equal(await llm.generateText(prompt, { maxTokens: 131072 }), 'complete');
   assert.equal(calls, 2);
 });
+
+test('configured timeout is respected and queue-owned retry makes only one request', async t => {
+ const llm = new ExternalLLM({provider:'zhipu',enabled:true,apiKey:'synthetic',timeout:30000,maxTokens:32000});
+ assert.equal(llm.config.timeout,30000);let calls=0;
+ t.mock.method(llm.client,'post',async()=>{calls++;const e=new Error('timeout');e.code='ECONNABORTED';throw e});
+ await assert.rejects(llm.generateText('synthetic',{retryTransient:false}),{code:'ECONNABORTED'});assert.equal(calls,1);
+});

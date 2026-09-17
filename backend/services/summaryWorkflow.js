@@ -56,10 +56,28 @@ async function generate(job, checkpoint, dependencies = {}) {
   }
   const user = await User.findById(job.user).select('customPrompts nickname username workProfile').lean();
   const model = dependencies.model || await modelFor(job.user);
+  const cache = { ...(p.completedCalls || {}) };
   const ask = async (prompt) => {
-    const text = await model.generateText(prompt, { maxTokens: Number(model.config?.maxTokens) || 16000, requireComplete: true });
-    if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回内容');
-    return text.trim();
+    const key = require('crypto').createHash('sha256').update(prompt).digest('hex');
+    if (typeof cache[key] === 'string') return cache[key];
+    let text;
+    try {
+      text = await model.generateText(prompt, { maxTokens: Number(model.config?.maxTokens) || 16000, requireComplete: true, retryTransient: false, retryTruncated: false });
+    } catch (error) {
+      const status = error.response?.status;
+      if (['ECONNABORTED', 'ETIMEDOUT'].includes(error.code) || /timeout/i.test(error.message || '')) {
+        throw invalid(`模型请求超时（${Math.round((model.config?.timeout || 30000) / 1000)}秒）。已保存完成的分段；请调整模型超时或切换模型后重试，将从断点继续。`);
+      }
+      if ([400, 401, 403, 404, 422].includes(status)) throw invalid(`模型服务拒绝请求（${status}），请检查模型名称、密钥、接口或输出预算。已完成分段保留。`);
+      if (!error.publicMessage) error.publicMessage = status === 429 ? '模型服务限流，稍后从已保存分段继续。' : '模型连接失败，已保存完成的分段，可稍后重试。';
+      throw error;
+    }
+    if (typeof text !== 'string' || !text.trim()) throw invalid('模型返回空内容，已保存完成的分段，请检查模型后重试。');
+    const value = text.trim();
+    const saved = await Job.updateOne({ _id: job._id, token: job.token, status: 'running' }, { $set: { [`payload.completedCalls.${key}`]: value } });
+    if (!saved.matchedCount) throw new Error('任务租约已失效');
+    cache[key] = value;
+    return value;
   };
   const editorial = ['weekly', 'monthly'].includes(p.type);
   let chunks = diaryChunks(diaries);
@@ -69,7 +87,7 @@ async function generate(job, checkpoint, dependencies = {}) {
     if (level > 5) throw invalid('模型未能压缩长周期资料，请缩短统计周期后重试');
     const parts = [];
     for (const chunk of chunks) {
-      await checkpoint(`整理长周期资料（第 ${level + 1} 轮，第 ${parts.length + 1} 段）`);
+      await checkpoint(`整理长周期资料（第 ${level + 1} 轮，第 ${parts.length + 1}/${chunks.length} 段，已完成分段自动复用）`);
       parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`));
     }
     material = parts.join('\n');

@@ -40,10 +40,10 @@ async function runOne(kind, handler) {
     if (job.attempts > 3) throw new Error('任务多次中断，请手动重试');
     const result = await handler(job, checkpoint);
     await checkpoint('完成');
-    await Job.updateOne(owner, { $set: { status: 'succeeded', result, error: null }, $unset: { activeKey: 1, token: 1, leaseUntil: 1, 'payload.snapshot': 1, 'payload.generatedContent': 1 } });
+    await Job.updateOne(owner, { $set: { status: 'succeeded', result, error: null }, $unset: { activeKey: 1, token: 1, leaseUntil: 1, 'payload.snapshot': 1, 'payload.generatedContent': 1, 'payload.completedCalls': 1 } });
   } catch (error) {
     // Keep third-party responses, credentials and diary content out of persisted errors.
-    const retry = job.attempts < 3 && !error.permanent;
+    const retry = job.attempts < (kind === 'summary' ? 2 : 3) && !error.permanent;
     await Job.updateOne(owner, { $set: {
       status: retry ? 'queued' : 'failed', stage: retry ? '处理失败，稍后重试' : '处理失败，可手动重试',
       error: error.publicMessage || '处理未完成，请检查模型或检索服务配置后重试',
