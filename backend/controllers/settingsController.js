@@ -702,13 +702,19 @@ const testExternalLLM = async (settings, res) => {
       (rawData && (rawData.error?.message || rawData.message)) ||
       (error.code ? `${error.code}: ${error.message}` : error.message);
 
-    const friendlyMessage =
-      statusCode === 500
+    const providerAuthFailure = statusCode === 401 || statusCode === 403;
+    const friendlyMessage = providerAuthFailure
+      ? '模型服务拒绝了认证，请检查 API 密钥、接口地址和模型访问权限。网站登录仍然有效。'
+      : statusCode === 500
         ? `测试LLM配置失败（网络/连接错误）: ${briefErrorMsg}`
         : `测试LLM配置失败（${statusCode}）: ${briefErrorMsg}`;
 
-    return res.status(statusCode).json({
+    // A provider's 401 is not a failure of this application's login session.
+    // Never forward it as HTTP 401: the browser correctly logs out on app 401s.
+    return res.status(error.code === 'ECONNABORTED' ? 504 : 502).json({
       success: false,
+      code: providerAuthFailure ? 'MODEL_AUTH_FAILED' : 'MODEL_TEST_FAILED',
+      upstreamStatus: error.response?.status || null,
       message: friendlyMessage,
       provider,
       apiUrl,
