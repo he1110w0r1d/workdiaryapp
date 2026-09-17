@@ -57,7 +57,7 @@ async function generate(job, checkpoint, dependencies = {}) {
   const user = await User.findById(job.user).select('customPrompts nickname username workProfile').lean();
   const model = dependencies.model || await modelFor(job.user);
   const cache = { ...(p.completedCalls || {}) };
-  const ask = async (prompt, budget = 16384) => {
+  const ask = async (prompt, budget = 65536) => {
     const key = require('crypto').createHash('sha256').update(prompt).digest('hex');
     if (typeof cache[key] === 'string') return cache[key];
     let text;
@@ -89,15 +89,22 @@ async function generate(job, checkpoint, dependencies = {}) {
     return value;
   };
   const editorial = ['weekly', 'monthly'].includes(p.type);
-  let chunks = diaryChunks(diaries);
+  // Preserve the established chunk plan for jobs that already have checkpoints.
+  const legacyChunks = Object.keys(p.completedCalls || {}).length > 0 && !p.chunkPlan;
+  const inputTarget = legacyChunks ? 12000 : 64000;
+  let chunks = diaryChunks(diaries, legacyChunks ? 9000 : 48000);
+  if (!legacyChunks && !p.chunkPlan) {
+    const saved = await Job.updateOne({ _id: job._id, token: job.token, status: 'running' }, { $set: { 'payload.chunkPlan': 'large-v1' } });
+    if (!saved.matchedCount) throw new Error('任务租约已失效');
+  }
   let material = chunks.join('\n');
   // Every source is processed; chunks preserve diary boundaries and identity.
-  for (let level = 0; material.length > 12000; level++) {
+  for (let level = 0; material.length > inputTarget; level++) {
     if (level > 5) throw invalid('模型未能压缩长周期资料，请缩短统计周期后重试');
     const parts = [];
     for (const chunk of chunks) {
       await checkpoint(`整理长周期资料（第 ${level + 1} 轮，第 ${parts.length + 1}/${chunks.length} 段，已完成分段自动复用）`);
-      parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`, 8192));
+      parts.push(await ask(`按项目或主题归并以下工作记录，保留每项的实际进展、已确认结果、阻碍、明确后续事项、日期及来源ID；区分未记录结果与已完成，不新增事实，不评分。输出不超过1500字。\n${chunk}`, 32768));
     }
     material = parts.join('\n');
     chunks = [];
