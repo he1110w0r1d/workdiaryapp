@@ -374,13 +374,13 @@ const Settings = () => {
 
                   <Form.Item
                     name="externalMaxTokens"
-                    label="最大Token数"
-                    tooltip="生成内容的最大长度限制"
-                    rules={[{ required: true, message: '请输入最大Token数' }]}
+                    label="最大输出 Token"
+                    tooltip="单次生成的输出预算，不是上下文窗口。请按所选模型支持的最大输出设置。"
+                    rules={[{ required: true, message: '请输入最大输出 Token' }]}
                   >
                     <InputNumber 
                       min={100} 
-                      max={8000} 
+                      precision={0}
                       step={100} 
                       style={{ width: '100%' }} 
                     />

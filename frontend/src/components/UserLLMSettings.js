@@ -483,12 +483,13 @@ const UserLLMSettings = () => {
 
           <Form.Item
             name="maxTokens"
-            label="最大Token数"
-            rules={[{ required: true, message: '请输入最大Token数' }]}
+            label="最大输出 Token"
+            extra="这是单次输出预算，不是上下文容量。应用不设固定上限，实际支持范围以模型服务为准。"
+            rules={[{ required: true, message: '请输入最大输出 Token' }]}
           >
             <InputNumber 
               min={100} 
-              max={32000} 
+              precision={0}
               step={100} 
               style={{ width: '100%' }}
             />

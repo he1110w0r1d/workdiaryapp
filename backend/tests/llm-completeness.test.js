@@ -49,8 +49,25 @@ test('configured reasoning budget and long complete input are preserved', async 
 });
 
 test('token cap and Anthropic max_tokens stop cannot bypass completeness checks', async t => {
+  const previousCap = process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP;
+  process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP = '32768';
+  t.after(() => { if (previousCap === undefined) delete process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP; else process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP = previousCap; });
   const llm = model(); let calls = 0;
   t.mock.method(llm.client, 'post', async () => { calls++; return { data: { stop_reason: 'max_tokens', content: [{ type: 'text', text: 'partial' }] } }; });
   await assert.rejects(llm.generateText('report', { maxTokens: 32768, requireComplete: true }), { code: 'LLM_OUTPUT_TRUNCATED' });
   assert.equal(calls, 1);
+});
+
+
+test('large output budgets and long ordinary input reach provider unchanged', async t => {
+  const llm = model(); const prompt = '资料'.repeat(30000);
+  for (const provider of ['deepseek', 'openai', 'claude', 'custom']) assert.equal(llm._getSafeMaxTokens(provider, 131072), 131072);
+  let calls = 0;
+  t.mock.method(llm.client, 'post', async (_, body) => {
+    assert.equal(body.max_tokens, 131072); assert.equal(body.messages[0].content, prompt);
+    if (++calls === 1) { const error = new Error('timeout'); error.code = 'ECONNABORTED'; throw error; }
+    return response('stop', 'complete');
+  });
+  assert.equal(await llm.generateText(prompt, { maxTokens: 131072 }), 'complete');
+  assert.equal(calls, 2);
 });

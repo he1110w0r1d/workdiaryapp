@@ -132,12 +132,7 @@ class ExternalLLM {
     let normalizedModel = String(this.config.model || '').trim();
     let normalizedApiUrl = String(this.config.apiUrl || '').trim();
 
-    // 对超长提示词进行适度截断（通用策略，避免长输入触发远端切断）
-    let promptToSend = prompt;
-    if (!options.requireComplete && typeof prompt === 'string' && prompt.length > 20000) {
-      logger.llm('提示词过长，进行截断以提升稳定性');
-      promptToSend = prompt.slice(0, 20000);
-    }
+    const promptToSend = prompt; // Preserve complete input; provider validates its actual context window.
 
     if (providerLower === 'deepseek') {
       const m = normalizedModel.toLowerCase();
@@ -340,14 +335,7 @@ class ExternalLLM {
       const isTransient = /ECONNABORTED|ETIMEDOUT|ECONNRESET|timeout|aborted/i.test(error.message || '') || error.code === 'ECONNABORTED';
       if (isTransient) {
         try {
-          logger.llm('出现瞬时错误，尝试以较小max_tokens重试一次');
-          const half = options.requireComplete ? maxTokens : Math.max(512, Math.floor(maxTokens / 2));
-          const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
-          requestData.max_tokens = reducedTokens;
-          if (!options.requireComplete && typeof promptToSend === 'string' && promptToSend.length > 12000) {
-            promptToSend = promptToSend.slice(0, 12000);
-            requestData.messages = [{ role: 'user', content: promptToSend }];
-          }
+          logger.llm('出现瞬时错误，保留完整输入和输出预算重试一次');
           response = await this.client.post(apiUrl, requestData, requestConfig);
         } catch (retryErr) {
           logger.error('外部LLM重试仍失败', {
@@ -358,34 +346,7 @@ class ExternalLLM {
           throw retryErr;
         }
       } else {
-        // 针对非瞬时错误的 max_tokens 限制，进行一次降级重试
-        const status = error.response?.status;
-        const bodyRaw = error.response?.data || {};
-        const bodyMsg = (
-          bodyRaw?.error?.message ||
-          bodyRaw?.message ||
-          error.message ||
-          ''
-        ).toString();
-        const tokenError = status === 400 && /max[_ ]?tokens|too many tokens|invalid|length/i.test(bodyMsg);
-        if (tokenError) {
-          try {
-            logger.llm('检测到max_tokens限制，降级max_tokens并重试一次');
-            const half = Math.max(512, Math.floor(maxTokens / 2));
-            const reducedTokens = this._getSafeMaxTokens(effectiveProvider, half);
-            requestData.max_tokens = reducedTokens;
-            response = await this.client.post(apiUrl, requestData, requestConfig);
-          } catch (retryErr) {
-            logger.error('降级max_tokens重试失败', {
-              message: retryErr.message,
-              code: retryErr.code,
-              status: retryErr.response?.status
-            });
-            throw retryErr;
-          }
-        } else {
-          throw error;
-        }
+        throw error; // Surface model limits instead of silently reducing user configuration.
       }
     }
 
@@ -414,61 +375,18 @@ class ExternalLLM {
   }
 
   /**
-   * 针对不同提供商进行 max_tokens 安全限制，避免因过大数值导致400
+   * 验证输出预算，不按提供商或模型名称猜测能力上限
    * @param {string} provider
    * @param {number} asked
    * @returns {number}
    */
   _getSafeMaxTokens(provider, asked) {
-    const n = Number(asked) || 1024;
-    const envCapRaw = process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP;
-    const envCap = envCapRaw ? Number(envCapRaw) : null;
-
-    // 提供商默认安全上限（根据常见路由与输出上限经验值）
-    let capByProvider;
-    switch (String(provider || '').toLowerCase()) {
-      case 'openrouter':
-        capByProvider = 65536;
-        break;
-      case 'qwen':
-        capByProvider = 65536;
-        break;
-      case 'zhipu':
-        capByProvider = 32768;
-        break;
-      case 'openai':
-        capByProvider = 16384;
-        break;
-      case 'deepseek':
-        capByProvider = 16384;
-        break;
-      case 'anthropic':
-      case 'claude':
-        capByProvider = 8192;
-        break;
-      case 'custom':
-        capByProvider = 65536;
-        break;
-      default:
-        capByProvider = 32768;
-        break;
-    }
-
-    // 模型感知覆盖（进一步限制或提升）
-    const modelLower = String(this.config.model || '').toLowerCase();
-    let capByModel = capByProvider;
-    if (/qwen|qwen[-_]?long/.test(modelLower)) capByModel = Math.min(capByModel, 65536);
-    if (/gemini|google/.test(modelLower)) capByModel = Math.min(capByModel, 65536);
-    if (/claude/.test(modelLower)) capByModel = Math.min(capByModel, 8192);
-    if (/gpt/.test(modelLower)) capByModel = Math.min(capByModel, 16384);
-    if (/deepseek/.test(modelLower)) capByModel = Math.min(capByModel, 16384);
-
-    const finalCap = envCap ? Math.min(capByModel, envCap) : capByModel;
-    const safe = Math.min(n, finalCap);
-    try {
-      logger.llm(`max_tokens请求: ${n}, 安全上限: ${finalCap}, 实际发送: ${safe}`);
-    } catch (_) {}
-    return safe;
+    const n = Number(asked);
+    if (!Number.isSafeInteger(n) || n < 1) throw new Error('最大输出 Token 必须为正整数');
+    // Only an explicitly configured operator budget can cap output. Provider/model
+    // names are not reliable limits: new models and compatible gateways differ.
+    const envCap = Number(process.env.EXTERNAL_LLM_MAX_OUTPUT_TOKENS_CAP);
+    return Number.isSafeInteger(envCap) && envCap > 0 ? Math.min(n, envCap) : n;
   }
 
   /**

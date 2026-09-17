@@ -138,6 +138,8 @@ const userSchema = new mongoose.Schema({
     },
     maxTokens: {
       type: Number,
+      min: 1,
+      validate: { validator: Number.isSafeInteger, message: '最大输出 Token 必须为正整数' },
       default: 8000
     },
     isDefault: {
